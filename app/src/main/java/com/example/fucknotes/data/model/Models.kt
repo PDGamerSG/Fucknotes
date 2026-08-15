@@ -3,7 +3,25 @@ package com.example.fucknotes.data.model
 import kotlinx.serialization.Serializable
 
 /** What kind of content a note holds. A note keeps one primary mode but may carry attachments. */
-enum class NoteType { TEXT, CHECKLIST, DRAWING }
+enum class NoteType {
+    TEXT,
+    CHECKLIST,
+
+    /**
+     * Canvas mode: one endless sheet the camera roams over.
+     *
+     * The constant keeps its original name because it is the string Room has already written into
+     * every existing row; the user-facing name is "Canvas".
+     */
+    DRAWING,
+
+    /** Notebook mode: the same ink, laid out as screen-shaped pages stacked down a column. */
+    NOTEBOOK,
+    ;
+
+    /** True for the two ink modes, which share the writing surface and differ only in layout. */
+    val isInk: Boolean get() = this == DRAWING || this == NOTEBOOK
+}
 
 /** Paper background drawn behind the editor and the drawing canvas. */
 enum class PaperStyle { PLAIN, LINED, GRID, DOTTED }

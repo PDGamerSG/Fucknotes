@@ -100,7 +100,7 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
                 appendLine(if (markdown) "- [${if (it.checked) "x" else " "}] ${it.text}" else "${if (it.checked) "[x]" else "[ ]"} ${it.text}")
             }
 
-            NoteType.DRAWING -> {
+            NoteType.DRAWING, NoteType.NOTEBOOK -> {
                 appendLine(if (markdown) "_(handwritten note — export as PDF or image to keep the ink)_" else "(handwritten note)")
                 if (note.body.isNotBlank()) appendLine(note.body)
             }

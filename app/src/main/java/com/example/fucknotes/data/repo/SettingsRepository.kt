@@ -37,6 +37,7 @@ class SettingsRepository(private val context: Context) {
         val passcodeHash = stringPreferencesKey("passcode_hash")
         val biometricUnlock = booleanPreferencesKey("biometric_unlock")
         val fingerDrawing = booleanPreferencesKey("finger_drawing")
+        val zoomLocked = booleanPreferencesKey("zoom_locked")
     }
 
     data class Settings(
@@ -61,6 +62,8 @@ class SettingsRepository(private val context: Context) {
          * and a page that ignored every touch would look broken on those.
          */
         val fingerDrawing: Boolean = true,
+        /** Whether a pinch may change the page scale. Scrolling works either way. */
+        val zoomLocked: Boolean = false,
     )
 
     val settings: Flow<Settings> = context.dataStore.data.map { it.toSettings() }
@@ -80,6 +83,7 @@ class SettingsRepository(private val context: Context) {
         hasPasscode = !this[Keys.passcodeHash].isNullOrBlank(),
         biometricUnlock = this[Keys.biometricUnlock] ?: true,
         fingerDrawing = this[Keys.fingerDrawing] ?: true,
+        zoomLocked = this[Keys.zoomLocked] ?: false,
     )
 
     private inline fun <reified T : Enum<T>> enumOr(raw: String?, fallback: T): T =
@@ -98,6 +102,7 @@ class SettingsRepository(private val context: Context) {
     suspend fun setLastBackupAt(stamp: String) = edit { it[Keys.lastBackupAt] = stamp }
     suspend fun setBiometricUnlock(v: Boolean) = edit { it[Keys.biometricUnlock] = v }
     suspend fun setFingerDrawing(v: Boolean) = edit { it[Keys.fingerDrawing] = v }
+    suspend fun setZoomLocked(v: Boolean) = edit { it[Keys.zoomLocked] = v }
 
     // ---- note lock ---------------------------------------------------------
 

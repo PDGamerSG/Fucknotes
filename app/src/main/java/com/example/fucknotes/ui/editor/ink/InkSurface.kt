@@ -5,18 +5,21 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+// Aliased: androidx.ink.strokes.Stroke is the ink stroke, this one is a paint style.
+import androidx.compose.ui.graphics.drawscope.Stroke as DrawStroke
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerType
@@ -35,6 +38,8 @@ import com.example.fucknotes.data.model.InkTool
 import com.example.fucknotes.data.model.PaperStyle
 import java.util.Collections
 import java.util.WeakHashMap
+import kotlin.math.ceil
+import kotlin.math.floor
 import androidx.ink.geometry.Box as InkBox
 
 /**
@@ -74,6 +79,19 @@ fun InkSurface(
      * stylus usable — otherwise the hand resting on the glass writes as well as the pen.
      */
     fingerDrawing: Boolean,
+    /**
+     * Freezes the zoom level.
+     *
+     * A locked page still scrolls — otherwise a notebook would be unusable — but a pinch cannot
+     * change its scale, so resting fingers and a passing palm stop resizing the writing.
+     */
+    zoomLocked: Boolean,
+    /**
+     * Notebook mode: pages the shape of this surface, stacked down a column.
+     *
+     * Canvas mode passes false and gets the endless sheet instead.
+     */
+    notebook: Boolean,
     paperStyle: PaperStyle,
     onStrokesFinished: (List<Stroke>) -> Unit,
     onErase: (Set<Int>) -> Unit,
@@ -99,6 +117,7 @@ fun InkSurface(
     val currentEnabled by rememberUpdatedState(enabled)
     val currentWidth by rememberUpdatedState(widthDp)
     val currentFingerDrawing by rememberUpdatedState(fingerDrawing)
+    val currentZoomLocked by rememberUpdatedState(zoomLocked)
     val currentOnErase by rememberUpdatedState(onErase)
 
     val brush = remember(tool, colorArgb, widthDp, camera.scale) {
@@ -110,10 +129,10 @@ fun InkSurface(
     // make it rebuild its low-latency surface. Keep one instance per actual camera position.
     val screenToWorld = remember(camera.scale, camera.panX, camera.panY) { camera.screenToWorld() }
 
-    Box(
+    BoxWithConstraints(
         modifier = modifier
-            .background(pageColor)
-            .drawBehind { drawPaper(paperStyle, ruleColor, camera) }
+            // Notebook pages float on a desk; the endless canvas *is* the page.
+            .background(if (notebook) DeskSurface else pageColor)
             .pointerInput(Unit) {
                 awaitPointerEventScope {
                     var lastErasePoint: Offset? = null
@@ -133,7 +152,8 @@ fun InkSurface(
                         // Two or more pointers always mean "move the page", never "draw".
                         if (down.size >= 2) {
                             camera.transformBy(
-                                factor = event.calculateZoom().takeIf { it > 0f } ?: 1f,
+                                factor = if (currentZoomLocked) 1f
+                                else event.calculateZoom().takeIf { it > 0f } ?: 1f,
                                 centroid = event.calculateCentroid(useCurrent = false),
                                 panDelta = event.calculatePan(),
                             )
@@ -194,6 +214,28 @@ fun InkSurface(
                 }
             }
     ) {
+        // A page is exactly one screenful, so a notebook has the proportions of the device it is
+        // written on and a page turn lands where the eye already is.
+        val pageWidthDp = maxWidth.value
+        val pageHeightDp = maxHeight.value
+
+        // Written from an effect rather than inline: the camera is snapshot state that this
+        // composable reads, and writing it mid-composition would schedule another pass — the very
+        // thing that disturbs InProgressStrokes.
+        SideEffect {
+            camera.configure(
+                columnWidthDp = if (notebook) pageWidthDp else 0f,
+                viewportWidthPx = constraints.maxWidth.toFloat(),
+                viewportHeightPx = constraints.maxHeight.toFloat(),
+            )
+        }
+
+        // Paper.
+        Canvas(Modifier.fillMaxSize()) {
+            if (notebook) drawNotebookPages(camera, pageWidthDp, pageHeightDp, pageColor, paperStyle, ruleColor)
+            else drawPaper(paperStyle, ruleColor, camera)
+        }
+
         // Dry ink.
         Canvas(Modifier.fillMaxSize()) {
             val matrix = camera.worldToScreen()
@@ -204,6 +246,28 @@ fun InkSurface(
                 // it how large the stroke will end up so it can pick a level of detail. The canvas
                 // itself has to carry the camera, or dry ink lands at raw world coordinates while
                 // wet ink stays under the pen.
+                if (notebook) {
+                    // Clipped page by page, so ink never appears to run off the sheet onto the desk.
+                    forEachVisiblePage(camera, pageHeightDp, size.height) { top ->
+                        val bottom = top + pageHeightDp
+                        native.save()
+                        native.clipRect(
+                            camera.panX,
+                            top * camera.scale + camera.panY,
+                            pageWidthDp * camera.scale + camera.panX,
+                            bottom * camera.scale + camera.panY,
+                        )
+                        native.concat(matrix)
+                        val pageBounds = WorldRect(0f, top, pageWidthDp, bottom)
+                        currentStrokes().forEach { inkStroke ->
+                            if (isVisible(inkStroke.stroke, pageBounds)) {
+                                renderer.draw(native, inkStroke.stroke, matrix)
+                            }
+                        }
+                        native.restore()
+                    }
+                    return@drawIntoCanvas
+                }
                 native.save()
                 native.concat(matrix)
                 currentStrokes().forEach { inkStroke ->
@@ -262,56 +326,147 @@ private fun eraseHits(
 // ---- paper -----------------------------------------------------------------
 
 /**
- * Ruled / grid / dotted paper, drawn in world space so it pans and zooms with the ink instead of
- * sliding underneath it.
+ * Ruled / grid / dotted paper for the endless canvas, drawn in world space so it pans and zooms
+ * with the ink instead of sliding underneath it.
  */
 private fun DrawScope.drawPaper(style: PaperStyle, color: Color, camera: InkCamera) {
-    if (style == PaperStyle.PLAIN) return
     val step = PAPER_SPACING_DP * camera.scale
-    if (step < 6f) return // Too dense to read once zoomed far out.
+    if (style == PaperStyle.PLAIN || step < 6f) return // Too dense to read once zoomed far out.
+    drawPaperPattern(
+        style = style,
+        color = color,
+        step = step,
+        startX = camera.panX.mod(step),
+        startY = camera.panY.mod(step),
+        left = 0f,
+        top = 0f,
+        right = size.width,
+        bottom = size.height,
+    )
+}
 
-    val originX = camera.panX.mod(step)
-    val originY = camera.panY.mod(step)
+/**
+ * Notebook mode: screen-shaped sheets stacked down a column with a gap between them.
+ *
+ * Only the pages the viewport touches are drawn, so the column can run on for as long as the user
+ * keeps writing without the cost growing.
+ */
+private fun DrawScope.drawNotebookPages(
+    camera: InkCamera,
+    pageWidthDp: Float,
+    pageHeightDp: Float,
+    pageColor: Color,
+    style: PaperStyle,
+    ruleColor: Color,
+) {
+    val scale = camera.scale
+    val step = PAPER_SPACING_DP * scale
+    val widthPx = pageWidthDp * scale
+    val heightPx = pageHeightDp * scale
 
-    when (style) {
-        PaperStyle.PLAIN -> Unit
-
-        PaperStyle.LINED -> {
-            var y = originY
-            while (y < size.height) {
-                drawLine(color, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
-                y += step
-            }
+    forEachVisiblePage(camera, pageHeightDp, size.height) { topWorld ->
+        val left = camera.panX
+        val top = topWorld * scale + camera.panY
+        drawRect(pageColor, topLeft = Offset(left, top), size = Size(widthPx, heightPx))
+        if (style != PaperStyle.PLAIN && step >= 6f) {
+            drawPaperPattern(
+                style = style,
+                color = ruleColor,
+                step = step,
+                // Rules start below the top edge so the first line is not welded to it.
+                startX = left + step,
+                startY = top + step,
+                left = left,
+                top = top,
+                right = left + widthPx,
+                bottom = top + heightPx,
+            )
         }
+        // A hairline edge, so a page reads as a sheet rather than as a lit rectangle.
+        drawRect(
+            color = PageEdge,
+            topLeft = Offset(left, top),
+            size = Size(widthPx, heightPx),
+            style = DrawStroke(width = 1f),
+        )
+    }
+}
 
-        PaperStyle.GRID -> {
-            var y = originY
-            while (y < size.height) {
-                drawLine(color, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
-                y += step
-            }
-            var x = originX
-            while (x < size.width) {
-                drawLine(color, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1f)
+/**
+ * Calls [block] with the world-space top of every page the viewport can see.
+ *
+ * Pages run downwards from world zero; there is no last page, so the range is derived from where
+ * the camera is rather than from any stored count.
+ */
+private inline fun forEachVisiblePage(
+    camera: InkCamera,
+    pageHeightDp: Float,
+    viewportHeightPx: Float,
+    block: (topWorld: Float) -> Unit,
+) {
+    val stride = pageHeightDp + PAGE_GAP_DP
+    if (stride <= 0f) return
+    val topWorld = camera.screenToWorld(Offset.Zero).y
+    val bottomWorld = camera.screenToWorld(Offset(0f, viewportHeightPx)).y
+    val first = floor(topWorld / stride).toInt().coerceAtLeast(0)
+    val last = floor(bottomWorld / stride).toInt().coerceAtLeast(0)
+    for (index in first..last) block(index * stride)
+}
+
+/** Lines, grid or dots stepping from ([startX], [startY]) and confined to the given rectangle. */
+private fun DrawScope.drawPaperPattern(
+    style: PaperStyle,
+    color: Color,
+    step: Float,
+    startX: Float,
+    startY: Float,
+    left: Float,
+    top: Float,
+    right: Float,
+    bottom: Float,
+) {
+    // Skip straight to the first visible row / column: a page scrolled far down the column would
+    // otherwise spin through thousands of off-screen steps.
+    val firstX = startX + ceil(((left - startX) / step).coerceAtLeast(0f)) * step
+    val firstY = startY + ceil(((top - startY) / step).coerceAtLeast(0f)) * step
+
+    if (style == PaperStyle.LINED || style == PaperStyle.GRID) {
+        var y = firstY
+        while (y < bottom) {
+            drawLine(color, Offset(left, y), Offset(right, y), strokeWidth = 1f)
+            y += step
+        }
+    }
+    if (style == PaperStyle.GRID) {
+        var x = firstX
+        while (x < right) {
+            drawLine(color, Offset(x, top), Offset(x, bottom), strokeWidth = 1f)
+            x += step
+        }
+    }
+    if (style == PaperStyle.DOTTED) {
+        var y = firstY
+        while (y < bottom) {
+            var x = firstX
+            while (x < right) {
+                drawCircle(color, radius = 1.6f, center = Offset(x, y))
                 x += step
             }
-        }
-
-        PaperStyle.DOTTED -> {
-            var y = originY
-            while (y < size.height) {
-                var x = originX
-                while (x < size.width) {
-                    drawCircle(color, radius = 1.6f, center = Offset(x, y))
-                    x += step
-                }
-                y += step
-            }
+            y += step
         }
     }
 }
 
 private const val PAPER_SPACING_DP = 24f
+
+/** Gap between notebook pages, in world units. */
+private const val PAGE_GAP_DP = 18f
+
+/** The surface a notebook's pages lie on. */
+private val DeskSurface = Color(0xFF2A2C31)
+
+/** Page outline, one hairline of separation from the desk. */
+private val PageEdge = Color(0x22000000)
 
 /** Warm off-white, so a night-time page is not a slab of pure white. */
 val PaperWhite = Color(0xFFFCFCFA)

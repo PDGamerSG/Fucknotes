@@ -35,8 +35,33 @@ class InkCamera(density: Float) {
     var panY: Float by mutableFloatStateOf(0f)
         private set
 
+    /**
+     * Width of the page column the camera is confined to, in world units.
+     *
+     * Zero is canvas mode — an endless sheet with nothing to bump into. Anything larger is notebook
+     * mode, where the column is centred when it fits on screen and cannot be dragged off the edge
+     * when it does not, so the page always stays under the pen.
+     */
+    var columnWidthDp: Float = 0f
+        private set
+
+    private var viewportWidthPx = 0f
+    private var viewportHeightPx = 0f
+
     /** Combined world-unit to screen-pixel factor. */
     val scale: Float get() = density * zoom
+
+    /** Told by the surface on every layout; re-clamps in case the window or the mode changed. */
+    fun configure(columnWidthDp: Float, viewportWidthPx: Float, viewportHeightPx: Float) {
+        val changed = this.columnWidthDp != columnWidthDp ||
+            this.viewportWidthPx != viewportWidthPx ||
+            this.viewportHeightPx != viewportHeightPx
+        if (!changed) return
+        this.columnWidthDp = columnWidthDp
+        this.viewportWidthPx = viewportWidthPx
+        this.viewportHeightPx = viewportHeightPx
+        clampToColumn()
+    }
 
     /** Applies a pinch: [factor] around [centroid], plus a drag of [panDelta]. All in pixels. */
     fun transformBy(factor: Float, centroid: Offset, panDelta: Offset) {
@@ -46,18 +71,39 @@ class InkCamera(density: Float) {
         panX = centroid.x - (centroid.x - panX) * applied + panDelta.x
         panY = centroid.y - (centroid.y - panY) * applied + panDelta.y
         zoom = target
+        clampToColumn()
     }
 
     /** Single-finger / two-finger drag with no scaling. */
     fun panBy(delta: Offset) {
         panX += delta.x
         panY += delta.y
+        clampToColumn()
     }
 
     fun reset() {
         zoom = 1f
         panX = 0f
         panY = 0f
+        clampToColumn()
+    }
+
+    /**
+     * Keeps a notebook page in view.
+     *
+     * Sideways the column is pinned: centred while it is narrower than the window, otherwise held
+     * so neither margin can be dragged past the edge. Downwards nothing stops the user — a notebook
+     * grows a page at a time — but the first page cannot be pushed off the top.
+     */
+    private fun clampToColumn() {
+        if (columnWidthDp <= 0f || viewportWidthPx <= 0f) return
+        val columnPx = columnWidthDp * scale
+        panX = if (columnPx <= viewportWidthPx) {
+            (viewportWidthPx - columnPx) / 2f
+        } else {
+            panX.coerceIn(viewportWidthPx - columnPx, 0f)
+        }
+        panY = panY.coerceAtMost(0f)
     }
 
     /** Screen pixels to world units — what Ink calls `pointerEventToWorldTransform`. */

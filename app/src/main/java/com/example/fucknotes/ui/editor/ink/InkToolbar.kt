@@ -25,6 +25,8 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.AutoFixNormal
 import androidx.compose.material.icons.outlined.CenterFocusStrong
 import androidx.compose.material.icons.outlined.Draw
+import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.PanTool
 import androidx.compose.material.icons.outlined.TouchApp
 import androidx.compose.material3.DropdownMenu
@@ -64,7 +66,9 @@ fun InkToolbar(
     canUndo: Boolean,
     canRedo: Boolean,
     fingerDrawing: Boolean,
+    zoomLocked: Boolean,
     onToggleFingerDrawing: () -> Unit,
+    onToggleZoomLock: () -> Unit,
     onSelectPen: (Int) -> Unit,
     onEditPen: (index: Int, colorArgb: Int, widthDp: Float) -> Unit,
     onSelectTool: (InkTool) -> Unit,
@@ -137,6 +141,15 @@ fun InkToolbar(
                     }
                 }
             }
+
+            // Zoom lock. Locked, the page still scrolls but keeps its scale, so handwriting stays
+            // the size the user set it to.
+            ToolToggle(
+                selected = zoomLocked,
+                icon = if (zoomLocked) Icons.Outlined.Lock else Icons.Outlined.LockOpen,
+                label = if (zoomLocked) "Zoom locked" else "Lock zoom",
+                onClick = onToggleZoomLock,
+            )
 
             Box(
                 Modifier

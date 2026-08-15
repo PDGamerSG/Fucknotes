@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.Alarm
 import androidx.compose.material.icons.outlined.Brush
+import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material.icons.outlined.CheckBox
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Lock
@@ -158,6 +159,7 @@ fun NoteCard(
 private fun badge(type: NoteType): ImageVector? = when (type) {
     NoteType.CHECKLIST -> Icons.Outlined.CheckBox
     NoteType.DRAWING -> Icons.Outlined.Brush
+    NoteType.NOTEBOOK -> Icons.Outlined.MenuBook
     NoteType.TEXT -> null
 }
 

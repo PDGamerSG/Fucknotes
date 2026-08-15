@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.Brush
+import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material.icons.outlined.CheckBox
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.CreateNewFolder
@@ -254,9 +255,13 @@ fun HomeScreen(
                                 verticalArrangement = Arrangement.spacedBy(10.dp),
                                 modifier = Modifier.padding(bottom = 12.dp),
                             ) {
-                                MiniFab("Handwriting", Icons.Outlined.Brush) {
+                                MiniFab("Canvas", Icons.Outlined.Brush) {
                                     showFabMenu = false
                                     viewModel.createNote(NoteType.DRAWING, onOpenNote)
+                                }
+                                MiniFab("Notebook", Icons.Outlined.MenuBook) {
+                                    showFabMenu = false
+                                    viewModel.createNote(NoteType.NOTEBOOK, onOpenNote)
                                 }
                                 MiniFab("Checklist", Icons.Outlined.CheckBox) {
                                     showFabMenu = false

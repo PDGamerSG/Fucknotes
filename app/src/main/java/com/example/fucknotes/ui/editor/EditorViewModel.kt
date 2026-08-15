@@ -62,6 +62,8 @@ data class EditorUiState(
     val selectedPen: Int = 0,
     /** Mirrors the app-wide setting; false means the page only takes stylus input. */
     val fingerDrawing: Boolean = true,
+    /** Mirrors the app-wide setting; true pins the page scale against stray pinches. */
+    val zoomLocked: Boolean = false,
     val recording: Boolean = false,
     val recordingElapsedMs: Long = 0,
     val message: String? = null,
@@ -120,8 +122,9 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
         // and observed rather than copied in once.
         viewModelScope.launch {
             settings.settings.collect { s ->
-                if (s.fingerDrawing != _state.value.fingerDrawing) {
-                    _state.value = _state.value.copy(fingerDrawing = s.fingerDrawing)
+                val current = _state.value
+                if (s.fingerDrawing != current.fingerDrawing || s.zoomLocked != current.zoomLocked) {
+                    _state.value = current.copy(fingerDrawing = s.fingerDrawing, zoomLocked = s.zoomLocked)
                 }
             }
         }
@@ -143,7 +146,7 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
                 archived = note.archived,
                 reminderAt = note.reminderAt,
                 updatedAt = note.updatedAt,
-                inkMode = note.type == NoteType.DRAWING,
+                inkMode = note.type.isInk,
             )
         }
         repo.observeAttachments(noteId)
@@ -233,7 +236,9 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
                 inkMode = false,
             )
 
-            target == NoteType.DRAWING -> _state.value = s.copy(type = target, inkMode = true)
+            // Canvas and notebook differ only in how the page is laid out, so switching between
+            // them keeps the ink exactly where it is.
+            target.isInk -> _state.value = s.copy(type = target, inkMode = true)
         }
         scheduleSave()
     }
@@ -255,6 +260,11 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
     /** Turns finger drawing on or off for every note; a finger still pans while it is off. */
     fun toggleFingerDrawing() {
         viewModelScope.launch { settings.setFingerDrawing(!_state.value.fingerDrawing) }
+    }
+
+    /** Pins or releases the page scale for every ink note. */
+    fun toggleZoomLock() {
+        viewModelScope.launch { settings.setZoomLocked(!_state.value.zoomLocked) }
     }
 
     fun selectPen(index: Int) {

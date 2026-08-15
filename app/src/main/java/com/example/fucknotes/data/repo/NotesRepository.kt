@@ -49,9 +49,14 @@ class NotesRepository(private val db: AppDatabase) {
                 createdAt = now,
                 updatedAt = now,
                 checklistJson = if (type == NoteType.CHECKLIST) json.encodeToString(emptyList<ChecklistItem>()) else "",
-                // A blank handwriting page needs something to write against, the way real
-                // notebook paper does; plain white gives no sense of scale or alignment.
-                paperStyle = if (type == NoteType.DRAWING) PaperStyle.DOTTED else PaperStyle.PLAIN,
+                // A blank writing page needs something to write against, the way real paper does;
+                // plain white gives no sense of scale or alignment. A notebook is ruled, the way a
+                // bought notebook is; the endless canvas is dotted, so nothing dictates a baseline.
+                paperStyle = when (type) {
+                    NoteType.DRAWING -> PaperStyle.DOTTED
+                    NoteType.NOTEBOOK -> PaperStyle.LINED
+                    else -> PaperStyle.PLAIN
+                },
             )
         )
     }
@@ -228,6 +233,6 @@ class NotesRepository(private val db: AppDatabase) {
         NoteType.CHECKLIST -> checklistOf(note).joinToString("\n") {
             (if (it.checked) "[x] " else "[ ] ") + it.text
         }
-        NoteType.DRAWING -> note.body
+        NoteType.DRAWING, NoteType.NOTEBOOK -> note.body
     }
 }

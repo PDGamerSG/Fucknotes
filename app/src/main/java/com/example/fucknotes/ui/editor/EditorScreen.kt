@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Alarm
 import androidx.compose.material.icons.outlined.Brush
+import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material.icons.outlined.CheckBox
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
@@ -134,8 +135,9 @@ fun EditorScreen(
     val screenDensity = LocalDensity.current.density
     val camera = remember { InkCamera(screenDensity) }
 
-    /** A handwriting note is presented as a full-bleed page rather than a text form. */
-    val isCanvasNote = state.type == NoteType.DRAWING
+    /** An ink note — canvas or notebook — is a full-bleed page rather than a text form. */
+    val isCanvasNote = state.type.isInk
+    val isNotebook = state.type == NoteType.NOTEBOOK
 
     // Handed to the ink surface as a stable lambda so committing a stroke does not recompose it.
     val inkStrokes = remember(viewModel) { { viewModel.strokes } }
@@ -213,7 +215,7 @@ fun EditorScreen(
                     IconButton(onClick = { viewModel.setInkMode(!state.inkMode) }) {
                         Icon(
                             Icons.Outlined.Brush,
-                            contentDescription = "Handwriting",
+                            contentDescription = "Ink",
                             tint = if (state.inkMode) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -303,7 +305,9 @@ fun EditorScreen(
                     canUndo = viewModel.canUndoInk,
                     canRedo = viewModel.canRedoInk,
                     fingerDrawing = state.fingerDrawing,
+                    zoomLocked = state.zoomLocked,
                     onToggleFingerDrawing = viewModel::toggleFingerDrawing,
+                    onToggleZoomLock = viewModel::toggleZoomLock,
                     onSelectPen = viewModel::selectPen,
                     onEditPen = viewModel::editPen,
                     onSelectTool = viewModel::setTool,
@@ -344,7 +348,7 @@ fun EditorScreen(
                             onDeleteChecked = viewModel::deleteCheckedItems,
                         )
 
-                        NoteType.DRAWING -> Box(Modifier.fillMaxSize())
+                        NoteType.DRAWING, NoteType.NOTEBOOK -> Box(Modifier.fillMaxSize())
 
                         NoteType.TEXT -> Column(Modifier.verticalScroll(rememberScrollState())) {
                             TextField(
@@ -377,6 +381,8 @@ fun EditorScreen(
                     widthDp = state.activePen.widthDp,
                     enabled = state.inkMode,
                     fingerDrawing = state.fingerDrawing,
+                    zoomLocked = state.zoomLocked,
+                    notebook = isNotebook,
                     paperStyle = if (isCanvasNote) state.paperStyle else PaperStyle.PLAIN,
                     onStrokesFinished = viewModel::commitStrokes,
                     onErase = viewModel::eraseStrokes,
@@ -700,6 +706,21 @@ private fun EditorOverflowMenu(
                 text = { Text("Convert to text") },
                 leadingIcon = { Icon(Icons.Outlined.Description, null) },
                 onClick = { onConvert(NoteType.TEXT) },
+            )
+        }
+        // Canvas and notebook hold the same ink, so switching is a change of view, not of content.
+        if (type != NoteType.DRAWING) {
+            DropdownMenuItem(
+                text = { Text("Convert to canvas") },
+                leadingIcon = { Icon(Icons.Outlined.Brush, null) },
+                onClick = { onConvert(NoteType.DRAWING) },
+            )
+        }
+        if (type != NoteType.NOTEBOOK) {
+            DropdownMenuItem(
+                text = { Text("Convert to notebook") },
+                leadingIcon = { Icon(Icons.Outlined.MenuBook, null) },
+                onClick = { onConvert(NoteType.NOTEBOOK) },
             )
         }
         HorizontalDivider()
