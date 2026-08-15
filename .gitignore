@@ -1,0 +1,53 @@
+# Gradle
+.gradle/
+build/
+/build
+captures/
+.cxx/
+.externalNativeBuild/
+
+# Local configuration
+local.properties
+keystore.properties
+*.jks
+*.keystore
+
+# Build outputs
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+release/
+output-metadata.json
+
+# Kotlin
+.kotlin/
+
+# IDE - IntelliJ / Android Studio
+*.iml
+.idea/
+!.idea/gradle.xml
+!.idea/compiler.xml
+!.idea/misc.xml
+!.idea/AndroidProjectSystem.xml
+.idea/caches/
+.idea/libraries/
+.idea/modules.xml
+.idea/workspace.xml
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+.idea/deploymentTargetSelector.xml
+.idea/deploymentTargetDropDown.xml
+.idea/androidTestResultsUserPreferences.xml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Signing / secrets
+google-services.json
+secrets.properties
