@@ -69,6 +69,7 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.navigation.compose)
 
     implementation(libs.androidx.room.runtime)
@@ -78,6 +79,15 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.biometric)
     implementation(libs.androidx.documentfile)
+    // Google's Ink API: low-latency wet-ink rendering, stock brushes, stroke geometry + storage.
+    implementation(libs.androidx.ink.nativeloader)
+    implementation(libs.androidx.ink.strokes)
+    implementation(libs.androidx.ink.rendering)
+    implementation(libs.androidx.ink.storage)
+    implementation(libs.androidx.ink.brush.compose)
+    implementation(libs.androidx.ink.geometry.compose)
+    implementation(libs.androidx.ink.authoring.compose)
+
     implementation(libs.coil.compose)
     implementation(libs.kotlinx.serialization.json)
 

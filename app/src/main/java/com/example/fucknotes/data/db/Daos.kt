@@ -203,7 +203,23 @@ interface TagDao {
 
     @Upsert
     suspend fun upsertCrossRefs(refs: List<NoteTagCrossRef>)
+
+    @Query(
+        """
+        SELECT nt.noteId AS noteId, t.name AS name
+        FROM note_tags nt
+        INNER JOIN tags t ON t.id = nt.tagId
+        ORDER BY t.name COLLATE NOCASE ASC
+        """
+    )
+    fun observeAllLabels(): Flow<List<NoteTagLabel>>
 }
+
+/** Flat tag label attached to a note id, used to decorate list cards without an N+1 query. */
+data class NoteTagLabel(val noteId: Long, val name: String)
+
+/** Per-note attachment tally so a card can show camera / mic badges. */
+data class NoteMediaFlags(val noteId: Long, val images: Int, val audio: Int)
 
 @Dao
 interface AttachmentDao {
@@ -216,6 +232,17 @@ interface AttachmentDao {
 
     @Query("SELECT * FROM attachments")
     suspend fun allAttachments(): List<AttachmentEntity>
+
+    @Query(
+        """
+        SELECT noteId AS noteId,
+               SUM(CASE WHEN type = 'IMAGE' THEN 1 ELSE 0 END) AS images,
+               SUM(CASE WHEN type = 'AUDIO' THEN 1 ELSE 0 END) AS audio
+        FROM attachments
+        GROUP BY noteId
+        """
+    )
+    fun observeMediaFlags(): Flow<List<NoteMediaFlags>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(attachment: AttachmentEntity): Long

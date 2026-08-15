@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Camera captures and imported media. -->
+    <files-path name="media" path="media/" />
+    <!-- Rendered PDFs / PNGs handed to the share sheet. -->
+    <cache-path name="exports" path="exports/" />
+</paths>

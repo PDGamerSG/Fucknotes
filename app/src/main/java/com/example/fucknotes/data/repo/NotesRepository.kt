@@ -6,9 +6,11 @@ import com.example.fucknotes.data.db.FolderEntity
 import com.example.fucknotes.data.db.NoteEntity
 import com.example.fucknotes.data.db.NoteTagCrossRef
 import com.example.fucknotes.data.db.TagEntity
+import com.example.fucknotes.data.ink.InkCodec
+import com.example.fucknotes.data.ink.InkStroke
 import com.example.fucknotes.data.model.ChecklistItem
-import com.example.fucknotes.data.model.Drawing
 import com.example.fucknotes.data.model.NoteType
+import com.example.fucknotes.data.model.PaperStyle
 import com.example.fucknotes.data.model.SortOrder
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.json.Json
@@ -47,7 +49,9 @@ class NotesRepository(private val db: AppDatabase) {
                 createdAt = now,
                 updatedAt = now,
                 checklistJson = if (type == NoteType.CHECKLIST) json.encodeToString(emptyList<ChecklistItem>()) else "",
-                drawingJson = if (type == NoteType.DRAWING) json.encodeToString(Drawing()) else "",
+                // A blank handwriting page needs something to write against, the way real
+                // notebook paper does; plain white gives no sense of scale or alignment.
+                paperStyle = if (type == NoteType.DRAWING) PaperStyle.DOTTED else PaperStyle.PLAIN,
             )
         )
     }
@@ -170,6 +174,11 @@ class NotesRepository(private val db: AppDatabase) {
 
     fun observeTags(): Flow<List<TagEntity>> = tags.observeAll()
 
+    /** Every note-to-tag label in one shot, so list cards do not each open their own query. */
+    fun observeTagLabels() = tags.observeAllLabels()
+
+    fun observeMediaFlags() = attachments.observeMediaFlags()
+
     fun observeTagsForNote(noteId: Long): Flow<List<TagEntity>> = tags.observeTagsForNote(noteId)
 
     fun observeNotesForTag(tagId: Long): Flow<List<NoteEntity>> = tags.observeNotesForTag(tagId)
@@ -210,11 +219,8 @@ class NotesRepository(private val db: AppDatabase) {
 
     fun encodeChecklist(items: List<ChecklistItem>): String = json.encodeToString(items)
 
-    fun drawingOf(note: NoteEntity): Drawing =
-        if (note.drawingJson.isBlank()) Drawing()
-        else runCatching { json.decodeFromString<Drawing>(note.drawingJson) }.getOrDefault(Drawing())
-
-    fun encodeDrawing(drawing: Drawing): String = json.encodeToString(drawing)
+    /** Ink lives in its own encoding; see [com.example.fucknotes.data.ink.InkCodec]. */
+    fun inkOf(note: NoteEntity): List<InkStroke> = InkCodec.decode(note.drawingJson)
 
     /** Flattens any note type to searchable / exportable plain text. */
     fun plainTextOf(note: NoteEntity): String = when (note.type) {

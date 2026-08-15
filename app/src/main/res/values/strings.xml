@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">Fucknotes</string>
+    <string name="reminder_default_title">Note reminder</string>
+    <string name="reminder_body">Tap to open the note.</string>
 </resources>

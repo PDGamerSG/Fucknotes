@@ -36,6 +36,7 @@ class SettingsRepository(private val context: Context) {
         val lastBackupAt = stringPreferencesKey("last_backup_at")
         val passcodeHash = stringPreferencesKey("passcode_hash")
         val biometricUnlock = booleanPreferencesKey("biometric_unlock")
+        val fingerDrawing = booleanPreferencesKey("finger_drawing")
     }
 
     data class Settings(
@@ -52,6 +53,14 @@ class SettingsRepository(private val context: Context) {
         val lastBackupAt: String = "",
         val hasPasscode: Boolean = false,
         val biometricUnlock: Boolean = true,
+        /**
+         * Whether a finger draws ink.
+         *
+         * Off means the page only takes stylus input, and a finger pans instead — the palm-proof
+         * mode a pen user expects. On is the default because most devices have no stylus at all,
+         * and a page that ignored every touch would look broken on those.
+         */
+        val fingerDrawing: Boolean = true,
     )
 
     val settings: Flow<Settings> = context.dataStore.data.map { it.toSettings() }
@@ -70,6 +79,7 @@ class SettingsRepository(private val context: Context) {
         lastBackupAt = this[Keys.lastBackupAt].orEmpty(),
         hasPasscode = !this[Keys.passcodeHash].isNullOrBlank(),
         biometricUnlock = this[Keys.biometricUnlock] ?: true,
+        fingerDrawing = this[Keys.fingerDrawing] ?: true,
     )
 
     private inline fun <reified T : Enum<T>> enumOr(raw: String?, fallback: T): T =
@@ -87,6 +97,7 @@ class SettingsRepository(private val context: Context) {
     suspend fun setAutoBackup(v: Boolean) = edit { it[Keys.autoBackup] = v }
     suspend fun setLastBackupAt(stamp: String) = edit { it[Keys.lastBackupAt] = stamp }
     suspend fun setBiometricUnlock(v: Boolean) = edit { it[Keys.biometricUnlock] = v }
+    suspend fun setFingerDrawing(v: Boolean) = edit { it[Keys.fingerDrawing] = v }
 
     // ---- note lock ---------------------------------------------------------
 

@@ -8,8 +8,67 @@ enum class NoteType { TEXT, CHECKLIST, DRAWING }
 /** Paper background drawn behind the editor and the drawing canvas. */
 enum class PaperStyle { PLAIN, LINED, GRID, DOTTED }
 
-/** Drawing tools available on the canvas. */
-enum class DrawTool { PEN, HIGHLIGHTER, ERASER }
+/**
+ * Tools on the ink toolbar.
+ *
+ * The drawing tools map onto Ink API stock brush families; [ERASER] and [PAN] are handled by the
+ * canvas itself rather than by a brush.
+ */
+enum class InkTool {
+    /** Pressure- and speed-sensitive nib, the default for handwriting. */
+    PEN,
+
+    /** Flat-width felt tip. */
+    MARKER,
+
+    /** Translucent chisel tip that does not darken where it overlaps itself. */
+    HIGHLIGHTER,
+
+    /** Dashed line, useful for guides and annotations. */
+    DASHED,
+
+    /** Removes whole strokes it passes over. */
+    ERASER,
+
+    /** Single-finger pan instead of drawing. */
+    PAN,
+    ;
+
+    val isBrush: Boolean get() = this == PEN || this == MARKER || this == HIGHLIGHTER || this == DASHED
+}
+
+/**
+ * One slot in the pen tray.
+ *
+ * The reference app shows a fixed row of pre-configured pens; keeping colour and width on the slot
+ * means switching pens restores the exact nib the user last set for it.
+ */
+@Serializable
+data class PenPreset(
+    val tool: InkTool,
+    val colorArgb: Int,
+    /** Nib width in dp, which is also the brush size in world units. */
+    val widthDp: Float,
+)
+
+/** Default tray, left to right, mirroring the source app's pen row. */
+val DefaultPenTray: List<PenPreset> = listOf(
+    PenPreset(InkTool.PEN, 0xFF1B1B1F.toInt(), 2.5f),
+    PenPreset(InkTool.PEN, 0xFF2F6FED.toInt(), 2.5f),
+    PenPreset(InkTool.PEN, 0xFFE23B3B.toInt(), 2.5f),
+    PenPreset(InkTool.MARKER, 0xFF1B1B1F.toInt(), 6f),
+    PenPreset(InkTool.MARKER, 0xFF2E9E5B.toInt(), 6f),
+    PenPreset(InkTool.HIGHLIGHTER, 0xFFFFE14D.toInt(), 18f),
+    PenPreset(InkTool.HIGHLIGHTER, 0xFF7BE0A6.toInt(), 18f),
+    PenPreset(InkTool.DASHED, 0xFF8E44AD.toInt(), 3f),
+)
+
+/** Colour choices offered for the selected pen. */
+val InkColors: List<Int> = listOf(
+    0xFF1B1B1F.toInt(), 0xFF5A5A66.toInt(), 0xFF2F6FED.toInt(), 0xFF1B9AAA.toInt(),
+    0xFF2E9E5B.toInt(), 0xFFE8A317.toInt(), 0xFFE23B3B.toInt(), 0xFF8E44AD.toInt(),
+    0xFFFFE14D.toInt(), 0xFF7BE0A6.toInt(), 0xFFFFAFCC.toInt(), 0xFFFFFFFF.toInt(),
+)
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
@@ -24,22 +83,6 @@ data class ChecklistItem(
     val text: String,
     val checked: Boolean = false,
 )
-
-/** One captured pen movement. Pressure is parallel to [points] so stylus width can vary per segment. */
-@Serializable
-data class Stroke(
-    val points: List<StrokePoint>,
-    val colorArgb: Int,
-    val width: Float,
-    val tool: DrawTool,
-)
-
-@Serializable
-data class StrokePoint(val x: Float, val y: Float, val pressure: Float = 1f)
-
-/** Serializable envelope so a whole drawing round-trips through a single DB column. */
-@Serializable
-data class Drawing(val strokes: List<Stroke> = emptyList())
 
 enum class AttachmentType { IMAGE, AUDIO }
 
