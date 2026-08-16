@@ -70,6 +70,21 @@ interface NoteDao {
     @Query("SELECT COUNT(*) FROM notes WHERE deletedAt IS NULL AND archived = 0 AND folderId IS :folderId")
     fun countInFolder(folderId: Long?): Flow<Int>
 
+    /**
+     * Every folder's tally in one query.
+     *
+     * The rail shows a count on each row, and asking per row would open one query per folder on a
+     * screen that already has a live note list running.
+     */
+    @Query(
+        """
+        SELECT folderId AS folderId, COUNT(*) AS count FROM notes
+        WHERE deletedAt IS NULL AND archived = 0
+        GROUP BY folderId
+        """
+    )
+    fun observeFolderCounts(): Flow<List<FolderCount>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(note: NoteEntity): Long
 
@@ -220,6 +235,9 @@ data class NoteTagLabel(val noteId: Long, val name: String)
 
 /** Per-note attachment tally so a card can show camera / mic badges. */
 data class NoteMediaFlags(val noteId: Long, val images: Int, val audio: Int)
+
+/** How many live notes sit in one folder. A null id is the unfiled bucket. */
+data class FolderCount(val folderId: Long?, val count: Int)
 
 @Dao
 interface AttachmentDao {

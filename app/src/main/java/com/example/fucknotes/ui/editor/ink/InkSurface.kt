@@ -25,7 +25,9 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.ink.authoring.compose.InProgressStrokes
 import androidx.ink.geometry.MutableParallelogram
 import androidx.ink.geometry.MutableSegment
@@ -34,10 +36,13 @@ import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
 import androidx.ink.strokes.Stroke
 import com.example.fucknotes.data.ink.InkCodec
 import com.example.fucknotes.data.ink.InkStroke
+import com.example.fucknotes.data.ink.NotebookLayout
+import com.example.fucknotes.data.ink.PageSpec
 import com.example.fucknotes.data.model.InkTool
 import com.example.fucknotes.data.model.PaperStyle
 import java.util.Collections
 import java.util.WeakHashMap
+import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
 import androidx.ink.geometry.Box as InkBox
@@ -53,7 +58,8 @@ import androidx.ink.geometry.Box as InkBox
  *
  * A gesture layer sits above both. Because ancestors receive [PointerEventPass.Initial] first, it
  * can claim events before the ink layer sees them: two fingers pan and zoom, the eraser and pan
- * tools take over single-pointer input, and a resting palm is dropped while a stylus is down.
+ * tools take over single-pointer input, a resting palm is dropped while a stylus is down, and a
+ * double tap swaps the eraser in and out.
  */
 @Composable
 fun InkSurface(
@@ -87,14 +93,28 @@ fun InkSurface(
      */
     zoomLocked: Boolean,
     /**
-     * Notebook mode: pages the shape of this surface, stacked down a column.
+     * Notebook mode: sheets of [pageSpec] stacked down a column, fitted to the window's width.
      *
      * Canvas mode passes false and gets the endless sheet instead.
      */
     notebook: Boolean,
     paperStyle: PaperStyle,
+    /** Sheet size and direction. Ignored in canvas mode, which has no sheet. */
+    pageSpec: PageSpec,
+    /** Colour of the rules, grid or dots. */
+    ruleColor: Color,
+    /** Distance between rules, in world units. */
+    ruleSpacingDp: Float,
+    /** The surface a notebook's pages float on. Canvas mode paints [pageColor] instead. */
+    deskColor: Color,
     onStrokesFinished: (List<Stroke>) -> Unit,
     onErase: (Set<Int>) -> Unit,
+    /**
+     * Double-tap on the page: swap between the eraser and the pen in hand without reaching for the
+     * toolbar. See the gesture loop for which taps qualify — a tap that could have been a stroke
+     * never does.
+     */
+    onToggleEraser: () -> Unit,
     modifier: Modifier = Modifier,
     /**
      * The sheet the ink sits on.
@@ -108,7 +128,6 @@ fun InkSurface(
     camera.density = LocalDensity.current.density
 
     val renderer = remember { CanvasStrokeRenderer.create() }
-    val ruleColor = remember(pageColor) { PaperRule }
 
     // The gesture loop reads these on every event; holding them in updated state keeps the pointer
     // coroutine alive when the user simply picks a different pen.
@@ -116,12 +135,37 @@ fun InkSurface(
     val currentStrokes by rememberUpdatedState(strokes)
     val currentEnabled by rememberUpdatedState(enabled)
     val currentWidth by rememberUpdatedState(widthDp)
+    val currentColor by rememberUpdatedState(colorArgb)
     val currentFingerDrawing by rememberUpdatedState(fingerDrawing)
     val currentZoomLocked by rememberUpdatedState(zoomLocked)
     val currentOnErase by rememberUpdatedState(onErase)
+    val currentOnToggleEraser by rememberUpdatedState(onToggleEraser)
+    val haptics = LocalHapticFeedback.current
 
     val brush = remember(tool, colorArgb, widthDp, camera.scale) {
         if (tool.isBrush) InkCodec.brushFor(tool, colorArgb, widthDp, camera.scale) else null
+    }
+
+    /**
+     * The brush a stroke is actually drawn with, asked for the moment the stroke begins.
+     *
+     * This has to be one lambda that lives as long as the component and reads the pen when it is
+     * called. Ink builds its stroke workflow from this parameter and keeps the one it was built
+     * with, so supplying the brush by value instead — a fresh object every time the user picks a
+     * pen — left the page drawing with whichever pen happened to be in hand when the note opened:
+     * a new colour, a new nib and even a new brush family were all accepted by the tray and then
+     * ignored by the ink. Reading the pen here through the updated-state handles keeps this lambda
+     * identical for the component's whole life while still returning the current pen.
+     */
+    val nextBrush = remember {
+        {
+            InkCodec.brushFor(
+                tool = currentTool.takeIf { it.isBrush } ?: InkTool.PEN,
+                colorArgb = currentColor,
+                widthDp = currentWidth,
+                worldToScreenScale = camera.scale,
+            )
+        }
     }
 
     // Compose's Matrix is a value class over a FloatArray, so it compares by reference: building a
@@ -132,22 +176,80 @@ fun InkSurface(
     BoxWithConstraints(
         modifier = modifier
             // Notebook pages float on a desk; the endless canvas *is* the page.
-            .background(if (notebook) DeskSurface else pageColor)
+            .background(if (notebook) deskColor else pageColor)
             .pointerInput(Unit) {
                 awaitPointerEventScope {
                     var lastErasePoint: Offset? = null
 
+                    // Double-tap tool swap, measured over a whole gesture: from the first pointer
+                    // down to the last one up.
+                    var gestureActive = false
+                    var gestureStartMs = 0L
+                    var gesturePointers = 0
+                    var gestureTravel = 0f
+                    var gestureSpread = 0f
+                    var gestureHadStylus = false
+                    var lastTapMs = 0L
+                    var lastTapPointers = 0
+
                     while (true) {
                         val event = awaitPointerEvent(PointerEventPass.Initial)
+                        val nowMs = event.changes.firstOrNull()?.uptimeMillis ?: 0L
 
                         // While ink is off the layer is display-only: it must not steal scrolling
                         // or text selection, and the page must not drift out from under the text.
                         if (!currentEnabled) {
                             lastErasePoint = null
+                            gestureActive = false
                             continue
                         }
 
                         val down = event.changes.filter { it.pressed }
+
+                        if (down.isNotEmpty()) {
+                            if (!gestureActive) {
+                                gestureActive = true
+                                gestureStartMs = nowMs
+                                gesturePointers = 0
+                                gestureTravel = 0f
+                                gestureSpread = 0f
+                                gestureHadStylus = false
+                            }
+                            // Highest count wins: fingers rarely land or lift on the same frame,
+                            // so a two-finger tap passes through one-pointer frames at both ends.
+                            gesturePointers = maxOf(gesturePointers, down.size)
+                            gestureTravel += event.calculatePan().getDistance()
+                            if (down.size >= 2) {
+                                gestureSpread += abs((event.calculateZoom().takeIf { it > 0f } ?: 1f) - 1f)
+                            }
+                            if (down.any { it.type == PointerType.Stylus }) gestureHadStylus = true
+                        } else if (gestureActive) {
+                            gestureActive = false
+
+                            // Only gestures this layer already claims for itself can be taps: two
+                            // fingers, which always move the page, or one finger while the page is
+                            // stylus-only. Anything a stylus touched is writing, never a swap — so
+                            // a tap can never cost the user the dot they meant to draw.
+                            val claimed = !gestureHadStylus &&
+                                (gesturePointers == 2 || (gesturePointers == 1 && !currentFingerDrawing))
+                            val tap = claimed &&
+                                nowMs - gestureStartMs <= viewConfiguration.longPressTimeoutMillis &&
+                                gestureTravel <= viewConfiguration.touchSlop &&
+                                gestureSpread <= PINCH_SLOP
+
+                            val doubled = tap &&
+                                gesturePointers == lastTapPointers &&
+                                nowMs - lastTapMs <= viewConfiguration.doubleTapTimeoutMillis
+                            if (doubled) {
+                                currentOnToggleEraser()
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                // Consumed: a third tap starts a new pair rather than toggling again.
+                                lastTapMs = 0L
+                            } else {
+                                lastTapMs = if (tap) nowMs else 0L
+                                lastTapPointers = gesturePointers
+                            }
+                        }
 
                         // Two or more pointers always mean "move the page", never "draw".
                         if (down.size >= 2) {
@@ -214,10 +316,10 @@ fun InkSurface(
                 }
             }
     ) {
-        // A page is exactly one screenful, so a notebook has the proportions of the device it is
-        // written on and a page turn lands where the eye already is.
-        val pageWidthDp = maxWidth.value
-        val pageHeightDp = maxHeight.value
+        // A page is measured in points, so it exports as a PDF page one-to-one; the camera scales
+        // it to whatever window it is being written in.
+        val pageWidthDp = pageSpec.widthDp
+        val pageHeightDp = pageSpec.heightDp
 
         // Written from an effect rather than inline: the camera is snapshot state that this
         // composable reads, and writing it mid-composition would schedule another pass — the very
@@ -232,8 +334,19 @@ fun InkSurface(
 
         // Paper.
         Canvas(Modifier.fillMaxSize()) {
-            if (notebook) drawNotebookPages(camera, pageWidthDp, pageHeightDp, pageColor, paperStyle, ruleColor)
-            else drawPaper(paperStyle, ruleColor, camera)
+            if (notebook) {
+                drawNotebookPages(
+                    camera = camera,
+                    pageWidthDp = pageWidthDp,
+                    pageHeightDp = pageHeightDp,
+                    pageColor = pageColor,
+                    style = paperStyle,
+                    ruleColor = ruleColor,
+                    ruleSpacingDp = ruleSpacingDp,
+                )
+            } else {
+                drawPaper(paperStyle, ruleColor, ruleSpacingDp, camera)
+            }
         }
 
         // Dry ink.
@@ -279,12 +392,19 @@ fun InkSurface(
             }
         }
 
-        // Wet ink. A null brush keeps the renderer warm while a non-drawing tool is selected.
-        InProgressStrokes(
-            defaultBrush = if (enabled) brush else null,
-            pointerEventToWorldTransform = screenToWorld,
-            onStrokesFinished = onStrokesFinished,
-        )
+        // Wet ink.
+        //
+        // Composed only while a brush is actually selected: handed a null brush the component still
+        // takes the touch and draws it in its own default black, which is how ink appeared on pages
+        // whose pen tray was not even on screen.
+        if (enabled && brush != null) {
+            InProgressStrokes(
+                defaultBrush = brush,
+                nextBrush = nextBrush,
+                pointerEventToWorldTransform = screenToWorld,
+                onStrokesFinished = onStrokesFinished,
+            )
+        }
     }
 }
 
@@ -329,8 +449,13 @@ private fun eraseHits(
  * Ruled / grid / dotted paper for the endless canvas, drawn in world space so it pans and zooms
  * with the ink instead of sliding underneath it.
  */
-private fun DrawScope.drawPaper(style: PaperStyle, color: Color, camera: InkCamera) {
-    val step = PAPER_SPACING_DP * camera.scale
+private fun DrawScope.drawPaper(
+    style: PaperStyle,
+    color: Color,
+    ruleSpacingDp: Float,
+    camera: InkCamera,
+) {
+    val step = ruleSpacingDp * camera.scale
     if (style == PaperStyle.PLAIN || step < 6f) return // Too dense to read once zoomed far out.
     drawPaperPattern(
         style = style,
@@ -346,7 +471,10 @@ private fun DrawScope.drawPaper(style: PaperStyle, color: Color, camera: InkCame
 }
 
 /**
- * Notebook mode: screen-shaped sheets stacked down a column with a gap between them.
+ * Notebook mode: A4 sheets stacked down a column, edge to edge.
+ *
+ * Nothing separates one sheet from the next but the hairline both of them draw, so scrolling reads
+ * as one continuous surface and a line of writing never lands in a dead band between pages.
  *
  * Only the pages the viewport touches are drawn, so the column can run on for as long as the user
  * keeps writing without the cost growing.
@@ -358,9 +486,10 @@ private fun DrawScope.drawNotebookPages(
     pageColor: Color,
     style: PaperStyle,
     ruleColor: Color,
+    ruleSpacingDp: Float,
 ) {
     val scale = camera.scale
-    val step = PAPER_SPACING_DP * scale
+    val step = ruleSpacingDp * scale
     val widthPx = pageWidthDp * scale
     val heightPx = pageHeightDp * scale
 
@@ -404,7 +533,7 @@ private inline fun forEachVisiblePage(
     viewportHeightPx: Float,
     block: (topWorld: Float) -> Unit,
 ) {
-    val stride = pageHeightDp + PAGE_GAP_DP
+    val stride = pageHeightDp + NotebookLayout.PAGE_GAP_DP
     if (stride <= 0f) return
     val topWorld = camera.screenToWorld(Offset.Zero).y
     val bottomWorld = camera.screenToWorld(Offset(0f, viewportHeightPx)).y
@@ -457,13 +586,8 @@ private fun DrawScope.drawPaperPattern(
     }
 }
 
-private const val PAPER_SPACING_DP = 24f
-
-/** Gap between notebook pages, in world units. */
-private const val PAGE_GAP_DP = 18f
-
-/** The surface a notebook's pages lie on. */
-private val DeskSurface = Color(0xFF2A2C31)
+/** How much two fingers may spread before a quick two-finger tap counts as a pinch instead. */
+private const val PINCH_SLOP = 0.12f
 
 /** Page outline, one hairline of separation from the desk. */
 private val PageEdge = Color(0x22000000)
@@ -472,4 +596,4 @@ private val PageEdge = Color(0x22000000)
 val PaperWhite = Color(0xFFFCFCFA)
 
 /** Rules and dots: visible on paper, never competing with the ink. */
-private val PaperRule = Color(0xFFD3D6DE)
+val DefaultRuleColor = Color(0xFFD3D6DE)

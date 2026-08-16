@@ -18,6 +18,9 @@ import com.example.fucknotes.data.db.AttachmentEntity
 import com.example.fucknotes.data.db.NoteEntity
 import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
 import com.example.fucknotes.data.ink.InkStroke
+import com.example.fucknotes.data.ink.NotebookLayout
+import com.example.fucknotes.data.ink.DEFAULT_RULE_SPACING_DP
+import com.example.fucknotes.data.ink.PageSpec
 import com.example.fucknotes.data.model.AttachmentType
 import com.example.fucknotes.data.model.NoteType
 import com.example.fucknotes.data.model.PaperStyle
@@ -52,6 +55,18 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
         const val EXPORT_MAX_SCALE = 150f / 160f
         const val PAGE_WIDTH = 1240   // A4 at ~150 dpi
         const val PAGE_HEIGHT = 1754
+
+        /**
+         * Points to output pixels for a notebook sheet.
+         *
+         * Derived from the A4 page above so an A4 notebook exports exactly as it always has, while
+         * a note written on another size comes out at the same resolution rather than stretched to
+         * A4's pixel count.
+         */
+        const val PDF_PIXELS_PER_POINT = PAGE_WIDTH / 595f
+
+        /** A stray stroke far down the column must not turn into thousands of blank sheets. */
+        const val MAX_NOTEBOOK_PAGES = 500
         const val MARGIN = 90f
         const val TITLE_SIZE = 44f
         const val BODY_SIZE = 28f
@@ -127,16 +142,138 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
 
     private fun exportPdf(notes: List<NoteEntity>, attachments: List<AttachmentEntity>, dark: Boolean): File {
         val document = PdfDocument()
-        notes.forEachIndexed { index, note ->
-            val info = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, index + 1).create()
+        var pageNumber = 1
+        notes.forEach { note ->
+            val ownAttachments = if (notes.size == 1) attachments else emptyList()
+
+            // A notebook is already paginated, so each sheet becomes a PDF page at the size it was
+            // written on rather than being shrunk to fit alongside a title block.
+            if (note.type == NoteType.NOTEBOOK) {
+                val strokes = repo.inkOf(note)
+                val spec = PageSpec.decode(note.pageFormat)
+                val sheetWidth = (spec.widthDp * PDF_PIXELS_PER_POINT).toInt()
+                val sheetHeight = (spec.heightDp * PDF_PIXELS_PER_POINT).toInt()
+                repeat(notebookPageCount(strokes, spec)) { index ->
+                    val info = PdfDocument.PageInfo.Builder(sheetWidth, sheetHeight, pageNumber++).create()
+                    val page = document.startPage(info)
+                    drawNotebookPage(page.canvas, note, strokes, index, dark, spec, sheetWidth, sheetHeight)
+                    document.finishPage(page)
+                }
+                return@forEach
+            }
+
+            val info = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNumber++).create()
             val page = document.startPage(info)
-            drawNotePage(page.canvas, note, if (notes.size == 1) attachments else emptyList(), dark, index)
+            drawNotePage(page.canvas, note, ownAttachments, dark, 0)
             document.finishPage(page)
         }
         val file = outFile(notes.first(), "pdf")
         file.outputStream().use { document.writeTo(it) }
         document.close()
         return file
+    }
+
+    // ---- notebook pages ----------------------------------------------------
+
+    /** How many sheets the ink reaches, at least one so an empty notebook still exports a page. */
+    private fun notebookPageCount(strokes: List<InkStroke>, spec: PageSpec): Int {
+        var lastPage = 0
+        strokes.forEach { inkStroke ->
+            val box = inkStroke.stroke.shape.computeBoundingBox() ?: return@forEach
+            lastPage = maxOf(lastPage, NotebookLayout.pageIndexAt(box.yMax, spec))
+        }
+        return (lastPage + 1).coerceIn(1, MAX_NOTEBOOK_PAGES)
+    }
+
+    /**
+     * One notebook sheet, 1:1.
+     *
+     * The page is measured in points and the output is the same page at 150 dpi, so the whole
+     * transform is a single uniform scale — ink comes out the size it was written, with nothing
+     * fitted or cropped.
+     */
+    private fun drawNotebookPage(
+        canvas: Canvas,
+        note: NoteEntity,
+        strokes: List<InkStroke>,
+        pageIndex: Int,
+        dark: Boolean,
+        spec: PageSpec,
+        sheetWidth: Int,
+        sheetHeight: Int,
+    ) {
+        val background = when {
+            dark -> Color.parseColor("#12131A")
+            note.colorArgb != 0 -> note.colorArgb
+            else -> Color.WHITE
+        }
+        val faint = when {
+            dark -> Color.parseColor("#2A2C36")
+            note.lineColorArgb != 0 -> note.lineColorArgb
+            else -> Color.parseColor("#E4E4EA")
+        }
+        canvas.drawColor(background)
+
+        val scale = PDF_PIXELS_PER_POINT
+        val pageTop = NotebookLayout.topOf(pageIndex, spec)
+
+        drawNotebookPaper(canvas, note, faint, scale, sheetWidth, sheetHeight)
+
+        if (strokes.isEmpty()) return
+        val transform = android.graphics.Matrix().apply {
+            setTranslate(0f, -pageTop)
+            postScale(scale, scale)
+        }
+        canvas.save()
+        // Clipped to the sheet, so a stroke that runs past the bottom edge stays on its own page.
+        canvas.clipRect(0f, 0f, sheetWidth.toFloat(), sheetHeight.toFloat())
+        canvas.concat(transform)
+        strokes.forEach { inkStroke ->
+            runCatching { inkRenderer.draw(canvas, inkStroke.stroke, transform) }
+        }
+        canvas.restore()
+    }
+
+    /** Rules for a notebook sheet: full bleed, at the spacing the note was written on. */
+    private fun drawNotebookPaper(
+        canvas: Canvas,
+        note: NoteEntity,
+        color: Int,
+        scale: Float,
+        sheetWidth: Int,
+        sheetHeight: Int,
+    ) {
+        val style = note.paperStyle
+        if (style == PaperStyle.PLAIN) return
+        val paint = Paint().apply {
+            isAntiAlias = true
+            this.color = color
+            strokeWidth = 1.5f
+        }
+        val spacingDp = note.lineSpacingDp.takeIf { it > 0 }?.toFloat() ?: DEFAULT_RULE_SPACING_DP
+        val step = spacingDp * scale
+        if (step < 2f) return
+        var y = step
+        while (y < sheetHeight) {
+            if (style == PaperStyle.LINED || style == PaperStyle.GRID) {
+                canvas.drawLine(0f, y, sheetWidth.toFloat(), y, paint)
+            }
+            if (style == PaperStyle.DOTTED) {
+                var x = step
+                while (x < sheetWidth) {
+                    canvas.drawCircle(x, y, 2f, paint)
+                    x += step
+                }
+            }
+            y += step
+        }
+        if (style == PaperStyle.GRID) {
+            var x = step
+            while (x < sheetWidth) {
+                canvas.drawLine(x, 0f, x, sheetHeight.toFloat(), paint)
+                x += step
+            }
+        }
     }
 
     // ---- shared page painting ---------------------------------------------

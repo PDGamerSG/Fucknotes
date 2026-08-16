@@ -49,6 +49,11 @@ class BackupManager(private val context: Context, private val db: AppDatabase) {
         val colorArgb: Int, val paperStyle: String, val pinned: Boolean, val archived: Boolean,
         val locked: Boolean, val deletedAt: Long?, val reminderAt: Long?,
         val createdAt: Long, val updatedAt: Long,
+        // Paper, added after the first format: a backup written by an older build has none of
+        // these, and the defaults are exactly the "unset" values the app already understands.
+        val lineColorArgb: Int = 0,
+        val lineSpacingDp: Int = 0,
+        val pageFormat: String = "A4",
     )
 
     @Serializable
@@ -152,6 +157,7 @@ class BackupManager(private val context: Context, private val db: AppDatabase) {
     private fun NoteEntity.toDto() = NoteDto(
         id, title, body, type.name, checklistJson, drawingJson, folderId, colorArgb,
         paperStyle.name, pinned, archived, locked, deletedAt, reminderAt, createdAt, updatedAt,
+        lineColorArgb, lineSpacingDp, pageFormat,
     )
 
     private fun NoteDto.toEntity() = NoteEntity(
@@ -171,6 +177,9 @@ class BackupManager(private val context: Context, private val db: AppDatabase) {
         reminderAt = reminderAt,
         createdAt = createdAt,
         updatedAt = updatedAt,
+        lineColorArgb = lineColorArgb,
+        lineSpacingDp = lineSpacingDp,
+        pageFormat = pageFormat,
     )
 
     companion object {

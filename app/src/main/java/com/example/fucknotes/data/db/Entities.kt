@@ -27,6 +27,12 @@ data class NoteEntity(
     /** ARGB tint of the note card; 0 means "follow the theme". */
     val colorArgb: Int = 0,
     val paperStyle: PaperStyle = PaperStyle.PLAIN,
+    /** ARGB of the rules, grid or dots; 0 means "use the default rule tone". */
+    val lineColorArgb: Int = 0,
+    /** Distance between rules in points; 0 means "use the default spacing". */
+    val lineSpacingDp: Int = 0,
+    /** Sheet size and direction, encoded by `PageSpec.encode()` — "A4", "A5_L" and so on. */
+    val pageFormat: String = "A4",
     val pinned: Boolean = false,
     val archived: Boolean = false,
     val locked: Boolean = false,

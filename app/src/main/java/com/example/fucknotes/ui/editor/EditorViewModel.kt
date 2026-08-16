@@ -12,8 +12,11 @@ import com.example.fucknotes.data.db.AttachmentEntity
 import com.example.fucknotes.data.db.NoteEntity
 import com.example.fucknotes.data.db.TagEntity
 import androidx.ink.strokes.Stroke
+import com.example.fucknotes.data.ink.DEFAULT_RULE_SPACING_DP
 import com.example.fucknotes.data.ink.InkCodec
 import com.example.fucknotes.data.ink.InkStroke
+import com.example.fucknotes.data.ink.NotebookLayout
+import com.example.fucknotes.data.ink.PageSpec
 import com.example.fucknotes.data.model.AttachmentType
 import com.example.fucknotes.data.model.ChecklistItem
 import com.example.fucknotes.data.model.DefaultPenTray
@@ -48,6 +51,12 @@ data class EditorUiState(
     val checklist: List<ChecklistItem> = emptyList(),
     val paperStyle: PaperStyle = PaperStyle.PLAIN,
     val colorArgb: Int = 0,
+    /** 0 keeps the default rule tone. */
+    val lineColorArgb: Int = 0,
+    /** 0 keeps the default rule spacing. */
+    val lineSpacingDp: Int = 0,
+    /** Sheet size and direction; only a notebook has sheets to size. */
+    val page: PageSpec = PageSpec.Default,
     val pinned: Boolean = false,
     val locked: Boolean = false,
     val archived: Boolean = false,
@@ -68,8 +77,19 @@ data class EditorUiState(
     val recordingElapsedMs: Long = 0,
     val message: String? = null,
 ) {
+    /**
+     * Whether the writing surface takes input.
+     *
+     * A canvas or notebook note is nothing but its ink, so writing is never off there whatever the
+     * layered-ink toggle says; on a text note it follows the toggle.
+     */
+    val inkActive: Boolean get() = inkMode || type.isInk
+
     /** The pen the brush tools draw with. Falls back to the first slot if an index goes stale. */
     val activePen: PenPreset get() = pens.getOrElse(selectedPen) { DefaultPenTray.first() }
+    /** The rule spacing to draw with, in world units. */
+    val ruleSpacingDp: Float get() = lineSpacingDp.takeIf { it > 0 }?.toFloat() ?: DEFAULT_RULE_SPACING_DP
+
     val wordCount: Int get() = body.split(Regex("\\s+")).count { it.isNotBlank() }
     val charCount: Int get() = body.length
 }
@@ -102,6 +122,16 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
         private set
 
     /**
+     * How many sheets the notebook currently holds.
+     *
+     * Pages are implicit — a notebook is as long as its ink reaches — so this is derived from the
+     * stroke bounds rather than stored, and kept as snapshot state next to [strokes] so the page
+     * counter updates in the same frame a stroke lands on a new sheet.
+     */
+    var pageCount: Int by mutableStateOf(1)
+        private set
+
+    /**
      * Undo history as whole-page snapshots.
      *
      * Snapshots share their [InkStroke] elements, so a step costs one list header rather than a
@@ -111,21 +141,36 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
     private val redoStack = ArrayDeque<List<InkStroke>>()
 
     private var saveJob: Job? = null
+    private var penSaveJob: Job? = null
     private var recordingTicker: Job? = null
+
+    /** Set once the app-wide tray has arrived, so only the first copy may choose the tool. */
+    private var trayRestored = false
 
     /** Set when the ink changed, so an autosave triggered by typing does not re-encode the page. */
     private var inkDirty = false
     private var encodedInk = ""
 
     init {
-        // Stylus-only is a property of the user's hardware, not of one note, so it is kept app-wide
-        // and observed rather than copied in once.
+        // Stylus-only is a property of the user's hardware, and the pen tray of the pens the user
+        // set up — neither belongs to one note, so both are kept app-wide and observed rather than
+        // copied in once. A copy that matches what is already here is dropped by the StateFlow.
         viewModelScope.launch {
             settings.settings.collect { s ->
                 val current = _state.value
-                if (s.fingerDrawing != current.fingerDrawing || s.zoomLocked != current.zoomLocked) {
-                    _state.value = current.copy(fingerDrawing = s.fingerDrawing, zoomLocked = s.zoomLocked)
-                }
+                val index = s.selectedPen.coerceIn(0, s.penTray.lastIndex.coerceAtLeast(0))
+                _state.value = current.copy(
+                    fingerDrawing = s.fingerDrawing,
+                    zoomLocked = s.zoomLocked,
+                    pens = s.penTray,
+                    selectedPen = index,
+                    // The restored slot picks the tool once, as the note opens. After that the
+                    // user's current tool stands: a later tray write must not take the eraser out
+                    // of their hand mid-page.
+                    tool = if (trayRestored) current.tool
+                    else s.penTray.getOrNull(index)?.tool ?: current.tool,
+                )
+                trayRestored = true
             }
         }
 
@@ -141,6 +186,9 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
                 checklist = repo.checklistOf(note),
                 paperStyle = note.paperStyle,
                 colorArgb = note.colorArgb,
+                lineColorArgb = note.lineColorArgb,
+                lineSpacingDp = note.lineSpacingDp,
+                page = PageSpec.decode(note.pageFormat),
                 pinned = note.pinned,
                 locked = note.locked,
                 archived = note.archived,
@@ -148,6 +196,7 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
                 updatedAt = note.updatedAt,
                 inkMode = note.type.isInk,
             )
+            recountPages()
         }
         repo.observeAttachments(noteId)
             .onEach { list -> _state.value = _state.value.copy(attachments = list) }
@@ -257,6 +306,17 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
         )
     }
 
+    /**
+     * The double-tap swap: eraser out, then the pen back.
+     *
+     * Unlike [setTool] this returns to the pen actually in the tray slot rather than to a plain
+     * pen, so a double tap in the middle of a highlighter pass gives the highlighter back.
+     */
+    fun toggleEraser() {
+        val s = _state.value
+        _state.value = s.copy(tool = if (s.tool == InkTool.ERASER) s.activePen.tool else InkTool.ERASER)
+    }
+
     /** Turns finger drawing on or off for every note; a finger still pans while it is off. */
     fun toggleFingerDrawing() {
         viewModelScope.launch { settings.setFingerDrawing(!_state.value.fingerDrawing) }
@@ -270,14 +330,26 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
     fun selectPen(index: Int) {
         val pen = _state.value.pens.getOrNull(index) ?: return
         _state.value = _state.value.copy(selectedPen = index, tool = pen.tool)
+        viewModelScope.launch { settings.setSelectedPen(index) }
     }
 
-    /** Edits a tray slot in place; the slot keeps its own colour and nib between switches. */
+    /**
+     * Edits a tray slot in place; the slot keeps its own colour and nib between switches, and now
+     * between sessions too.
+     *
+     * State moves at once so the next stroke uses the new nib, while the store write is debounced —
+     * a nib slider fires this on every frame of the drag, and each write is a whole-file rewrite.
+     */
     fun editPen(index: Int, colorArgb: Int, widthDp: Float) {
         val pens = _state.value.pens.toMutableList()
         val pen = pens.getOrNull(index) ?: return
         pens[index] = pen.copy(colorArgb = colorArgb, widthDp = widthDp)
         _state.value = _state.value.copy(pens = pens)
+        penSaveJob?.cancel()
+        penSaveJob = viewModelScope.launch {
+            delay(300)
+            settings.setPenTray(pens)
+        }
     }
 
     /**
@@ -331,14 +403,66 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
         strokes = next
         canUndoInk = undoStack.isNotEmpty()
         canRedoInk = redoStack.isNotEmpty()
+        recountPages()
         inkDirty = true
         scheduleSave()
+    }
+
+    /**
+     * Recomputes the sheet count from where the ink actually reaches.
+     *
+     * [reachedPages] lets the editor claim a page the user has scrolled to but not yet written on,
+     * so "new page" produces a sheet that stays until the note is closed empty.
+     */
+    private fun recountPages() {
+        val spec = _state.value.page
+        var last = 0
+        strokes.forEach { inkStroke ->
+            val box = inkStroke.stroke.shape.computeBoundingBox() ?: return@forEach
+            last = maxOf(last, NotebookLayout.pageIndexAt(box.yMax, spec))
+        }
+        pageCount = maxOf(last + 1, reachedPages)
+    }
+
+    /** The furthest page the user has scrolled to this session. */
+    private var reachedPages = 1
+
+    /** Claims one more sheet at the end of the column, and reports its index. */
+    fun appendPage(): Int {
+        reachedPages = pageCount + 1
+        pageCount = reachedPages
+        return pageCount - 1
     }
 
     // ---- note properties ---------------------------------------------------
 
     fun setPaperStyle(style: PaperStyle) {
         _state.value = _state.value.copy(paperStyle = style)
+        scheduleSave()
+    }
+
+    /** Rule tone. 0 restores the default grey. */
+    fun setLineColor(colorArgb: Int) {
+        _state.value = _state.value.copy(lineColorArgb = colorArgb)
+        scheduleSave()
+    }
+
+    /** Rule spacing in points. 0 restores the default. */
+    fun setLineSpacing(spacingDp: Int) {
+        _state.value = _state.value.copy(lineSpacingDp = spacingDp)
+        scheduleSave()
+    }
+
+    /**
+     * Resizes the sheets.
+     *
+     * The ink does not move: strokes are stored in page coordinates, so a taller sheet simply takes
+     * in more of the column and a shorter one pushes the tail of a page over the fold. Nothing is
+     * rescaled, which is the only behaviour that keeps handwriting the size it was written.
+     */
+    fun setPageSpec(spec: PageSpec) {
+        _state.value = _state.value.copy(page = spec)
+        recountPages()
         scheduleSave()
     }
 
@@ -530,6 +654,9 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
                 drawingJson = encodedInk,
                 paperStyle = s.paperStyle,
                 colorArgb = s.colorArgb,
+                lineColorArgb = s.lineColorArgb,
+                lineSpacingDp = s.lineSpacingDp,
+                pageFormat = s.page.encode(),
                 pinned = s.pinned,
                 archived = s.archived,
                 locked = s.locked,

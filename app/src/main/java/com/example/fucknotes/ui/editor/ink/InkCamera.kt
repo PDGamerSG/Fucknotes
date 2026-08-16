@@ -6,6 +6,8 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Matrix
+import com.example.fucknotes.data.ink.NotebookLayout
+import com.example.fucknotes.data.ink.PageSpec
 
 /**
  * The "camera" over the infinite page.
@@ -46,7 +48,13 @@ class InkCamera(density: Float) {
         private set
 
     private var viewportWidthPx = 0f
-    private var viewportHeightPx = 0f
+
+    /** Read by the page counter, which has to know how much of the column is on screen. */
+    var viewportHeightPx: Float = 0f
+        private set
+
+    /** A notebook opens with its page fitted to the window; after that the user's zoom stands. */
+    private var fittedColumn = false
 
     /** Combined world-unit to screen-pixel factor. */
     val scale: Float get() = density * zoom
@@ -60,7 +68,19 @@ class InkCamera(density: Float) {
         this.columnWidthDp = columnWidthDp
         this.viewportWidthPx = viewportWidthPx
         this.viewportHeightPx = viewportHeightPx
+        if (columnWidthDp <= 0f) {
+            fittedColumn = false
+        } else if (!fittedColumn) {
+            fitColumnWidth()
+            fittedColumn = true
+        }
         clampToColumn()
+    }
+
+    /** Sets the zoom so a page fills the window's width, the way a notebook is meant to be read. */
+    fun fitColumnWidth() {
+        if (columnWidthDp <= 0f || viewportWidthPx <= 0f) return
+        zoom = (viewportWidthPx / (columnWidthDp * density)).coerceIn(MIN_ZOOM, MAX_ZOOM)
     }
 
     /** Applies a pinch: [factor] around [centroid], plus a drag of [panDelta]. All in pixels. */
@@ -81,10 +101,32 @@ class InkCamera(density: Float) {
         clampToColumn()
     }
 
+    /**
+     * Which page is under the middle of the window, counting from zero.
+     *
+     * Taken at the centre rather than at the top edge so the counter changes when the page you are
+     * actually writing on changes, not the moment a previous page's last line leaves the screen.
+     */
+    fun pageAtCentre(spec: PageSpec): Int {
+        val stride = NotebookLayout.strideOf(spec)
+        if (stride <= 0f || scale <= 0f) return 0
+        val centreWorld = (viewportHeightPx / 2f - panY) / scale
+        return NotebookLayout.pageIndexAt(centreWorld, spec).coerceAtLeast(0)
+    }
+
+    /** Puts the top of [index] just below the top of the window. */
+    fun goToPage(index: Int, spec: PageSpec) {
+        val target = index.coerceAtLeast(0)
+        panY = -NotebookLayout.topOf(target, spec) * scale
+        clampToColumn()
+    }
+
     fun reset() {
         zoom = 1f
         panX = 0f
         panY = 0f
+        // In a notebook "reset" means back to a full page, not back to 100%.
+        fitColumnWidth()
         clampToColumn()
     }
 

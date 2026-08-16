@@ -8,5 +8,12 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar" tools:targetApi="m">true</item>
+        <!--
+          The app runs with the system bars hidden. Without this the window is letterboxed away
+          from the cutout the moment the status bar goes, leaving a black band across the top;
+          shortEdges lets it fill the panel, and the UI keeps clear of the lens through the
+          display-cutout insets instead.
+        -->
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="o_mr1">shortEdges</item>
     </style>
 </resources>

@@ -8,11 +8,13 @@ import com.example.fucknotes.data.db.NoteTagCrossRef
 import com.example.fucknotes.data.db.TagEntity
 import com.example.fucknotes.data.ink.InkCodec
 import com.example.fucknotes.data.ink.InkStroke
+import com.example.fucknotes.data.ink.PageSpec
 import com.example.fucknotes.data.model.ChecklistItem
 import com.example.fucknotes.data.model.NoteType
 import com.example.fucknotes.data.model.PaperStyle
 import com.example.fucknotes.data.model.SortOrder
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
 
 /** Single funnel for every read and write the UI performs. */
@@ -40,23 +42,46 @@ class NotesRepository(private val db: AppDatabase) {
 
     fun countInFolder(folderId: Long?): Flow<Int> = notes.countInFolder(folderId)
 
-    suspend fun createNote(type: NoteType, folderId: Long?): Long {
+    /** Live note tally per folder, keyed by folder id; a null key is the unfiled bucket. */
+    fun observeFolderCounts(): Flow<Map<Long?, Int>> =
+        notes.observeFolderCounts().map { rows -> rows.associate { it.folderId to it.count } }
+
+    /**
+     * Starts a note.
+     *
+     * Everything past [folderId] is what the New Notebook sheet collects; left out, a note gets the
+     * paper its type implies. A blank writing page needs something to write against, the way real
+     * paper does — plain white gives no sense of scale or alignment — so a notebook is ruled like a
+     * bought one, and the endless canvas is dotted, where nothing dictates a baseline.
+     */
+    suspend fun createNote(
+        type: NoteType,
+        folderId: Long?,
+        title: String = "",
+        paperStyle: PaperStyle? = null,
+        paperColorArgb: Int = 0,
+        lineColorArgb: Int = 0,
+        lineSpacingDp: Int = 0,
+        pageSpec: PageSpec = PageSpec.Default,
+    ): Long {
         val now = System.currentTimeMillis()
         return notes.insert(
             NoteEntity(
+                title = title.trim(),
                 type = type,
                 folderId = folderId,
                 createdAt = now,
                 updatedAt = now,
                 checklistJson = if (type == NoteType.CHECKLIST) json.encodeToString(emptyList<ChecklistItem>()) else "",
-                // A blank writing page needs something to write against, the way real paper does;
-                // plain white gives no sense of scale or alignment. A notebook is ruled, the way a
-                // bought notebook is; the endless canvas is dotted, so nothing dictates a baseline.
-                paperStyle = when (type) {
+                paperStyle = paperStyle ?: when (type) {
                     NoteType.DRAWING -> PaperStyle.DOTTED
                     NoteType.NOTEBOOK -> PaperStyle.LINED
                     else -> PaperStyle.PLAIN
                 },
+                colorArgb = paperColorArgb,
+                lineColorArgb = lineColorArgb,
+                lineSpacingDp = lineSpacingDp,
+                pageFormat = pageSpec.encode(),
             )
         )
     }

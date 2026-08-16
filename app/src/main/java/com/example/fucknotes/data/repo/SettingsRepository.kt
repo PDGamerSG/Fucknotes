@@ -8,13 +8,16 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.example.fucknotes.data.model.AccentPreset
+import com.example.fucknotes.data.model.DefaultPenTray
 import com.example.fucknotes.data.model.LayoutMode
 import com.example.fucknotes.data.model.PaperStyle
+import com.example.fucknotes.data.model.PenPreset
 import com.example.fucknotes.data.model.SortOrder
 import com.example.fucknotes.data.model.ThemeMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.json.Json
 import java.security.MessageDigest
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
@@ -38,12 +41,21 @@ class SettingsRepository(private val context: Context) {
         val biometricUnlock = booleanPreferencesKey("biometric_unlock")
         val fingerDrawing = booleanPreferencesKey("finger_drawing")
         val zoomLocked = booleanPreferencesKey("zoom_locked")
+        val penTray = stringPreferencesKey("pen_tray")
+        val selectedPen = intPreferencesKey("selected_pen")
     }
+
+    private val json = Json { ignoreUnknownKeys = true }
 
     data class Settings(
         val themeMode: ThemeMode = ThemeMode.SYSTEM,
         val accent: AccentPreset = AccentPreset.INDIGO,
-        val dynamicColor: Boolean = true,
+        /**
+         * Off by default: the app has its own violet identity, and a wallpaper-derived palette
+         * repaints the rail, the artwork and the paper previews in colours the design was not made
+         * from. It stays available for anyone who prefers their system's colours.
+         */
+        val dynamicColor: Boolean = false,
         val layout: LayoutMode = LayoutMode.GRID,
         val sort: SortOrder = SortOrder.UPDATED_DESC,
         val defaultPaper: PaperStyle = PaperStyle.PLAIN,
@@ -64,6 +76,16 @@ class SettingsRepository(private val context: Context) {
         val fingerDrawing: Boolean = true,
         /** Whether a pinch may change the page scale. Scrolling works either way. */
         val zoomLocked: Boolean = false,
+        /**
+         * The pen case, kept app-wide rather than per note.
+         *
+         * A nib width and colour is a property of the pen the user set up, not of the page they
+         * happened to set it on; storing it here is what makes a 12 dp marker still be 12 dp the
+         * next time the app opens.
+         */
+        val penTray: List<PenPreset> = DefaultPenTray,
+        /** Which tray slot is in hand, so a note opens with the pen last written with. */
+        val selectedPen: Int = 0,
     )
 
     val settings: Flow<Settings> = context.dataStore.data.map { it.toSettings() }
@@ -71,7 +93,7 @@ class SettingsRepository(private val context: Context) {
     private fun Preferences.toSettings() = Settings(
         themeMode = enumOr(this[Keys.themeMode], ThemeMode.SYSTEM),
         accent = enumOr(this[Keys.accent], AccentPreset.INDIGO),
-        dynamicColor = this[Keys.dynamicColor] ?: true,
+        dynamicColor = this[Keys.dynamicColor] ?: false,
         layout = enumOr(this[Keys.layout], LayoutMode.GRID),
         sort = enumOr(this[Keys.sort], SortOrder.UPDATED_DESC),
         defaultPaper = enumOr(this[Keys.defaultPaper], PaperStyle.PLAIN),
@@ -84,6 +106,13 @@ class SettingsRepository(private val context: Context) {
         biometricUnlock = this[Keys.biometricUnlock] ?: true,
         fingerDrawing = this[Keys.fingerDrawing] ?: true,
         zoomLocked = this[Keys.zoomLocked] ?: false,
+        // A tray written by an older build — or half-written — falls back whole rather than
+        // leaving the user with an empty pen case.
+        penTray = this[Keys.penTray]
+            ?.let { runCatching { json.decodeFromString<List<PenPreset>>(it) }.getOrNull() }
+            ?.takeIf { it.isNotEmpty() }
+            ?: DefaultPenTray,
+        selectedPen = this[Keys.selectedPen] ?: 0,
     )
 
     private inline fun <reified T : Enum<T>> enumOr(raw: String?, fallback: T): T =
@@ -103,6 +132,8 @@ class SettingsRepository(private val context: Context) {
     suspend fun setBiometricUnlock(v: Boolean) = edit { it[Keys.biometricUnlock] = v }
     suspend fun setFingerDrawing(v: Boolean) = edit { it[Keys.fingerDrawing] = v }
     suspend fun setZoomLocked(v: Boolean) = edit { it[Keys.zoomLocked] = v }
+    suspend fun setPenTray(pens: List<PenPreset>) = edit { it[Keys.penTray] = json.encodeToString(pens) }
+    suspend fun setSelectedPen(index: Int) = edit { it[Keys.selectedPen] = index }
 
     // ---- note lock ---------------------------------------------------------
 
