@@ -53,10 +53,10 @@ abstract class AppDatabase : RoomDatabase() {
         private val MIGRATION_3_4 = object : Migration(3, 4) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE notes ADD COLUMN pagesExplicitlyCreated INTEGER NOT NULL DEFAULT 0")
-                // Version 3 inferred page counts from stroke bounds. Those values can include raw
-                // screen coordinates from old Xiaomi input packets, so keep only pages explicitly
-                // added by the user in the new source-of-truth field.
-                db.execSQL("UPDATE notes SET pageCount = 1 WHERE pagesExplicitlyCreated = 0")
+                // A recorded count can include real writing on later pages. Preserve it when
+                // adopting explicit page creation instead of making those pages inaccessible.
+                db.execSQL("UPDATE notes SET pageCount = MAX(1, MIN(pageCount, 500))")
+                db.execSQL("UPDATE notes SET pagesExplicitlyCreated = 1 WHERE pageCount > 1")
             }
         }
 

@@ -210,11 +210,7 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
                 updatedAt = note.updatedAt,
                 inkMode = note.type.isInk,
             )
-            reachedPages = if (note.pagesExplicitlyCreated) {
-                note.pageCount.coerceIn(1, MAX_NOTEBOOK_PAGES)
-            } else {
-                1
-            }
+            reachedPages = note.pageCount.coerceIn(1, MAX_NOTEBOOK_PAGES)
             pagesExplicitlyCreated = note.pagesExplicitlyCreated
             recountPages()
         }

@@ -16,6 +16,7 @@ Code and test sources compile. Runtime tests and tablet installation are deferre
 - Combined PDFs, ZIPs of PDFs, and separate PDFs in a selected folder; nested exports preserve folder paths and disambiguate duplicate names.
 - Notebook exports use the page's point dimensions. Image exports show the first notebook page; use PDF for all pages.
 - Adding a page keeps the camera still. Initial blank-page counts persist. Scroll bounds follow created pages.
+- Older stored page counts are preserved during database upgrade, backup restore, editing and PDF export.
 - Pending note saves complete when navigating away; saving and export share the persisted ink representation.
 
 ## Compile checks
@@ -36,5 +37,6 @@ git diff --check
 7. Add pages while viewing a middle page, reopen the notebook, and immediately leave after a final stroke. Confirm the camera, page count and final stroke are retained.
 8. Check compact/expanded controls, night shading, folder menus and all removed actions on narrow and wide windows.
 9. In an existing typed note, annotate several lines, scroll using a finger or the hand tool, switch back to typing, and reopen. Confirm the ink stays visible, moves with the text, and does not intercept typing or text selection while annotation mode is off.
+10. Upgrade/restore an older multi-page notebook and confirm every stored page remains accessible and exports, including notes that predate the explicit-page flag.
 
 No runtime result is claimed by the compile checks above.

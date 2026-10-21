@@ -187,7 +187,7 @@ class BackupManager(private val context: Context, private val db: AppDatabase) {
         lineColorArgb = lineColorArgb,
         lineSpacingDp = lineSpacingDp,
         pageFormat = pageFormat,
-        pageCount = if (pagesExplicitlyCreated) pageCount else 1,
+        pageCount = pageCount.coerceIn(1, com.example.fucknotes.data.model.MAX_NOTEBOOK_PAGES),
         pagesExplicitlyCreated = pagesExplicitlyCreated,
     )
 

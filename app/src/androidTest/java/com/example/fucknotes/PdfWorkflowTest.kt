@@ -26,6 +26,25 @@ import java.io.File
 /** Deferred device regression: imported pages must survive persistence and PDF export. */
 @RunWith(AndroidJUnit4::class)
 class PdfWorkflowTest {
+    @Test fun legacyNotebookExportsEveryStoredPage() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
+        val repo = NotesRepository(db)
+        var exported: File? = null
+        try {
+            val id = repo.createNote(com.example.fucknotes.data.model.NoteType.NOTEBOOK,
+                folderId = null, title = "Older notebook", pageCount = 3, pagesExplicitlyCreated = false)
+            val output = NoteExporter(context, repo).export(requireNotNull(repo.getNote(id)), ExportFormat.PDF)
+            exported = output
+            PdfRenderer(ParcelFileDescriptor.open(output, ParcelFileDescriptor.MODE_READ_ONLY)).use { pdf ->
+                assertEquals(3, pdf.pageCount)
+            }
+        } finally {
+            exported?.delete()
+            db.close()
+        }
+    }
+
     @Test fun importedPdfKeepsTitlePageCountAndBackgrounds() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()

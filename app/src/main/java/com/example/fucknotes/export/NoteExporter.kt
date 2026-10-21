@@ -354,15 +354,10 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
 
     // ---- notebook pages ----------------------------------------------------
 
-    /** How many sheets the ink reaches, at least one so an empty notebook still exports a page. */
+    /** Preserve saved pages, including counts recorded before explicit page creation was added. */
     private fun notebookPageCount(note: NoteEntity): Int {
-        // Page creation is explicit. Stroke bounds can contain legacy screen coordinates and must
-        // never turn an empty notebook into a seven-page export.
-        return if (note.pagesExplicitlyCreated) {
-            note.pageCount.coerceIn(1, MAX_NOTEBOOK_PAGES)
-        } else {
-            1
-        }
+        // New pages are explicit; never infer additional sheets from new stroke bounds.
+        return note.pageCount.coerceIn(1, MAX_NOTEBOOK_PAGES)
     }
 
     /**
