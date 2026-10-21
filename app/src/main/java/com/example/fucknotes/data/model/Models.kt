@@ -59,7 +59,14 @@ enum class InkTool {
 enum class FingerInputMode(val label: String, val description: String) {
     HAND("Hand / move page", "A finger pans the page"),
     DRAW("Write with fingers", "A finger uses the selected pen"),
-    DISABLED("Disabled", "Finger touches do nothing"),
+    DISABLED("Pen only", "Write with the pen; palm and finger touches on the page are ignored"),
+    ;
+
+    fun next(): FingerInputMode = when (this) {
+        HAND -> DRAW
+        DRAW -> DISABLED
+        DISABLED -> HAND
+    }
 }
 
 /** Physical buttons exposed by Android for active styluses, including the Xiaomi Pen. */

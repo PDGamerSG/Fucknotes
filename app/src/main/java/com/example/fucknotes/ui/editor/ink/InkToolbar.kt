@@ -8,24 +8,20 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Block
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Gesture
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.PanTool
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import com.example.fucknotes.data.model.FingerInputMode
 import com.example.fucknotes.data.model.InkTool
@@ -57,7 +53,6 @@ fun InkToolbar(
     modifier: Modifier = Modifier,
 ) {
     var editingPen by remember { mutableIntStateOf(-1) }
-    var showFingerModes by remember { mutableStateOf(false) }
 
     // Three pens, two highlighters and three fixed controls; only the swatches scroll on phones.
     FloatingPanel(modifier.widthIn(max = 420.dp)) {
@@ -72,30 +67,13 @@ fun InkToolbar(
                 onClick = { onSelectTool(InkTool.ERASER) },
                 size = 48.dp,
             )
-            Box {
-                ToolButton(
-                    icon = fingerModeIcon(fingerInputMode),
-                    label = "Finger input: ${fingerInputMode.label}",
-                    selected = showFingerModes,
-                    onClick = { showFingerModes = true },
-                    size = 48.dp,
-                )
-                DropdownMenu(expanded = showFingerModes, onDismissRequest = { showFingerModes = false }) {
-                    FingerInputMode.entries.forEach { mode ->
-                        DropdownMenuItem(
-                            text = { Text(mode.label) },
-                            leadingIcon = { Icon(fingerModeIcon(mode), contentDescription = null) },
-                            trailingIcon = {
-                                if (mode == fingerInputMode) Icon(Icons.Filled.Check, contentDescription = "Selected")
-                            },
-                            onClick = {
-                                showFingerModes = false
-                                onFingerInputMode(mode)
-                            },
-                        )
-                    }
-                }
-            }
+            ToolButton(
+                icon = fingerModeIcon(fingerInputMode),
+                label = "Finger input: ${fingerInputMode.label}. Tap for ${fingerInputMode.next().label}",
+                modifier = Modifier.semantics { stateDescription = fingerInputMode.description },
+                onClick = { onFingerInputMode(fingerInputMode.next()) },
+                size = 48.dp,
+            )
             ToolDivider()
 
             val penSlots = pens.withIndex().filter { it.value.tool == InkTool.PEN }.take(3)
@@ -175,5 +153,5 @@ fun InkToolbar(
 private fun fingerModeIcon(mode: FingerInputMode) = when (mode) {
     FingerInputMode.HAND -> Icons.Outlined.PanTool
     FingerInputMode.DRAW -> Icons.Outlined.Gesture
-    FingerInputMode.DISABLED -> Icons.Outlined.Block
+    FingerInputMode.DISABLED -> Icons.Outlined.Edit
 }

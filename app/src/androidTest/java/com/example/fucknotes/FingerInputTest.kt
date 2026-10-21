@@ -85,10 +85,44 @@ class FingerInputTest {
             }
             val event = MotionEvent.obtain(start, start + i * 16L, action, 1, arrayOf(properties),
                 arrayOf(coords), 0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_STYLUS, 0)
-            compose.runOnUiThread { compose.activity.dispatchTouchEvent(event) }
-            event.recycle()
+            dispatchAtEventTime(event)
         }
         compose.waitUntil(5_000) { strokes.isNotEmpty() }
+        val beforePalmStroke = strokes.size
+        // A palm lands before the pen, stays while it writes, then moves after the pen lifts.
+        // No touch in that sequence may pan, add ink, or change the tool.
+        val palmStart = SystemClock.uptimeMillis()
+        val palm = MotionEvent.PointerProperties().apply { id = 1; toolType = MotionEvent.TOOL_TYPE_FINGER }
+        val pen = MotionEvent.PointerProperties().apply { id = 0; toolType = MotionEvent.TOOL_TYPE_STYLUS }
+        for (i in 0..14) {
+            val withPen = i in 1..12
+            val action = when (i) {
+                0 -> MotionEvent.ACTION_DOWN
+                1 -> MotionEvent.ACTION_POINTER_DOWN or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT)
+                12 -> MotionEvent.ACTION_POINTER_UP or (1 shl MotionEvent.ACTION_POINTER_INDEX_SHIFT)
+                14 -> MotionEvent.ACTION_UP
+                else -> MotionEvent.ACTION_MOVE
+            }
+            val palmCoords = MotionEvent.PointerCoords().apply {
+                x = 500f + i * 4f; y = 850f + i * 3f; pressure = if (i == 14) 0f else 1f
+            }
+            val penCoords = MotionEvent.PointerCoords().apply {
+                x = 200f + i * 12f; y = 650f; pressure = if (i == 12) 0f else 0.7f
+            }
+            val event = MotionEvent.obtain(palmStart, palmStart + i * 16L, action,
+                if (withPen) 2 else 1, if (withPen) arrayOf(palm, pen) else arrayOf(palm),
+                if (withPen) arrayOf(palmCoords, penCoords) else arrayOf(palmCoords),
+                0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_STYLUS or InputDevice.SOURCE_TOUCHSCREEN, 0)
+            dispatchAtEventTime(event)
+        }
+        compose.waitUntil(5_000) { strokes.size > beforePalmStroke }
+        compose.runOnIdle {
+            assertEquals("Only the stylus may add ink with a resting palm", beforePalmStroke + 1, strokes.size)
+            assertEquals("A resting palm must not pan", 0f, camera.panY, 0f)
+            assertEquals(0f, camera.panX, 0f)
+            assertEquals("A resting palm must not zoom", 1f, camera.zoom, 0f)
+            assertEquals(0, swaps)
+        }
         val stylusCount = strokes.size
         compose.runOnIdle { mode = FingerInputMode.DRAW }
         page.performTouchInput { swipe(Offset(200f, 800f), Offset(450f, 800f)) }
@@ -98,17 +132,31 @@ class FingerInputTest {
         }
     }
 
-    @Test fun compactToolbarHasThreePensTwoHighlightersAndThreeTouchChoices() {
+    // Ink measures elapsed time against the real clock on its rendering thread. Dispatching a
+    // complete future-dated gesture immediately can give it negative elapsed times and drop ink.
+    private fun dispatchAtEventTime(event: MotionEvent) {
+        try {
+            SystemClock.sleep((event.eventTime - SystemClock.uptimeMillis()).coerceAtLeast(0L))
+            compose.runOnUiThread {
+                assertTrue("The page must handle the pointer stream", compose.activity.dispatchTouchEvent(event))
+            }
+        } finally {
+            event.recycle()
+        }
+    }
+
+    @Test fun toolbarCyclesTouchModesWithoutOpeningAMenu() {
         var selected by mutableStateOf(0)
         var mode by mutableStateOf(FingerInputMode.HAND)
+        var compact by mutableStateOf(true)
         val pens = DefaultPenTray
         compose.setContent {
             FucknotesTheme {
                 InkToolbar(
                     pens = pens, selectedPen = selected, tool = pens[selected].tool,
-                    fingerInputMode = mode, compact = true, onSelectPen = { selected = it },
+                    fingerInputMode = mode, compact = compact, onSelectPen = { selected = it },
                     onEditPen = { _, _, _ -> }, onSelectTool = {}, onFingerInputMode = { mode = it },
-                    onToggleCompact = {},
+                    onToggleCompact = { compact = !compact },
                 )
             }
         }
@@ -120,10 +168,20 @@ class FingerInputTest {
             compose.onNodeWithContentDescription(penLabel(pens[index])).performScrollTo().performClick().assertIsSelected()
             compose.runOnIdle { assertEquals(index, selected) }
         }
-        for (next in FingerInputMode.entries) {
-            compose.onNodeWithContentDescription("Finger input: ${mode.label}").performClick()
-            compose.onNodeWithText(next.label).performClick()
-            compose.runOnIdle { assertEquals(next, mode) }
+        for (expanded in listOf(false, true)) {
+            if (expanded) compose.onNodeWithContentDescription("Show all controls").performClick()
+            repeat(2) {
+                for (next in listOf(FingerInputMode.DRAW, FingerInputMode.DISABLED, FingerInputMode.HAND)) {
+                    compose.onNode(hasContentDescription("Finger input:", substring = true)).performClick()
+                    compose.runOnIdle {
+                        assertEquals(next, mode)
+                        assertEquals("Cycling must preserve the selected pen", 2, selected)
+                    }
+                    compose.onNode(hasContentDescription("Finger input: ${next.label}.", substring = true))
+                        .assertIsDisplayed()
+                    FingerInputMode.entries.forEach { compose.onNodeWithText(it.label).assertDoesNotExist() }
+                }
+            }
         }
     }
 }

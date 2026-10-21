@@ -5,8 +5,8 @@ Validated on the connected Xiaomi 2410CRP4CI (Android 16) on 2026-10-22. The cur
 ## Implemented
 
 - Compact editor controls, circular ink colors, custom eraser icon, and paper settings in the overflow menu.
-- Right-aligned toolbar in both compact and expanded modes: three pen swatches, two highlighter presets, eraser, finger-input menu and the control toggle. Standalone Pen/Highlighter buttons are removed. Swatches retain their saved colors and nib widths; tapping the selected swatch opens its editor.
-- The finger menu offers Hand / move page, Write with fingers and Disabled. Disabled rejects finger drawing, scrolling, pinch and double-taps while stylus input and toolbar controls remain usable. The preference persists across restarts and migrates the previous Draw with finger switch.
+- Right-aligned toolbar in both compact and expanded modes: three pen swatches, two highlighter presets, eraser, a finger-input cycle button and the control toggle. Standalone Pen/Highlighter buttons are removed. Swatches retain their saved colors and nib widths; tapping the selected swatch opens its editor.
+- Each tap on the finger-input button cycles Hand / move page -> Write with fingers -> Pen only -> Hand, without opening a dropdown. Pen only is the previous Disabled mode: normal stylus writing with palm/finger touches on the page ignored, including drawing, scrolling, pinch and double-taps. The icon and accessible state describe the current mode. The preference persists across restarts and migrates the previous Draw with finger switch.
 - Existing pen trays retain their slot indices and settings; missing pen/highlighter slots are supplemented for older builds.
 - Removed note locking, pinning, reminders, type-conversion and note-info controls; removed Stationery and the duplicate home create button.
 - Plus menu contains notebook, canvas, and PDF import.
@@ -37,8 +37,8 @@ git diff --check
 - 9 instrumented tests passed on the physical Xiaomi tablet (not the connected emulator).
 - PDF workflow tests verify original imported title, page count/backgrounds, exported page dimensions and background pixels, including legacy page counts.
 - Notebook rendering tests verify persisted ink and translucent highlighting over original PDF content, transparent PNG import, JPEG EXIF rotation, attachment preservation across duplicate-note removal, and readable nested ZIP PDFs with correct names/page counts.
-- Finger-input tests exercise the real Compose surface: hand touch pans without ink; disabled touch ignores swipe, double-tap and pinch; a stylus MotionEvent stream still creates ink with touch disabled; finger-writing mode creates ink without panning.
-- Toolbar tests verify exactly three pen swatches and two highlighters, absence of standalone Pen/Highlighter buttons, selection of both highlighters and a pen, and all three menu choices.
+- Finger-input tests exercise the real Compose surface: hand touch pans without ink; pen-only touch ignores swipe, double-tap and pinch; a stylus MotionEvent stream still creates ink with touch disabled even when a palm pointer lands first and remains down; finger-writing mode creates ink without panning.
+- Toolbar tests verify exactly three pen swatches and two highlighters, absence of standalone Pen/Highlighter buttons, selection of both highlighters and a pen, and repeated one-tap cycling through all three modes in compact and expanded layouts without a menu or a pen-selection change.
 - These Android tests use isolated surfaces or in-memory databases and do not edit the owner's notebooks.
 
 ## Interactive tablet checks
@@ -47,7 +47,7 @@ git diff --check
 - Created the isolated `Tablet_Validation_20261022` notebook with three pages. Adding a page kept the current page in view. The owner subsequently added handwriting/pages to this notebook; it is retained.
 - Plus menu shows New notebook, New canvas and Import PDF. Removed editor menu actions are absent; Paper is in the overflow menu.
 - Confirmed compact controls, right-aligned toolbar, fully visible swatches and increased dot size in tablet screenshots.
-- Opened the finger menu, selected Disabled, left the editor, restarted the app and reopened the notebook: Disabled was retained.
+- Selected pen-only touch behavior, left the editor, restarted the app and reopened the notebook: the preference was retained.
 - The owner confirmed the physical Xiaomi pen buttons work. Primary press/release was observed as KEY_PAGEDOWN on the Xiaomi Focus Pen Keyboard device.
 - The owner confirmed stroke color stays the same after pen lift following the night-tint fix.
 - Physical pen input and Android-injected stylus streams are recorded separately; synthetic input alone does not validate the Xiaomi hardware buttons.
