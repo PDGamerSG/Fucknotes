@@ -312,10 +312,10 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     fun importPdf(uri: Uri, onCreated: (Long) -> Unit) = viewModelScope.launch {
         if (progress.value != null) return@launch
         val folder = currentFolderId()
-        progress.value = "Opening PDF?"
+        progress.value = "Opening PDF…"
         try {
             val id = com.example.fucknotes.media.PdfImporter(getApplication(), repo).import(uri, folder) { page, total ->
-                progress.value = "Importing page $page of $total?"
+                progress.value = "Importing page $page of $total…"
             }
             onCreated(id)
         } catch (error: Exception) {
@@ -334,14 +334,14 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
     fun saveExport(request: HomeExportRequest, destination: Uri) = viewModelScope.launch {
         if (progress.value != null) return@launch
-        progress.value = "Preparing PDFs?"
+        progress.value = "Preparing PDFs…"
         try {
             val target = request.target
             val notes = target.folderId?.let { repo.notesInFolderTree(it) }
                 ?: target.noteIds.mapNotNull { repo.getNote(it) }
             com.example.fucknotes.export.FolderExporter(getApplication(), exporter).save(
                 notes, state.value.folders, target.folderId, target.title, request.mode, destination,
-            ) { done, total -> progress.value = "Exporting note $done of $total?" }
+            ) { done, total -> progress.value = "Exporting note $done of $total…" }
             _message.value = "Saved ${notes.size} ${if (notes.size == 1) "note" else "notes"}"
         } catch (error: Exception) {
             if (error is kotlinx.coroutines.CancellationException) throw error

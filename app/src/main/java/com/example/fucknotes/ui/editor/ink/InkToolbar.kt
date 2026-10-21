@@ -54,10 +54,12 @@ fun InkToolbar(
             Modifier.padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            ToolButton(icon = Icons.Outlined.Edit, label = "Pen", selected = tool == InkTool.PEN,
-                onClick = { onSelectTool(InkTool.PEN) })
-            ToolButton(icon = Icons.Outlined.BorderColor, label = "Highlighter", selected = tool == InkTool.HIGHLIGHTER,
-                onClick = { onSelectTool(InkTool.HIGHLIGHTER) })
+            if (!compact) {
+                ToolButton(icon = Icons.Outlined.Edit, label = "Pen", selected = tool == InkTool.PEN,
+                    onClick = { onSelectTool(InkTool.PEN) })
+                ToolButton(icon = Icons.Outlined.BorderColor, label = "Highlighter", selected = tool == InkTool.HIGHLIGHTER,
+                    onClick = { onSelectTool(InkTool.HIGHLIGHTER) })
+            }
             ToolButton(
                 icon = EraserIcon,
                 label = "Eraser",

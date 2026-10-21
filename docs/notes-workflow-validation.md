@@ -5,6 +5,7 @@ Code and test sources compile. Runtime tests and tablet installation are deferre
 ## Implemented
 
 - Compact editor controls, circular ink colors, custom eraser icon, and paper settings in the overflow menu.
+- Compact mode retains only colors, eraser, hand and the control toggle; expand it to change pen/highlighter families.
 - Removed note locking, pinning, reminders, type-conversion and note-info controls; removed Stationery and the duplicate home create button.
 - Plus menu contains notebook, canvas, and PDF import.
 - Collection/folder hierarchy with visible menus, recursive export, and a home light/dark toggle.

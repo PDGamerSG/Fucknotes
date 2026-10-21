@@ -171,7 +171,7 @@ fun EditorScreen(
         when {
             id != state.noteId -> Unit
             next == null -> leaveNote()
-            else -> scope.launch { viewModel.saveNow(); onOpenNote(next) }.let { Unit }
+            else -> { scope.launch { viewModel.saveNow(); onOpenNote(next) }; Unit }
         }
     }
 
