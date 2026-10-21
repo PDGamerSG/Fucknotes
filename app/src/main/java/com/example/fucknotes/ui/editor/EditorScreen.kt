@@ -236,7 +236,7 @@ fun EditorScreen(
                     compact = compact, onSelectPen = viewModel::selectPen,
                     onEditPen = viewModel::editPen, onSelectTool = viewModel::setTool,
                     onToggleCompact = { compact = !compact },
-                    modifier = Modifier.fillMaxWidth().padding(8.dp),
+                    modifier = Modifier.padding(8.dp),
                 )
             } else if (!isInkNote) {
                 EditorBottomBar(

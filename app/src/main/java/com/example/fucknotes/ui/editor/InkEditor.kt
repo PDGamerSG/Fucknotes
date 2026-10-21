@@ -118,16 +118,16 @@ fun InkEditor(
             )
         }
         BoxWithConstraints(Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(8.dp)) {
-            if (compact) penBar(Modifier.fillMaxWidth())
+            if (compact) penBar(Modifier.align(Alignment.TopEnd))
             else if (maxWidth < 900.dp) {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     quickBar()
-                    penBar(Modifier.fillMaxWidth())
+                    penBar(Modifier)
                 }
             } else {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     quickBar()
-                    penBar(Modifier.weight(1f))
+                    penBar(Modifier.weight(1f, fill = false))
                 }
             }
         }

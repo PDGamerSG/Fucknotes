@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Edit
@@ -21,7 +22,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.fucknotes.data.model.InkTool
-import com.example.fucknotes.data.model.InkColors
 import com.example.fucknotes.data.model.PenPreset
 import com.example.fucknotes.ui.common.FloatingPanel
 import com.example.fucknotes.ui.common.ToolButton
@@ -49,7 +49,7 @@ fun InkToolbar(
 ) {
     var editingPen by remember { mutableIntStateOf(-1) }
 
-    FloatingPanel(modifier) {
+    FloatingPanel(modifier.widthIn(max = if (compact) 374.dp else 454.dp)) {
         Row(
             Modifier.padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -75,7 +75,11 @@ fun InkToolbar(
             ToolDivider()
 
             val pen = pens.getOrElse(selectedPen) { pens.first() }
-            val colors = (InkColors + pen.colorArgb).distinct()
+            // Keep five useful colors on the bar. The active swatch opens the full color picker;
+            // a custom color replaces the last quick swatch instead of growing the toolbar.
+            val quickColors = listOf(0xFF171B23.toInt(), 0xFF2386DC.toInt(), 0xFFE84158.toInt(),
+                0xFF299B62.toInt(), 0xFFFFDF43.toInt())
+            val colors = if (pen.colorArgb in quickColors) quickColors else quickColors.take(4) + pen.colorArgb
             Row(
                 Modifier.weight(1f).horizontalScroll(rememberScrollState()).height(48.dp),
                 verticalAlignment = Alignment.CenterVertically,
