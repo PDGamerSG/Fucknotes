@@ -10,6 +10,7 @@ Code and test sources compile. Runtime tests and tablet installation are deferre
 - Collection/folder hierarchy with visible menus, recursive export, and a home light/dark toggle.
 - Cooler page tones and display-only night shading, with stronger dotted-paper contrast.
 - Translucent highlighting on new and reopened strokes.
+- Typed-note annotations remain visible while typing, scroll with their content, and have the same pen/highlighter/eraser controls as notebooks.
 - PDF import from the picker, Open with, and Share; pages become image backgrounds with editable ink above them. PDF text and links are rasterized during import. Mixed PDF page sizes are fitted proportionally into the notebook's first-page size.
 - Page images retain their position in notes, thumbnails, backups and PDF exports; their page menu supports repositioning, resizing and removal.
 - Combined PDFs, ZIPs of PDFs, and separate PDFs in a selected folder; nested exports preserve folder paths and disambiguate duplicate names.
@@ -34,5 +35,6 @@ git diff --check
 6. Export a collection with nested folders, same-name notes, Unicode names, empty pages, images and ink in each output mode. Reopen every output, compare page count/content, and verify cancellation and unwritable destinations.
 7. Add pages while viewing a middle page, reopen the notebook, and immediately leave after a final stroke. Confirm the camera, page count and final stroke are retained.
 8. Check compact/expanded controls, night shading, folder menus and all removed actions on narrow and wide windows.
+9. In an existing typed note, annotate several lines, scroll using a finger or the hand tool, switch back to typing, and reopen. Confirm the ink stays visible, moves with the text, and does not intercept typing or text selection while annotation mode is off.
 
 No runtime result is claimed by the compile checks above.

@@ -7,7 +7,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
@@ -48,6 +50,7 @@ import com.example.fucknotes.ui.components.TextPromptDialog
 import com.example.fucknotes.ui.editor.ink.DefaultRuleColor
 import com.example.fucknotes.ui.editor.ink.InkCamera
 import com.example.fucknotes.ui.editor.ink.InkSurface
+import com.example.fucknotes.ui.editor.ink.InkToolbar
 import com.example.fucknotes.ui.editor.tabs.EditorTabBar
 import com.example.fucknotes.ui.editor.tabs.OpenTabs
 import com.example.fucknotes.ui.theme.brand
@@ -77,6 +80,7 @@ fun EditorScreen(
     // Pan and zoom belong to the view, not the note, so the camera is remembered here.
     val density = LocalDensity.current.density
     val camera = remember(density) { InkCamera(density) }
+    val contentScroll = rememberScrollState()
 
     val isInkNote = state.type.isInk
     var compact by rememberSaveable(state.noteId) { mutableStateOf(false) }
@@ -176,7 +180,7 @@ fun EditorScreen(
                     onClose = closeTab,
                 )
                 // A typed note keeps an ordinary bar; an ink note's controls float over its page.
-                if (!isInkNote) {
+                if (!isInkNote && !compact) {
                     TopAppBar(
                         title = {},
                         navigationIcon = {
@@ -219,7 +223,15 @@ fun EditorScreen(
             }
         },
         bottomBar = {
-            if (!isInkNote) {
+            if (!isInkNote && state.inkActive) {
+                InkToolbar(
+                    pens = state.pens, selectedPen = state.selectedPen, tool = state.tool,
+                    compact = compact, onSelectPen = viewModel::selectPen,
+                    onEditPen = viewModel::editPen, onSelectTool = viewModel::setTool,
+                    onToggleCompact = { compact = !compact },
+                    modifier = Modifier.fillMaxWidth().padding(8.dp),
+                )
+            } else if (!isInkNote) {
                 EditorBottomBar(
                     state = state,
                     onAddImage = {
@@ -293,8 +305,8 @@ fun EditorScreen(
                         onColor = { showColor = true },
                         onPaper = { showPaper = true },
                         onTags = { showTagDialog = true },
-                                    onAddImage = { pickImage.launch(arrayOf("image/*")) },
-                                    onPageImages = if (isInkNote) ({ showPageImages = true }) else null,
+                        onAddImage = { pickImage.launch(arrayOf("image/*")) },
+                        onPageImages = { showPageImages = true },
                         onExport = { showExport = true },
                         onDelete = { showDeleteConfirm = true },
                         onOpenNote = onOpenNote,
@@ -310,32 +322,32 @@ fun EditorScreen(
                         playing = player.playingPath
                     },
                     onAddTag = { showTagDialog = true },
+                    contentScroll = contentScroll,
                 ) {
                     // Layered ink over a typed note: the same surface, transparent, with no paper
                     // of its own so the words underneath stay visible.
-                    if (state.inkActive) {
-                        InkSurface(
-                            strokes = inkStrokes,
-                            camera = camera,
-                            tool = state.tool,
-                            colorArgb = state.activePen.colorArgb,
-                            widthDp = state.activePen.widthDp,
-                            enabled = true,
-                            fingerDrawing = state.fingerDrawing,
-                            zoomLocked = state.zoomLocked,
-                            notebook = false,
-                            paperStyle = PaperStyle.PLAIN,
-                            pageSpec = state.page,
-                            ruleColor = state.lineColorArgb.paperColorOr(DefaultRuleColor),
-                            ruleSpacingDp = state.ruleSpacingDp,
-                            deskColor = MaterialTheme.brand.desk,
-                            onStrokesFinished = viewModel::commitStrokes,
-                            onErase = viewModel::eraseStrokes,
-                            onToggleEraser = viewModel::toggleEraser,
-                            modifier = Modifier.fillMaxSize(),
-                            pageColor = androidx.compose.ui.graphics.Color.Transparent,
-                        )
-                    }
+                    InkSurface(
+                        strokes = inkStrokes,
+                        camera = camera,
+                        tool = state.tool,
+                        colorArgb = state.activePen.colorArgb,
+                        widthDp = state.activePen.widthDp,
+                        enabled = state.inkActive,
+                        fingerDrawing = state.fingerDrawing,
+                        zoomLocked = state.zoomLocked,
+                        notebook = false,
+                        paperStyle = PaperStyle.PLAIN,
+                        pageSpec = state.page,
+                        ruleColor = state.lineColorArgb.paperColorOr(DefaultRuleColor),
+                        ruleSpacingDp = state.ruleSpacingDp,
+                        deskColor = MaterialTheme.brand.desk,
+                        onStrokesFinished = viewModel::commitStrokes,
+                        onErase = viewModel::eraseStrokes,
+                        onToggleEraser = viewModel::toggleEraser,
+                        modifier = Modifier.fillMaxSize(),
+                        pageColor = androidx.compose.ui.graphics.Color.Transparent,
+                        contentScroll = contentScroll,
+                    )
                 }
             }
         }

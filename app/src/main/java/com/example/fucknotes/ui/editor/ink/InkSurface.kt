@@ -1,6 +1,7 @@
 package com.example.fucknotes.ui.editor.ink
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculatePan
@@ -128,6 +129,8 @@ fun InkSurface(
     pageColor: Color = PaperWhite,
     attachments: List<com.example.fucknotes.data.db.AttachmentEntity> = emptyList(),
     pageCount: () -> Int = { 1 },
+    /** When annotating typed content, scrolling moves the text and ink as one document. */
+    contentScroll: ScrollState? = null,
 ) {
     camera.density = LocalDensity.current.density
 
@@ -149,7 +152,20 @@ fun InkSurface(
     val currentNotebook by rememberUpdatedState(notebook)
     val currentOnErase by rememberUpdatedState(onErase)
     val currentOnToggleEraser by rememberUpdatedState(onToggleEraser)
+    val currentContentScroll by rememberUpdatedState(contentScroll)
+    val contentScrollOffset = contentScroll?.value
     val haptics = LocalHapticFeedback.current
+
+    val panContent: (Offset) -> Unit = remember(camera) {
+        { delta ->
+            val scroll = currentContentScroll
+            if (scroll == null) camera.panBy(delta)
+            else {
+                scroll.dispatchRawDelta(-delta.y)
+                camera.followContentScroll(scroll.value)
+            }
+        }
+    }
 
     val brush = remember(tool, colorArgb, widthDp, camera.scale) {
         if (tool.isBrush) InkCodec.brushFor(tool, colorArgb, widthDp, camera.scale) else null
@@ -186,7 +202,7 @@ fun InkSurface(
         modifier = modifier
             // Notebook pages float on a desk; the endless canvas *is* the page.
             .background(if (notebook) deskColor else pageColor)
-            .pointerInput(Unit) {
+            .then(if (enabled) Modifier.pointerInput(Unit) {
                 awaitPointerEventScope {
                     var lastErasePoint: Offset? = null
                     var outsidePageGesture = false
@@ -300,7 +316,8 @@ fun InkSurface(
                         // Two or more touch pointers mean "move the page", never "draw". A
                         // stylus contact is excluded because a resting palm must not steer it.
                         if (down.size >= 2 && !stylusDown) {
-                            camera.transformBy(
+                            if (currentContentScroll != null) panContent(event.calculatePan())
+                            else camera.transformBy(
                                 factor = if (currentZoomLocked) 1f
                                 else event.calculateZoom().takeIf { it > 0f } ?: 1f,
                                 centroid = event.calculateCentroid(useCurrent = false),
@@ -321,7 +338,7 @@ fun InkSurface(
                             // initial pass on some Compose/Ink versions. Use the raw movement so
                             // a stylus-only page still responds to a finger drag instead of
                             // appearing frozen after the touch has been consumed downstream.
-                            down.firstOrNull()?.let { camera.panBy(it.positionChangeIgnoreConsumed()) }
+                            down.firstOrNull()?.let { panContent(it.positionChangeIgnoreConsumed()) }
                             event.changes
                                 .filter { it.type != PointerType.Stylus }
                                 .forEach { it.consume() }
@@ -336,7 +353,7 @@ fun InkSurface(
 
                         when {
                             currentTool == InkTool.PAN && active != null -> {
-                                camera.panBy(active.positionChangeIgnoreConsumed())
+                                panContent(active.positionChangeIgnoreConsumed())
                                 event.changes.forEach { it.consume() }
                             }
 
@@ -357,7 +374,7 @@ fun InkSurface(
                         }
                     }
                 }
-            }
+            } else Modifier)
     ) {
         // A page is measured in points, so it exports as a PDF page one-to-one; the camera scales
         // it to whatever window it is being written in.
@@ -374,6 +391,7 @@ fun InkSurface(
                 viewportHeightPx = constraints.maxHeight.toFloat(),
                 columnHeightDp = if (notebook) createdPageCount * NotebookLayout.strideOf(pageSpec) else 0f,
             )
+            contentScrollOffset?.let(camera::followContentScroll)
         }
 
         // Paper.

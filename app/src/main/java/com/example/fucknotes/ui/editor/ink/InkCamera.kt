@@ -105,6 +105,13 @@ class InkCamera(density: Float) {
         clampToColumn()
     }
 
+    /** Typed content owns its scroll position; annotations use exactly the same pixel offset. */
+    fun followContentScroll(offsetPx: Int) {
+        zoom = 1f
+        panX = 0f
+        panY = -offsetPx.toFloat()
+    }
+
     /**
      * Which page is under the middle of the window, counting from zero.
      *

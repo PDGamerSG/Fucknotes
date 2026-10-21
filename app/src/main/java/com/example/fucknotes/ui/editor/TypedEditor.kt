@@ -1,6 +1,7 @@
 package com.example.fucknotes.ui.editor
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,7 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -72,6 +72,7 @@ fun TypedEditor(
     playingPath: String?,
     onPlay: (String) -> Unit,
     onAddTag: () -> Unit,
+    contentScroll: ScrollState,
     modifier: Modifier = Modifier,
     inkOverlay: @Composable BoxScope.() -> Unit = {},
 ) {
@@ -98,9 +99,9 @@ fun TypedEditor(
                 modifier = Modifier.fillMaxSize(),
             ) {
                 when (state.type) {
-                    NoteType.CHECKLIST -> ChecklistBody(state = state, viewModel = viewModel)
+                    NoteType.CHECKLIST -> ChecklistBody(state = state, viewModel = viewModel, contentScroll = contentScroll)
 
-                    NoteType.TEXT -> Column(Modifier.verticalScroll(rememberScrollState())) {
+                    NoteType.TEXT -> Column(Modifier.verticalScroll(contentScroll)) {
                         TextField(
                             value = state.body,
                             onValueChange = viewModel::setBody,
@@ -152,10 +153,10 @@ internal fun transparentTextFieldColors() = TextFieldDefaults.colors(
 )
 
 @Composable
-private fun ChecklistBody(state: EditorUiState, viewModel: EditorViewModel) {
+private fun ChecklistBody(state: EditorUiState, viewModel: EditorViewModel, contentScroll: ScrollState) {
     Column(
         Modifier
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(contentScroll)
             .padding(horizontal = 8.dp)
     ) {
         state.checklist.forEach { item ->
