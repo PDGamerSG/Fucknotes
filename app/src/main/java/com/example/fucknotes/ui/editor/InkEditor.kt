@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -120,14 +121,23 @@ fun InkEditor(
         BoxWithConstraints(Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(8.dp)) {
             if (compact) penBar(Modifier.align(Alignment.TopEnd))
             else if (maxWidth < 900.dp) {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalAlignment = Alignment.End,
+                ) {
                     quickBar()
-                    penBar(Modifier)
+                    penBar(Modifier.align(Alignment.End))
                 }
             } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
                     quickBar()
-                    penBar(Modifier.weight(1f, fill = false))
+                    Spacer(Modifier.weight(1f))
+                    penBar(Modifier)
                 }
             }
         }

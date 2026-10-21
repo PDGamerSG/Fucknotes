@@ -61,14 +61,14 @@ private fun DrawScope.drawPaperPattern(style: PaperStyle, color: Color, step: Fl
     if (style == PaperStyle.LINED || style == PaperStyle.GRID) {
         var y = step
         while (y < size.height) {
-            drawLine(color, Offset(0f, y), Offset(size.width, y), strokeWidth = hairline)
+            drawLine(color, Offset(0f, y), Offset(size.width, y), strokeWidth = 1.25f)
             y += step
         }
     }
     if (style == PaperStyle.GRID) {
         var x = step
         while (x < size.width) {
-            drawLine(color, Offset(x, 0f), Offset(x, size.height), strokeWidth = hairline)
+            drawLine(color, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1.25f)
             x += step
         }
     }
@@ -77,7 +77,7 @@ private fun DrawScope.drawPaperPattern(style: PaperStyle, color: Color, step: Fl
         while (y < size.height) {
             var x = step
             while (x < size.width) {
-                drawCircle(color, radius = 1.4f, center = Offset(x, y))
+                drawCircle(color, radius = 1.9f, center = Offset(x, y))
                 x += step
             }
             y += step

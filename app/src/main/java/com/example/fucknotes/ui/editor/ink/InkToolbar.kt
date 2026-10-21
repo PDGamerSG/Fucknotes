@@ -21,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.example.fucknotes.data.model.DefaultPenTray
 import com.example.fucknotes.data.model.InkTool
 import com.example.fucknotes.data.model.PenPreset
 import com.example.fucknotes.ui.common.FloatingPanel
@@ -49,7 +50,7 @@ fun InkToolbar(
 ) {
     var editingPen by remember { mutableIntStateOf(-1) }
 
-    FloatingPanel(modifier.widthIn(max = if (compact) 374.dp else 454.dp)) {
+    FloatingPanel(modifier.widthIn(max = if (compact) 448.dp else 520.dp)) {
         Row(
             Modifier.padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -74,34 +75,73 @@ fun InkToolbar(
             )
             ToolDivider()
 
-            val pen = pens.getOrElse(selectedPen) { pens.first() }
-            // Keep five useful colors on the bar. The active swatch opens the full color picker;
-            // a custom color replaces the last quick swatch instead of growing the toolbar.
+            val pen = pens.getOrNull(selectedPen) ?: pens.firstOrNull() ?: DefaultPenTray.first()
+            val penSlots = pens.withIndex().filter { it.value.tool == InkTool.PEN }.take(5)
+            val highlighterSlots = pens.withIndex().filter { it.value.tool == InkTool.HIGHLIGHTER }.take(2)
+
+            // Keep five pen colors on the bar. A color is tied to a real pen slot so selecting it
+            // also changes the active family when a highlighter or eraser was in hand. A custom
+            // active pen color occupies the last slot, preserving the full color editor without
+            // growing the toolbar.
             val quickColors = listOf(0xFF171B23.toInt(), 0xFF2386DC.toInt(), 0xFFE84158.toInt(),
                 0xFF299B62.toInt(), 0xFFFFDF43.toInt())
-            val colors = if (pen.colorArgb in quickColors) quickColors else quickColors.take(4) + pen.colorArgb
+            val penColors = if (pen.tool == InkTool.PEN && pen.colorArgb !in quickColors) {
+                quickColors.take(4) + pen.colorArgb
+            } else quickColors
             Row(
                 Modifier.weight(1f).horizontalScroll(rememberScrollState()).height(48.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                colors.forEachIndexed { index, color ->
+                penColors.forEachIndexed { index, color ->
+                    val slot = penSlots.getOrNull(index)
+                    val slotIndex = slot?.index ?: -1
+                    val slotPen = slot?.value ?: pen.copy(tool = InkTool.PEN, colorArgb = color)
                     Box {
                         PenGlyph(
-                            pen = pen.copy(colorArgb = color),
-                            active = tool.isBrush && color == pen.colorArgb,
+                            pen = slotPen.copy(colorArgb = color),
+                            active = tool == InkTool.PEN && selectedPen == slotIndex && color == pen.colorArgb,
                             onClick = {
-                                if (tool.isBrush && color == pen.colorArgb) editingPen = index
-                                else {
-                                    onSelectPen(selectedPen)
-                                    onEditPen(selectedPen, color, pen.widthDp)
+                                if (slotIndex >= 0) {
+                                    if (tool == InkTool.PEN && selectedPen == slotIndex && color == pen.colorArgb) {
+                                        editingPen = slotIndex
+                                    } else {
+                                        onSelectPen(slotIndex)
+                                        onEditPen(slotIndex, color, slotPen.widthDp)
+                                    }
                                 }
                             },
                         )
-                        if (editingPen == index) {
+                        if (editingPen == slotIndex && slotIndex >= 0) {
                             PenEditorPopup(
-                                pen = pen,
+                                pen = pens.getOrNull(slotIndex) ?: slotPen,
                                 onDismiss = { editingPen = -1 },
-                                onChange = { nextColor, width -> onEditPen(selectedPen, nextColor, width) },
+                                onChange = { nextColor, width -> onEditPen(slotIndex, nextColor, width) },
+                            )
+                        }
+                    }
+                }
+
+                // Two dedicated highlighter choices stay visible in compact mode as well. Each is
+                // a real tray slot, so its translucent width and colour persist independently.
+                if (highlighterSlots.isNotEmpty()) ToolDivider()
+                highlighterSlots.forEach { slot ->
+                    val slotIndex = slot.index
+                    val slotPen = slot.value
+                    Box {
+                        PenGlyph(
+                            pen = slotPen,
+                            active = tool == InkTool.HIGHLIGHTER && selectedPen == slotIndex,
+                            highlighter = true,
+                            onClick = {
+                                if (tool == InkTool.HIGHLIGHTER && selectedPen == slotIndex) editingPen = slotIndex
+                                else onSelectPen(slotIndex)
+                            },
+                        )
+                        if (editingPen == slotIndex) {
+                            PenEditorPopup(
+                                pen = pens.getOrNull(slotIndex) ?: slotPen,
+                                onDismiss = { editingPen = -1 },
+                                onChange = { nextColor, width -> onEditPen(slotIndex, nextColor, width) },
                             )
                         }
                     }

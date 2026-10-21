@@ -637,14 +637,14 @@ private fun DrawScope.drawPaperPattern(
     if (style == PaperStyle.LINED || style == PaperStyle.GRID) {
         var y = firstY
         while (y < bottom) {
-            drawLine(color, Offset(left, y), Offset(right, y), strokeWidth = 1f)
+            drawLine(color, Offset(left, y), Offset(right, y), strokeWidth = 1.5f)
             y += step
         }
     }
     if (style == PaperStyle.GRID) {
         var x = firstX
         while (x < right) {
-            drawLine(color, Offset(x, top), Offset(x, bottom), strokeWidth = 1f)
+            drawLine(color, Offset(x, top), Offset(x, bottom), strokeWidth = 1.5f)
             x += step
         }
     }
@@ -653,7 +653,7 @@ private fun DrawScope.drawPaperPattern(
         while (y < bottom) {
             var x = firstX
             while (x < right) {
-                drawCircle(color, radius = 2.1f, center = Offset(x, y))
+                drawCircle(color, radius = 2.8f, center = Offset(x, y))
                 x += step
             }
             y += step
@@ -671,4 +671,4 @@ private val PageEdge = Color(0x22000000)
 val PaperWhite = Color(0xFFF1F5FA)
 
 /** Rules and dots: visible on paper, never competing with the ink. */
-val DefaultRuleColor = Color(0xFFAFBAC9)
+val DefaultRuleColor = Color(0xFF8795AA)

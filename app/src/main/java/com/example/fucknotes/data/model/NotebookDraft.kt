@@ -36,7 +36,7 @@ val PaperColors: List<Int> = listOf(
 
 /** Rule tones: the default grey, a soft blue, and a red for margins. */
 val LineColors: List<Int> = listOf(
-    0xFFAFBAC9.toInt(),
+    0xFF8795AA.toInt(),
     0xFFA9C8F0.toInt(),
     0xFFE58A8A.toInt(),
     0xFF6C4CE0.toInt(),

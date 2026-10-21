@@ -30,7 +30,7 @@ fun PaperBackground(
                 PaperStyle.LINED -> {
                     var y = step
                     while (y < size.height) {
-                        drawLine(lineColor, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
+                        drawLine(lineColor, Offset(0f, y), Offset(size.width, y), strokeWidth = 1.25f)
                         y += step
                     }
                 }
@@ -38,12 +38,12 @@ fun PaperBackground(
                 PaperStyle.GRID -> {
                     var y = step
                     while (y < size.height) {
-                        drawLine(lineColor, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
+                        drawLine(lineColor, Offset(0f, y), Offset(size.width, y), strokeWidth = 1.25f)
                         y += step
                     }
                     var x = step
                     while (x < size.width) {
-                        drawLine(lineColor, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1f)
+                        drawLine(lineColor, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1.25f)
                         x += step
                     }
                 }
@@ -53,7 +53,7 @@ fun PaperBackground(
                     while (y < size.height) {
                         var x = step
                         while (x < size.width) {
-                            drawCircle(lineColor, radius = 1.6f, center = Offset(x, y))
+                            drawCircle(lineColor, radius = 2f, center = Offset(x, y))
                             x += step
                         }
                         y += step

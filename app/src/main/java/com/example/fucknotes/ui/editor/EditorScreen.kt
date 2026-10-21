@@ -231,13 +231,14 @@ fun EditorScreen(
         },
         bottomBar = {
             if (!isInkNote && state.inkActive) {
-                InkToolbar(
-                    pens = state.pens, selectedPen = state.selectedPen, tool = state.tool,
-                    compact = compact, onSelectPen = viewModel::selectPen,
-                    onEditPen = viewModel::editPen, onSelectTool = viewModel::setTool,
-                    onToggleCompact = { compact = !compact },
-                    modifier = Modifier.padding(8.dp),
-                )
+                Box(Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.CenterEnd) {
+                    InkToolbar(
+                        pens = state.pens, selectedPen = state.selectedPen, tool = state.tool,
+                        compact = compact, onSelectPen = viewModel::selectPen,
+                        onEditPen = viewModel::editPen, onSelectTool = viewModel::setTool,
+                        onToggleCompact = { compact = !compact },
+                    )
+                }
             } else if (!isInkNote) {
                 EditorBottomBar(
                     state = state,

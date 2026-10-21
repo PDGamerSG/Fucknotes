@@ -23,6 +23,15 @@ import java.security.MessageDigest
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
 
+/** Keep the two highlighter choices available when loading a tray saved by an older build. */
+private fun normalizePenTray(stored: List<PenPreset>?): List<PenPreset> {
+    val tray = stored?.takeIf { it.isNotEmpty() } ?: DefaultPenTray
+    val missing = (2 - tray.count { it.tool == com.example.fucknotes.data.model.InkTool.HIGHLIGHTER })
+        .coerceAtLeast(0)
+    return tray + DefaultPenTray.filter { it.tool == com.example.fucknotes.data.model.InkTool.HIGHLIGHTER }
+        .take(missing)
+}
+
 /** App-wide preferences: appearance, list behaviour and the note-lock passcode. */
 class SettingsRepository(private val context: Context) {
 
@@ -115,10 +124,9 @@ class SettingsRepository(private val context: Context) {
         zoomLocked = this[Keys.zoomLocked] ?: false,
         // A tray written by an older build — or half-written — falls back whole rather than
         // leaving the user with an empty pen case.
-        penTray = this[Keys.penTray]
-            ?.let { runCatching { json.decodeFromString<List<PenPreset>>(it) }.getOrNull() }
-            ?.takeIf { it.isNotEmpty() }
-            ?: DefaultPenTray,
+        penTray = normalizePenTray(
+            this[Keys.penTray]?.let { runCatching { json.decodeFromString<List<PenPreset>>(it) }.getOrNull() },
+        ),
         selectedPen = this[Keys.selectedPen] ?: 0,
         penPrimaryAction = enumOr(this[Keys.penPrimaryAction], PenButtonAction.TOGGLE_ERASER),
         penSecondaryAction = enumOr(this[Keys.penSecondaryAction], PenButtonAction.UNDO),
