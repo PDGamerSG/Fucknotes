@@ -37,6 +37,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import com.example.fucknotes.data.model.NoteType
 import com.example.fucknotes.data.model.PaperStyle
 import com.example.fucknotes.input.PenInputBus
@@ -138,8 +141,11 @@ fun EditorScreen(
 
     // Hardware stylus buttons are delivered by the activity and consumed only by the visible
     // editor. This also keeps button presses out of text notes and the home screen.
-    LaunchedEffect(viewModel) {
-        PenInputBus.buttons.collect(viewModel::handlePenButton)
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(viewModel, lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            PenInputBus.buttons.collect(viewModel::handlePenButton)
+        }
     }
 
     // The tab bar names notes by their title, and a note is usually named after it is started.

@@ -316,7 +316,7 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
 
     fun setTool(tool: InkTool) {
         // Tapping an active eraser or pan button a second time returns to the last pen.
-        val next = if (_state.value.tool == tool && !tool.isBrush) InkTool.PEN else tool
+        val next = if (_state.value.tool == tool && !tool.isBrush) _state.value.activePen.tool else tool
         if (next.isBrush) {
             // A tool shortcut (including a Xiaomi Pen button) should also move the tray selection
             // to a slot of that family. Otherwise a Marker action would leave the blue Pen slot

@@ -18,6 +18,7 @@ Code and test sources compile. Runtime tests and tablet installation are deferre
 - Adding a page keeps the camera still. Initial blank-page counts persist. Scroll bounds follow created pages.
 - Older stored page counts are preserved during database upgrade, backup restore, editing and PDF export.
 - Pending note saves complete when navigating away; saving and export share the persisted ink representation.
+- Pen motion buttons track held switches across tip lifts and hover, ignore release packets, and reset after focus loss. Complete `ACTION_MULTIPLE` key events do not remain latched. Only the resumed editor consumes shortcuts.
 
 ## Compile checks
 

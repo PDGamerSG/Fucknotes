@@ -27,6 +27,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.fucknotes.data.repo.SettingsRepository
 import com.example.fucknotes.data.model.PenButton
 import com.example.fucknotes.input.PenInputBus
+import com.example.fucknotes.input.PenMotionButtons
 import com.example.fucknotes.ui.nav.FucknotesNavGraph
 import com.example.fucknotes.ui.theme.FucknotesTheme
 import java.util.Locale
@@ -43,11 +44,7 @@ class MainActivity : FragmentActivity() {
     }
 
 
-    /** Last Xiaomi button bitmask per input device, used when firmware reports a button on ACTION_MOVE. */
-    private val lastPenMotionButtons = mutableMapOf<Int, Int>()
-
-    /** Last actionButton value per device. Some Xiaomi builds repeat it on every hover packet. */
-    private val lastPenActionButtons = mutableMapOf<Int, Int>()
+    private val penMotionButtons = PenMotionButtons()
 
     /** Key down state lets us support firmware that sends only ACTION_UP without double-firing. */
     private val pressedPenKeys = mutableSetOf<Long>()
@@ -131,7 +128,8 @@ class MainActivity : FragmentActivity() {
             event.keyCode == KeyEvent.KEYCODE_STYLUS_BUTTON_SECONDARY ||
             event.keyCode == KeyEvent.KEYCODE_STYLUS_BUTTON_TERTIARY ||
             event.keyCode == KeyEvent.KEYCODE_STYLUS_BUTTON_TAIL
-        val isStylusSource = device?.sources?.and(InputDevice.SOURCE_STYLUS) == InputDevice.SOURCE_STYLUS
+        val isStylusSource = event.isFromSource(InputDevice.SOURCE_STYLUS) ||
+            device?.sources?.and(InputDevice.SOURCE_STYLUS) == InputDevice.SOURCE_STYLUS
         PenInputBus.recordKeyEvent(
             event,
             button.takeIf { isXiaomiPen(device) || isStandardStylusButton || isStylusSource },
@@ -148,8 +146,9 @@ class MainActivity : FragmentActivity() {
                 }
 
                 KeyEvent.ACTION_MULTIPLE -> {
-                    // A few Focus Pen endpoints send ACTION_MULTIPLE instead of ACTION_DOWN.
-                    if (pressedPenKeys.add(identity)) PenInputBus.emit(button)
+                    // ACTION_MULTIPLE is a complete event and need not have a later key-up.
+                    // Do not latch it permanently, or every subsequent press is ignored.
+                    if (identity !in pressedPenKeys) PenInputBus.emit(button)
                 }
 
                 KeyEvent.ACTION_UP -> {
@@ -191,49 +190,17 @@ class MainActivity : FragmentActivity() {
         val isPenMouseSource = event.isFromSource(InputDevice.SOURCE_MOUSE) && isXiaomiPen(device)
         if (!isXiaomiPen(device) && !isStylusSource && !isPenMouseSource) return false
 
-        val deviceId = device?.id ?: -1
+        val deviceId = event.deviceId
         val state = event.buttonState
-        val previous = lastPenMotionButtons[deviceId] ?: 0
-        // Mouse-style Xiaomi packets identify the changed button in actionButton. On some MIUI
-        // builds buttonState is still the previous value for ACTION_BUTTON_PRESS, so relying on
-        // the state delta alone drops every pen press.
-        // Android normally reports ACTION_BUTTON_PRESS with actionButton, but the Focus Pen's
-        // cursor mapper has shipped in builds that report ACTION_MOVE/HOVER_MOVE with the same
-        // actionButton field. Use only its rising edge; otherwise use the rising edge in
-        // buttonState. This covers both the stylus and mouse input mappers without repeating a
-        // shortcut during a long drag.
-        val actionButton = event.actionButton
-        val isRelease = event.actionMasked == MotionEvent.ACTION_BUTTON_RELEASE
-        val previousActionButton = lastPenActionButtons[deviceId] ?: 0
-        // On the Focus Pen, actionButton can remain set on every HOVER_MOVE while a switch is
-        // held. Treat only its rising edge as a press; otherwise a long drag would toggle the
-        // eraser repeatedly. Normal Android BUTTON_PRESS packets still take this same path.
-        val actionButtonPress = if (
-            !isRelease &&
-            actionButton != 0 &&
-            actionButton != previousActionButton &&
-            (previous and actionButton) == 0
-        ) {
-            actionButton
-        } else {
-            0
-        }
-        val newlyPressed = actionButtonPress.takeIf { it != 0 } ?: (state and previous.inv())
+        val newlyPressed = penMotionButtons.update(
+            deviceId = deviceId,
+            buttons = state,
+            actionButton = event.actionButton,
+            released = event.actionMasked == MotionEvent.ACTION_BUTTON_RELEASE,
+            cancelled = event.actionMasked == MotionEvent.ACTION_CANCEL,
+        )
+        // ACTION_UP means the tip left the glass; a side switch can still be held during hover.
         if (newlyPressed != 0) motionButtonFromState(newlyPressed)?.let(PenInputBus::emit)
-
-        if (event.actionMasked == MotionEvent.ACTION_BUTTON_RELEASE ||
-            event.actionMasked == MotionEvent.ACTION_UP ||
-            event.actionMasked == MotionEvent.ACTION_CANCEL
-        ) {
-            lastPenMotionButtons.remove(deviceId)
-            lastPenActionButtons.remove(deviceId)
-        } else {
-            // A MIUI BUTTON_PRESS packet can carry the changed button only in actionButton and
-            // leave buttonState at zero. Remember both fields so the following MOVE packet does
-            // not produce a second shortcut for the same physical press.
-            lastPenMotionButtons[deviceId] = state or actionButton
-            lastPenActionButtons[deviceId] = actionButton
-        }
 
         // Button press/release packets have no useful pointer data and must not reach the ink
         // surface. ACTION_MOVE/ACTION_DOWN still pass through so the pen can continue writing.
@@ -335,8 +302,7 @@ class MainActivity : FragmentActivity() {
         // A key-up packet can be lost when a permission dialog or another app takes focus. Reset
         // these edge detectors so the next press after returning to Fucknotes is never ignored.
         pressedPenKeys.clear()
-        lastPenMotionButtons.clear()
-        lastPenActionButtons.clear()
+        penMotionButtons.clear()
         super.onPause()
     }
 
