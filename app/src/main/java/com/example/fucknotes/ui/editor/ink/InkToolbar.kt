@@ -50,7 +50,9 @@ fun InkToolbar(
 ) {
     var editingPen by remember { mutableIntStateOf(-1) }
 
-    FloatingPanel(modifier.widthIn(max = if (compact) 448.dp else 520.dp)) {
+    // The expanded tray needs room for five pens, two highlighters and the fixed controls. The
+    // compact tray omits the family buttons, so it stays a little shorter on narrow windows.
+    FloatingPanel(modifier.widthIn(max = if (compact) 520.dp else 580.dp)) {
         Row(
             Modifier.padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
