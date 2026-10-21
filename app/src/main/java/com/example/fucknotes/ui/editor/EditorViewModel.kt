@@ -18,6 +18,7 @@ import com.example.fucknotes.data.ink.PageSpec
 import com.example.fucknotes.data.model.AttachmentType
 import com.example.fucknotes.data.model.ChecklistItem
 import com.example.fucknotes.data.model.DefaultPenTray
+import com.example.fucknotes.data.model.FingerInputMode
 import com.example.fucknotes.data.model.InkTool
 import com.example.fucknotes.data.model.NoteType
 import com.example.fucknotes.data.model.MAX_NOTEBOOK_PAGES
@@ -73,8 +74,8 @@ data class EditorUiState(
     val tool: InkTool = InkTool.PEN,
     val pens: List<PenPreset> = DefaultPenTray,
     val selectedPen: Int = 0,
-    /** Mirrors the app-wide setting; false means the page only takes stylus input. */
-    val fingerDrawing: Boolean = true,
+    /** Mirrors the app-wide finger mode without changing the selected stylus tool. */
+    val fingerInputMode: FingerInputMode = FingerInputMode.DRAW,
     /** Mirrors the app-wide setting; true pins the page scale against stray pinches. */
     val zoomLocked: Boolean = false,
     /** Actions assigned to the physical Xiaomi Pen controls. */
@@ -171,7 +172,7 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
                 val current = _state.value
                 val index = s.selectedPen.coerceIn(0, s.penTray.lastIndex.coerceAtLeast(0))
                 _state.value = current.copy(
-                    fingerDrawing = s.fingerDrawing,
+                    fingerInputMode = s.fingerInputMode,
                     zoomLocked = s.zoomLocked,
                     pens = s.penTray,
                     selectedPen = index,
@@ -365,9 +366,14 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
         }
     }
 
-    /** Turns finger drawing on or off for every note; a finger still pans while it is off. */
-    fun toggleFingerDrawing() {
-        viewModelScope.launch { settings.setFingerDrawing(!_state.value.fingerDrawing) }
+    /** Sets touch behavior independently of the pen/eraser, and restores a brush after legacy pan. */
+    fun setFingerInputMode(mode: FingerInputMode) {
+        val current = _state.value
+        _state.value = current.copy(
+            fingerInputMode = mode,
+            tool = if (current.tool == InkTool.PAN) current.activePen.tool else current.tool,
+        )
+        viewModelScope.launch { settings.setFingerInputMode(mode) }
     }
 
     /** Pins or releases the page scale for every ink note. */

@@ -19,6 +19,7 @@ import androidx.ink.strokes.Stroke
 import com.example.fucknotes.data.db.AttachmentEntity
 import com.example.fucknotes.data.ink.InkStroke
 import com.example.fucknotes.data.model.InkTool
+import com.example.fucknotes.data.model.FingerInputMode
 import com.example.fucknotes.data.model.NoteType
 import com.example.fucknotes.ui.common.paperColorOr
 import com.example.fucknotes.ui.editor.ink.DefaultRuleColor
@@ -63,6 +64,7 @@ fun InkEditor(
     onSelectPen: (Int) -> Unit,
     onEditPen: (index: Int, colorArgb: Int, widthDp: Float) -> Unit,
     onSelectTool: (InkTool) -> Unit,
+    onFingerInputMode: (FingerInputMode) -> Unit,
     onToggleZoomLock: () -> Unit,
     compact: Boolean,
     onToggleCompact: () -> Unit,
@@ -89,7 +91,7 @@ fun InkEditor(
             colorArgb = state.activePen.colorArgb,
             widthDp = state.activePen.widthDp,
             enabled = state.inkActive,
-            fingerDrawing = state.fingerDrawing,
+            fingerInputMode = state.fingerInputMode,
             zoomLocked = state.zoomLocked,
             notebook = notebook,
             paperStyle = state.paperStyle,
@@ -114,6 +116,7 @@ fun InkEditor(
         val penBar: @Composable (Modifier) -> Unit = { barModifier ->
             InkToolbar(
                 pens = state.pens, selectedPen = state.selectedPen, tool = state.tool,
+                fingerInputMode = state.fingerInputMode, onFingerInputMode = onFingerInputMode,
                 compact = compact, onSelectPen = onSelectPen, onEditPen = onEditPen,
                 onSelectTool = onSelectTool, onToggleCompact = onToggleCompact, modifier = barModifier,
             )
@@ -124,7 +127,6 @@ fun InkEditor(
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
-                    horizontalAlignment = Alignment.End,
                 ) {
                     quickBar()
                     penBar(Modifier.align(Alignment.End))

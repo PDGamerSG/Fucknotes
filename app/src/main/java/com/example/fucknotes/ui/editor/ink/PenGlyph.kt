@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
@@ -34,7 +35,7 @@ fun PenGlyph(
     highlighter: Boolean = false,
 ) {
     val color = Color(pen.colorArgb)
-    Box(modifier.size(44.dp).clickable(onClick = onClick).semantics {
+    Box(modifier.size(48.dp).clickable(role = Role.Button, onClick = onClick).semantics {
         contentDescription = penLabel(pen)
         selected = active
     }, contentAlignment = Alignment.Center) {

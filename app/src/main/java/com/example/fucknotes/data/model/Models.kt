@@ -55,6 +55,13 @@ enum class InkTool {
     val isBrush: Boolean get() = this == PEN || this == MARKER || this == HIGHLIGHTER || this == DASHED
 }
 
+/** What a finger does on a writing surface; the stylus always remains available. */
+enum class FingerInputMode(val label: String, val description: String) {
+    HAND("Hand / move page", "A finger pans the page"),
+    DRAW("Write with fingers", "A finger uses the selected pen"),
+    DISABLED("Disabled", "Finger touches do nothing"),
+}
+
 /** Physical buttons exposed by Android for active styluses, including the Xiaomi Pen. */
 enum class PenButton {
     PRIMARY,

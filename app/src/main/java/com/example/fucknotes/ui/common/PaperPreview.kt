@@ -57,7 +57,6 @@ fun PaperPreview(
 /** Rules, grid or dots stepping across the whole draw area. */
 private fun DrawScope.drawPaperPattern(style: PaperStyle, color: Color, step: Float) {
     if (style == PaperStyle.PLAIN || step <= 1f) return
-    val hairline = 1f
     if (style == PaperStyle.LINED || style == PaperStyle.GRID) {
         var y = step
         while (y < size.height) {

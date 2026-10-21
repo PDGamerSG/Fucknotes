@@ -46,6 +46,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.fucknotes.ServiceLocator
 import com.example.fucknotes.data.backup.BackupManager
 import com.example.fucknotes.data.model.AccentPreset
+import com.example.fucknotes.data.model.FingerInputMode
 import com.example.fucknotes.data.model.PaperStyle
 import com.example.fucknotes.data.model.PenButton
 import com.example.fucknotes.data.model.PenButtonAction
@@ -84,7 +85,7 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     fun setDefaultPaper(v: PaperStyle) = viewModelScope.launch { settingsRepo.setDefaultPaper(v) }
     fun setFontScale(v: Int) = viewModelScope.launch { settingsRepo.setFontScale(v) }
     fun setKeepScreenOn(v: Boolean) = viewModelScope.launch { settingsRepo.setKeepScreenOn(v) }
-    fun setFingerDrawing(v: Boolean) = viewModelScope.launch { settingsRepo.setFingerDrawing(v) }
+    fun setFingerInputMode(v: FingerInputMode) = viewModelScope.launch { settingsRepo.setFingerInputMode(v) }
     fun setConfirmDelete(v: Boolean) = viewModelScope.launch { settingsRepo.setConfirmDelete(v) }
     fun setAutoBackup(v: Boolean) = viewModelScope.launch { settingsRepo.setAutoBackup(v) }
     fun setPenPrimaryAction(v: PenButtonAction) = viewModelScope.launch { settingsRepo.setPenPrimaryAction(v) }
@@ -131,6 +132,7 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
     var showTheme by remember { mutableStateOf(false) }
     var showAccent by remember { mutableStateOf(false) }
     var showPaper by remember { mutableStateOf(false) }
+    var showFingerModes by remember { mutableStateOf(false) }
     var showPenControls by remember { mutableStateOf(false) }
 
     val createBackup = rememberLauncherForActivityResult(
@@ -206,11 +208,10 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                 subtitle = settings.defaultPaper.name.lowercase().replaceFirstChar(Char::uppercase),
                 onClick = { showPaper = true },
             )
-            SwitchRow(
-                title = "Draw with finger",
-                subtitle = "Off: only a stylus writes, and a finger scrolls the page",
-                checked = settings.fingerDrawing,
-                onChange = viewModel::setFingerDrawing,
+            SettingRow(
+                title = "Finger input",
+                subtitle = "${settings.fingerInputMode.label}: ${settings.fingerInputMode.description}",
+                onClick = { showFingerModes = true },
             )
             SwitchRow(
                 title = "Keep screen on while editing",
@@ -314,6 +315,16 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
             selectedIndex = PaperStyle.entries.indexOf(settings.defaultPaper),
             onDismiss = { showPaper = false },
             onPick = { viewModel.setDefaultPaper(PaperStyle.entries[it]); showPaper = false },
+        )
+    }
+
+    if (showFingerModes) {
+        OptionListDialog(
+            title = "Finger input",
+            options = FingerInputMode.entries.map { it.label },
+            selectedIndex = FingerInputMode.entries.indexOf(settings.fingerInputMode),
+            onDismiss = { showFingerModes = false },
+            onPick = { viewModel.setFingerInputMode(FingerInputMode.entries[it]); showFingerModes = false },
         )
     }
 

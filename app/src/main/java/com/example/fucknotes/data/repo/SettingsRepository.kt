@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.example.fucknotes.data.model.AccentPreset
 import com.example.fucknotes.data.model.DefaultPenTray
+import com.example.fucknotes.data.model.FingerInputMode
 import com.example.fucknotes.data.model.InkTool
 import com.example.fucknotes.data.model.LayoutMode
 import com.example.fucknotes.data.model.PaperStyle
@@ -52,6 +53,7 @@ class SettingsRepository(private val context: Context) {
         val passcodeHash = stringPreferencesKey("passcode_hash")
         val biometricUnlock = booleanPreferencesKey("biometric_unlock")
         val fingerDrawing = booleanPreferencesKey("finger_drawing")
+        val fingerInputMode = stringPreferencesKey("finger_input_mode")
         val zoomLocked = booleanPreferencesKey("zoom_locked")
         val penTray = stringPreferencesKey("pen_tray")
         val selectedPen = intPreferencesKey("selected_pen")
@@ -81,14 +83,8 @@ class SettingsRepository(private val context: Context) {
         val lastBackupAt: String = "",
         val hasPasscode: Boolean = false,
         val biometricUnlock: Boolean = true,
-        /**
-         * Whether a finger draws ink.
-         *
-         * Off means the page only takes stylus input, and a finger pans instead — the palm-proof
-         * mode a pen user expects. On is the default because most devices have no stylus at all,
-         * and a page that ignored every touch would look broken on those.
-         */
-        val fingerDrawing: Boolean = true,
+        /** App-wide finger behavior, independent of the selected stylus tool. */
+        val fingerInputMode: FingerInputMode = FingerInputMode.DRAW,
         /** Whether a pinch may change the page scale. Scrolling works either way. */
         val zoomLocked: Boolean = false,
         /**
@@ -122,7 +118,10 @@ class SettingsRepository(private val context: Context) {
         lastBackupAt = this[Keys.lastBackupAt].orEmpty(),
         hasPasscode = !this[Keys.passcodeHash].isNullOrBlank(),
         biometricUnlock = this[Keys.biometricUnlock] ?: true,
-        fingerDrawing = this[Keys.fingerDrawing] ?: true,
+        fingerInputMode = enumOr(
+            this[Keys.fingerInputMode],
+            if (this[Keys.fingerDrawing] == false) FingerInputMode.HAND else FingerInputMode.DRAW,
+        ),
         zoomLocked = this[Keys.zoomLocked] ?: false,
         // A tray written by an older build — or half-written — falls back whole rather than
         // leaving the user with an empty pen case.
@@ -150,7 +149,7 @@ class SettingsRepository(private val context: Context) {
     suspend fun setAutoBackup(v: Boolean) = edit { it[Keys.autoBackup] = v }
     suspend fun setLastBackupAt(stamp: String) = edit { it[Keys.lastBackupAt] = stamp }
     suspend fun setBiometricUnlock(v: Boolean) = edit { it[Keys.biometricUnlock] = v }
-    suspend fun setFingerDrawing(v: Boolean) = edit { it[Keys.fingerDrawing] = v }
+    suspend fun setFingerInputMode(v: FingerInputMode) = edit { it[Keys.fingerInputMode] = v.name }
     suspend fun setZoomLocked(v: Boolean) = edit { it[Keys.zoomLocked] = v }
     suspend fun setPenTray(pens: List<PenPreset>) = edit { it[Keys.penTray] = json.encodeToString(pens) }
     suspend fun setSelectedPen(index: Int) = edit { it[Keys.selectedPen] = index }

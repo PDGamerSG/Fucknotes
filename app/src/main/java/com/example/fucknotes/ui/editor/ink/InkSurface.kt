@@ -41,6 +41,7 @@ import com.example.fucknotes.data.ink.InkCodec
 import com.example.fucknotes.data.ink.InkStroke
 import com.example.fucknotes.data.ink.NotebookLayout
 import com.example.fucknotes.data.ink.PageSpec
+import com.example.fucknotes.data.model.FingerInputMode
 import com.example.fucknotes.data.model.InkTool
 import com.example.fucknotes.data.model.PaperStyle
 import java.util.Collections
@@ -80,14 +81,8 @@ fun InkSurface(
     colorArgb: Int,
     widthDp: Float,
     enabled: Boolean,
-    /**
-     * Whether a finger draws.
-     *
-     * When false the page is stylus-only: finger and palm contacts are consumed before the ink
-     * layer sees them, and a single finger pans the page instead. This is the mode that makes a
-     * stylus usable — otherwise the hand resting on the glass writes as well as the pen.
-     */
-    fingerDrawing: Boolean,
+    /** Finger drawing, page navigation or complete touch rejection; stylus input stays active. */
+    fingerInputMode: FingerInputMode,
     /**
      * Freezes the zoom level.
      *
@@ -145,7 +140,7 @@ fun InkSurface(
     val currentEnabled by rememberUpdatedState(enabled)
     val currentWidth by rememberUpdatedState(widthDp)
     val currentColor by rememberUpdatedState(colorArgb)
-    val currentFingerDrawing by rememberUpdatedState(fingerDrawing)
+    val currentFingerInputMode by rememberUpdatedState(fingerInputMode)
     val currentZoomLocked by rememberUpdatedState(zoomLocked)
     val currentPageCount by rememberUpdatedState(pageCount)
     val currentPageSpec by rememberUpdatedState(pageSpec)
@@ -239,7 +234,7 @@ fun InkSurface(
                         if (down.isEmpty()) outsidePageGesture = false
                         if (currentNotebook && currentTool.isBrush) {
                             val writer = down.firstOrNull { it.type == PointerType.Stylus }
-                                ?: down.singleOrNull()?.takeIf { currentFingerDrawing }
+                                ?: down.singleOrNull()?.takeIf { currentFingerInputMode == FingerInputMode.DRAW }
                             if (writer != null && !writer.previousPressed) {
                                 val world = camera.screenToWorld(writer.position)
                                 val spec = currentPageSpec
@@ -256,6 +251,19 @@ fun InkSurface(
                             // A stylus-up event is included as an unpressed stylus change.  Touch
                             // packets omit it, so they leave the state untouched until that up.
                             stylusContactActive = down.any { it.type == PointerType.Stylus }
+                        }
+
+                        val touchDisabled = currentFingerInputMode == FingerInputMode.DISABLED
+                        if (touchDisabled || stylusContactActive) {
+                            event.changes.filter { it.type != PointerType.Stylus }.forEach { it.consume() }
+                            // Ignore finger-only packets, including releases, before tap, pan,
+                            // pinch and eraser handling. A stylus in this packet still works.
+                            if (!stylusInEvent) {
+                                gestureActive = false
+                                lastTapMs = 0L
+                                lastErasePoint = null
+                                continue
+                            }
                         }
 
                         if (down.isNotEmpty()) {
@@ -282,8 +290,9 @@ fun InkSurface(
                             // fingers, which always move the page, or one finger while the page is
                             // stylus-only. Anything a stylus touched is writing, never a swap — so
                             // a tap can never cost the user the dot they meant to draw.
-                            val claimed = !gestureHadStylus &&
-                                (gesturePointers == 2 || (gesturePointers == 1 && !currentFingerDrawing))
+                            val claimed = !touchDisabled && !gestureHadStylus &&
+                                (gesturePointers == 2 || (gesturePointers == 1 &&
+                                    currentFingerInputMode == FingerInputMode.HAND))
                             val tap = claimed &&
                                 nowMs - gestureStartMs <= viewConfiguration.longPressTimeoutMillis &&
                                 gestureTravel <= viewConfiguration.touchSlop &&
@@ -315,7 +324,7 @@ fun InkSurface(
 
                         // Two or more touch pointers mean "move the page", never "draw". A
                         // stylus contact is excluded because a resting palm must not steer it.
-                        if (down.size >= 2 && !stylusDown) {
+                        if (down.size >= 2 && !stylusDown && !touchDisabled) {
                             if (currentContentScroll != null) panContent(event.calculatePan())
                             else camera.transformBy(
                                 factor = if (currentZoomLocked) 1f
@@ -331,7 +340,7 @@ fun InkSurface(
                         // Stylus-only: a finger scrolls the page instead of marking it. The
                         // consume is what keeps the touch away from the ink layer, so it has to
                         // happen here, before any tool handling below.
-                        if (!currentFingerDrawing && !stylusDown &&
+                        if (currentFingerInputMode == FingerInputMode.HAND && !stylusDown &&
                             event.changes.any { it.type != PointerType.Stylus }
                         ) {
                             // InProgressStrokes may observe the same touch stream during the
@@ -349,7 +358,7 @@ fun InkSurface(
                         // Prefer the pen when both are on the glass, so a stray finger cannot
                         // steer an erase or a pan away from where the stylus is.
                         val active = down.firstOrNull { it.type == PointerType.Stylus }
-                            ?: down.firstOrNull()
+                            ?: down.firstOrNull()?.takeUnless { touchDisabled || stylusDown }
 
                         when {
                             currentTool == InkTool.PAN && active != null -> {

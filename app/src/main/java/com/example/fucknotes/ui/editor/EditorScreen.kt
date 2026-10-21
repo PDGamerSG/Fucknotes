@@ -234,6 +234,7 @@ fun EditorScreen(
                 Box(Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.CenterEnd) {
                     InkToolbar(
                         pens = state.pens, selectedPen = state.selectedPen, tool = state.tool,
+                        fingerInputMode = state.fingerInputMode, onFingerInputMode = viewModel::setFingerInputMode,
                         compact = compact, onSelectPen = viewModel::selectPen,
                         onEditPen = viewModel::editPen, onSelectTool = viewModel::setTool,
                         onToggleCompact = { compact = !compact },
@@ -288,6 +289,7 @@ fun EditorScreen(
                     onSelectPen = viewModel::selectPen,
                     onEditPen = viewModel::editPen,
                     onSelectTool = viewModel::setTool,
+                    onFingerInputMode = viewModel::setFingerInputMode,
                     onToggleZoomLock = viewModel::toggleZoomLock,
                     compact = compact,
                     onToggleCompact = { compact = !compact },
@@ -347,7 +349,7 @@ fun EditorScreen(
                         colorArgb = state.activePen.colorArgb,
                         widthDp = state.activePen.widthDp,
                         enabled = state.inkActive,
-                        fingerDrawing = state.fingerDrawing,
+                        fingerInputMode = state.fingerInputMode,
                         zoomLocked = state.zoomLocked,
                         notebook = false,
                         paperStyle = PaperStyle.PLAIN,
