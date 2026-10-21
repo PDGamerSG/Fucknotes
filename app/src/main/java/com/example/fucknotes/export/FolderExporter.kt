@@ -21,7 +21,7 @@ class FolderExporter(private val context: Context, private val exporter: NoteExp
         mode: HomeExportMode, destination: Uri, onProgress: (Int, Int) -> Unit,
     ) = withContext(Dispatchers.IO) {
         require(notes.isNotEmpty()) { "There are no notes to export" }
-        val paths = pathsFor(notes, folders, rootId)
+        val paths = exportPathsFor(notes, folders, rootId)
         when (mode) {
             HomeExportMode.COMBINED -> {
                 val file = exporter.exportAll(notes, ExportFormat.PDF)
@@ -86,24 +86,4 @@ class FolderExporter(private val context: Context, private val exporter: NoteExp
         } ?: error("Cannot write to this location")
     }
 
-    private fun pathsFor(notes: List<NoteEntity>, folders: List<FolderEntity>, rootId: Long?): Map<Long, List<String>> {
-        val byId = folders.associateBy { it.id }
-        val usedFolders = mutableMapOf<Long?, MutableSet<String>>()
-        val names = folders.sortedBy { it.id }.associate { folder ->
-            folder.id to ExportNames.unique(folder.name, usedFolders.getOrPut(folder.parentId) { mutableSetOf() })
-        }
-        val usedFiles = mutableMapOf<List<String>, MutableSet<String>>()
-        return notes.associate { note ->
-            val ancestors = mutableListOf<String>()
-            val visited = mutableSetOf<Long>()
-            var id = note.folderId
-            while (id != null && id != rootId && visited.add(id)) {
-                val folder = byId[id] ?: break
-                ancestors.add(0, names.getValue(id))
-                id = folder.parentId
-            }
-            val name = ExportNames.unique(note.title, usedFiles.getOrPut(ancestors.toList()) { mutableSetOf() }, ".pdf")
-            note.id to (ancestors + name)
-        }
-    }
 }

@@ -16,6 +16,7 @@ Code and test sources compile. Runtime tests and tablet installation are deferre
 - Page images retain their position in notes, thumbnails, backups and PDF exports; their page menu supports repositioning, resizing and removal.
 - Camera photos use the same validated, orientation-corrected import as gallery images; their pending destination survives rotation while the system camera is open.
 - Combined PDFs, ZIPs of PDFs, and separate PDFs in a selected folder; nested exports preserve folder paths and disambiguate duplicate names.
+- Export filenames also avoid conflicts with child folders, so a folder named `Lecture.pdf` cannot overwrite or block the note `Lecture`.
 - Notebook exports use the page's point dimensions. Image exports show the first notebook page; use PDF for all pages.
 - Adding a page keeps the camera still. Initial blank-page counts persist. Scroll bounds follow created pages.
 - Older stored page counts are preserved during database upgrade, backup restore, editing and PDF export.
