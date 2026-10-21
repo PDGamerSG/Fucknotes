@@ -10,12 +10,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Brush
-import androidx.compose.material.icons.outlined.CheckBox
 import androidx.compose.material.icons.outlined.CloudUpload
-import androidx.compose.material.icons.outlined.CreateNewFolder
-import androidx.compose.material.icons.outlined.EditNote
+import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.GridView
-import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Search
@@ -40,12 +38,9 @@ import com.example.fucknotes.ui.common.ToolButton
 
 /** Everything the create menu can start. Kept as one type so the menu and its handler cannot drift. */
 enum class CreateAction(val label: String) {
-    QUICK_NOTE("QuickNote"),
-    NEW_NOTEBOOK("New Notebook"),
-    NEW_CANVAS("New Canvas"),
-    NEW_CHECKLIST("New Checklist"),
-    NEW_FOLDER("New Folder"),
-    IMAGE("Image"),
+    NEW_NOTEBOOK("New notebook"),
+    NEW_CANVAS("New canvas"),
+    IMPORT_PDF("Import PDF"),
 }
 
 /**
@@ -61,14 +56,13 @@ fun SheetTopBar(
     sort: SortOrder,
     onOpenRail: (() -> Unit)?,
     onBackup: () -> Unit,
+    onExport: () -> Unit,
     onSearch: () -> Unit,
     onToggleLayout: () -> Unit,
     onSort: (SortOrder) -> Unit,
-    onCreate: (CreateAction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var sortMenu by remember { mutableStateOf(false) }
-    var createMenu by remember { mutableStateOf(false) }
 
     Row(
         modifier
@@ -83,6 +77,7 @@ fun SheetTopBar(
         Spacer(Modifier.weight(1f))
 
         ToolButton(icon = Icons.Outlined.CloudUpload, label = "Back up", onClick = onBackup)
+        ToolButton(icon = Icons.Outlined.FileDownload, label = "Export notes as PDF", onClick = onExport)
         ToolButton(icon = Icons.Outlined.Search, label = "Search", onClick = onSearch)
         ToolButton(
             icon = if (layout == LayoutMode.GRID) Icons.Outlined.ViewAgenda else Icons.Outlined.GridView,
@@ -104,25 +99,13 @@ fun SheetTopBar(
             )
         }
 
-        Box {
-            ToolButton(
-                icon = Icons.Outlined.EditNote,
-                label = "Create",
-                selected = createMenu,
-                onClick = { createMenu = true },
-            )
-            CreateMenu(
-                expanded = createMenu,
-                onDismiss = { createMenu = false },
-                onPick = { createMenu = false; onCreate(it) },
-            )
-        }
+
     }
 }
 
 /** The create menu, in the order the work usually starts: write, then organise, then bring in. */
 @Composable
-private fun CreateMenu(expanded: Boolean, onDismiss: () -> Unit, onPick: (CreateAction) -> Unit) {
+fun CreateMenu(expanded: Boolean, onDismiss: () -> Unit, onPick: (CreateAction) -> Unit) {
     DropdownMenu(expanded, onDismissRequest = onDismiss, modifier = Modifier.width(240.dp)) {
         CreateAction.entries.forEach { action ->
             DropdownMenuItem(
@@ -130,12 +113,9 @@ private fun CreateMenu(expanded: Boolean, onDismiss: () -> Unit, onPick: (Create
                 trailingIcon = {
                     Icon(
                         when (action) {
-                            CreateAction.QUICK_NOTE -> Icons.Outlined.EditNote
                             CreateAction.NEW_NOTEBOOK -> Icons.Outlined.MenuBook
                             CreateAction.NEW_CANVAS -> Icons.Outlined.Brush
-                            CreateAction.NEW_CHECKLIST -> Icons.Outlined.CheckBox
-                            CreateAction.NEW_FOLDER -> Icons.Outlined.CreateNewFolder
-                            CreateAction.IMAGE -> Icons.Outlined.Image
+                            CreateAction.IMPORT_PDF -> Icons.Outlined.PictureAsPdf
                         },
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
@@ -173,10 +153,8 @@ private fun SortMenu(
     }
 }
 
-/** The note type a create action starts, or null when it opens something else first. */
+/** The note type a create action starts, or null for a picker. */
 fun CreateAction.noteType(): NoteType? = when (this) {
-    CreateAction.QUICK_NOTE -> NoteType.TEXT
     CreateAction.NEW_CANVAS -> NoteType.DRAWING
-    CreateAction.NEW_CHECKLIST -> NoteType.CHECKLIST
-    CreateAction.NEW_NOTEBOOK, CreateAction.NEW_FOLDER, CreateAction.IMAGE -> null
+    CreateAction.NEW_NOTEBOOK, CreateAction.IMPORT_PDF -> null
 }

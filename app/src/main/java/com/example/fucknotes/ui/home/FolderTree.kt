@@ -7,6 +7,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DriveFileRenameOutline
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.FolderOpen
+import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -24,9 +25,7 @@ import com.example.fucknotes.data.db.FolderEntity
  * A folder with children carries a chevron and keeps its own open state, so a deep tree collapses
  * back to a short list — the rail is a place to navigate from, not an outline to read.
  *
- * Row actions are on long press rather than on a permanent overflow button: a rail with a button on
- * every row reads as a settings screen, and the actions are rare next to the tap that opens the
- * folder.
+ * Visible overflow buttons expose creation, export and rename actions for each collection/folder.
  */
 @Composable
 fun FolderTree(
@@ -41,6 +40,7 @@ fun FolderTree(
     onNewSubfolder: (Long) -> Unit,
     onRename: (FolderEntity) -> Unit,
     onDelete: (Long) -> Unit,
+    onExport: (FolderEntity) -> Unit,
 ) {
     folders.filter { it.parentId == parentId }.forEach { folder ->
         val children = folders.filter { it.parentId == folder.id }
@@ -58,13 +58,22 @@ fun FolderTree(
                 expandable = children.isNotEmpty(),
                 expanded = open,
                 onToggleExpand = { onToggleExpand(folder.id) },
-                onClick = { onScope(Scope.Folder(folder.id, folder.name)) },
+                onClick = {
+                    if (children.isNotEmpty() && !open) onToggleExpand(folder.id)
+                    onScope(Scope.Folder(folder.id, folder.name))
+                },
                 onLongClick = { menu = true },
+                onMore = { menu = true },
             )
             DropdownMenu(menu, onDismissRequest = { menu = false }) {
+                DropdownMenuItem(
+                    text = { Text("Export PDFs") },
+                    leadingIcon = { Icon(Icons.Outlined.FileDownload, null) },
+                    onClick = { menu = false; onExport(folder) },
+                )
                 if (depth + 1 < HomeViewModel.MAX_FOLDER_DEPTH) {
                     DropdownMenuItem(
-                        text = { Text("New subfolder") },
+                        text = { Text("New folder") },
                         leadingIcon = { Icon(Icons.Outlined.CreateNewFolder, null) },
                         onClick = { menu = false; onNewSubfolder(folder.id) },
                     )
@@ -95,6 +104,7 @@ fun FolderTree(
                 onNewSubfolder = onNewSubfolder,
                 onRename = onRename,
                 onDelete = onDelete,
+                onExport = onExport,
             )
         }
     }

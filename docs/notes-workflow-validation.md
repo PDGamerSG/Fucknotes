@@ -1,0 +1,38 @@
+# Notes workflow changes
+
+Code and test sources compile. Runtime tests and tablet installation are deferred at the user's request.
+
+## Implemented
+
+- Compact editor controls, circular ink colors, custom eraser icon, and paper settings in the overflow menu.
+- Removed note locking, pinning, reminders, type-conversion and note-info controls; removed Stationery and the duplicate home create button.
+- Plus menu contains notebook, canvas, and PDF import.
+- Collection/folder hierarchy with visible menus, recursive export, and a home light/dark toggle.
+- Cooler page tones and display-only night shading, with stronger dotted-paper contrast.
+- Translucent highlighting on new and reopened strokes.
+- PDF import from the picker, Open with, and Share; pages become image backgrounds with editable ink above them. PDF text and links are rasterized during import. Mixed PDF page sizes are fitted proportionally into the notebook's first-page size.
+- Page images retain their position in notes, thumbnails, backups and PDF exports; their page menu supports repositioning, resizing and removal.
+- Combined PDFs, ZIPs of PDFs, and separate PDFs in a selected folder; nested exports preserve folder paths and disambiguate duplicate names.
+- Notebook exports use the page's point dimensions. Image exports show the first notebook page; use PDF for all pages.
+- Adding a page keeps the camera still. Initial blank-page counts persist. Scroll bounds follow created pages.
+- Pending note saves complete when navigating away; saving and export share the persisted ink representation.
+
+## Compile checks
+
+```powershell
+.\gradlew.bat :app:compileDebugKotlin :app:compileDebugUnitTestKotlin :app:compileDebugAndroidTestKotlin --no-daemon "-Dkotlin.incremental=false"
+git diff --check
+```
+
+## Deferred execution
+
+1. Run `:app:testDebugUnitTest` and `:app:connectedDebugAndroidTest`. The added PDF workflow test checks title preservation, imported page count, saved page backgrounds, exported dimensions and rendered background pixels.
+2. On the Xiaomi tablet, map Primary to Toggle eraser. Check single press, hold, release, repeat press, hover, pen contact, switching notes and returning from settings. Each physical press must produce exactly one action. A changing diagnostic keycode alone does not prove this works.
+3. Highlight typed text, handwriting, an image and a PDF page; save, reopen and export. Compare visibility while drawing, after the stroke finishes and in the PDF.
+4. Import portrait/landscape/mixed-page PDFs, a large PDF and a damaged/password-protected PDF. Check the progress/error states and annotate later pages.
+5. Import rotated camera images, PNGs with transparency and cloud-provider images. Move, resize, remove, duplicate and back up the note; removing one copy must not damage another.
+6. Export a collection with nested folders, same-name notes, Unicode names, empty pages, images and ink in each output mode. Reopen every output, compare page count/content, and verify cancellation and unwritable destinations.
+7. Add pages while viewing a middle page, reopen the notebook, and immediately leave after a final stroke. Confirm the camera, page count and final stroke are retained.
+8. Check compact/expanded controls, night shading, folder menus and all removed actions on narrow and wide windows.
+
+No runtime result is claimed by the compile checks above.

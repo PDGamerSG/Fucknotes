@@ -18,6 +18,7 @@ import com.example.fucknotes.data.db.AttachmentEntity
 import com.example.fucknotes.data.db.NoteEntity
 import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
 import com.example.fucknotes.data.ink.InkStroke
+import com.example.fucknotes.media.MediaStore
 import com.example.fucknotes.data.ink.NotebookLayout
 import com.example.fucknotes.data.ink.DEFAULT_RULE_SPACING_DP
 import com.example.fucknotes.data.ink.PageSpec
@@ -76,7 +77,7 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
         withContext(Dispatchers.IO) {
             val attachments = attachmentsOf(note.id)
             when (format) {
-                ExportFormat.PDF -> exportPdf(listOf(note), attachments, darkStyle)
+                ExportFormat.PDF -> exportPdf(mapOf(note.id to attachments), listOf(note), darkStyle)
                 ExportFormat.IMAGE -> exportImage(note, attachments, darkStyle)
                 ExportFormat.TEXT -> exportText(listOf(note), markdown = false)
                 ExportFormat.MARKDOWN -> exportText(listOf(note), markdown = true)
@@ -86,8 +87,10 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
     /** Bulk export: every note goes into one document. */
     suspend fun exportAll(notes: List<NoteEntity>, format: ExportFormat, darkStyle: Boolean = false): File =
         withContext(Dispatchers.IO) {
+            require(notes.isNotEmpty()) { "There are no notes to export" }
+            val attachments = notes.associate { it.id to attachmentsOf(it.id) }
             when (format) {
-                ExportFormat.PDF -> exportPdf(notes, emptyList(), darkStyle)
+                ExportFormat.PDF -> exportPdf(attachments, notes, darkStyle)
                 ExportFormat.IMAGE -> exportImage(notes.first(), attachmentsOf(notes.first().id), darkStyle)
                 ExportFormat.TEXT -> exportText(notes, markdown = false)
                 ExportFormat.MARKDOWN -> exportText(notes, markdown = true)
@@ -95,13 +98,13 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
         }
 
     private suspend fun attachmentsOf(noteId: Long): List<AttachmentEntity> =
-        runCatching { repo.observeAttachments(noteId).first() }.getOrDefault(emptyList())
+        repo.observeAttachments(noteId).first()
 
     // ---- text --------------------------------------------------------------
 
     private fun exportText(notes: List<NoteEntity>, markdown: Boolean): File {
         val text = notes.joinToString("\n\n---\n\n") { note -> renderText(note, markdown) }
-        val file = outFile(notes.first(), if (markdown) "md" else "txt")
+        val file = outFile(notes.first(), if (markdown) "md" else "txt", notes.fileBaseName())
         file.writeText(text)
         return file
     }
@@ -129,9 +132,14 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
     // ---- image -------------------------------------------------------------
 
     private fun exportImage(note: NoteEntity, attachments: List<AttachmentEntity>, dark: Boolean): File {
-        val bitmap = Bitmap.createBitmap(PAGE_WIDTH, PAGE_HEIGHT, Bitmap.Config.ARGB_8888)
+        val spec = PageSpec.decode(note.pageFormat)
+        val width = if (note.type == NoteType.NOTEBOOK) (spec.widthDp * PDF_PIXELS_PER_POINT).toInt() else PAGE_WIDTH
+        val height = if (note.type == NoteType.NOTEBOOK) (spec.heightDp * PDF_PIXELS_PER_POINT).toInt() else PAGE_HEIGHT
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
-        drawNotePage(canvas, note, attachments, dark, pageIndex = 0)
+        if (note.type == NoteType.NOTEBOOK) {
+            drawNotebookPage(canvas, note, repo.inkOf(note), 0, dark, spec, width, height, attachments)
+        } else drawNotePage(canvas, note, attachments, dark, pageIndex = 0)
         val file = outFile(note, "png")
         file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
         bitmap.recycle()
@@ -140,49 +148,221 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
 
     // ---- pdf ---------------------------------------------------------------
 
-    private fun exportPdf(notes: List<NoteEntity>, attachments: List<AttachmentEntity>, dark: Boolean): File {
+    private fun exportPdf(
+        attachmentsByNote: Map<Long, List<AttachmentEntity>>,
+        notes: List<NoteEntity>,
+        dark: Boolean,
+    ): File {
         val document = PdfDocument()
-        var pageNumber = 1
-        notes.forEach { note ->
-            val ownAttachments = if (notes.size == 1) attachments else emptyList()
+        try {
+            var pageNumber = 1
+            notes.forEach { note ->
+                val ownAttachments = attachmentsByNote[note.id].orEmpty()
 
-            // A notebook is already paginated, so each sheet becomes a PDF page at the size it was
-            // written on rather than being shrunk to fit alongside a title block.
-            if (note.type == NoteType.NOTEBOOK) {
-                val strokes = repo.inkOf(note)
-                val spec = PageSpec.decode(note.pageFormat)
-                val sheetWidth = (spec.widthDp * PDF_PIXELS_PER_POINT).toInt()
-                val sheetHeight = (spec.heightDp * PDF_PIXELS_PER_POINT).toInt()
-                repeat(notebookPageCount(strokes, spec)) { index ->
-                    val info = PdfDocument.PageInfo.Builder(sheetWidth, sheetHeight, pageNumber++).create()
-                    val page = document.startPage(info)
-                    drawNotebookPage(page.canvas, note, strokes, index, dark, spec, sheetWidth, sheetHeight)
-                    document.finishPage(page)
+                // A notebook is already paginated, so each sheet becomes a PDF page at the size it was
+                // written on rather than being shrunk to fit alongside a title block.
+                if (note.type == NoteType.NOTEBOOK) {
+                    val strokes = repo.inkOf(note)
+                    val spec = PageSpec.decode(note.pageFormat)
+                    val sheetWidth = kotlin.math.ceil(spec.widthDp).toInt()
+                    val sheetHeight = kotlin.math.ceil(spec.heightDp).toInt()
+                    repeat(notebookPageCount(note)) { index ->
+                        val info = PdfDocument.PageInfo.Builder(sheetWidth, sheetHeight, pageNumber++).create()
+                        val page = document.startPage(info)
+                        try {
+                            drawNotebookPage(
+                                page.canvas,
+                                note,
+                                strokes,
+                                index,
+                                dark,
+                                spec,
+                                sheetWidth,
+                                sheetHeight,
+                                ownAttachments,
+                            )
+                        } finally { document.finishPage(page) }
+                    }
+                    pageNumber = drawAttachmentPages(document, note, ownAttachments, dark, pageNumber)
+                    return@forEach
                 }
-                return@forEach
-            }
 
+                if (note.type == NoteType.TEXT || note.type == NoteType.CHECKLIST) {
+                    pageNumber = drawTextNotePages(document, note, dark, pageNumber)
+                    pageNumber = drawAttachmentPages(document, note, ownAttachments, dark, pageNumber)
+                    return@forEach
+                }
+
+                val info = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNumber++).create()
+                val page = document.startPage(info)
+                try {
+                    drawNotePage(page.canvas, note, ownAttachments, dark, 0)
+                } finally { document.finishPage(page) }
+                pageNumber = drawAttachmentPages(document, note, ownAttachments, dark, pageNumber)
+            }
+            val file = outFile(notes.first(), "pdf", notes.fileBaseName())
+            file.outputStream().use { document.writeTo(it) }
+            return file
+        } finally { document.close() }
+    }
+
+    /** Writes every line of a text/checklist note, carrying overflow onto additional PDF pages. */
+    private fun drawTextNotePages(
+        document: PdfDocument,
+        note: NoteEntity,
+        dark: Boolean,
+        firstPageNumber: Int,
+    ): Int {
+        val background = if (dark) Color.parseColor("#12131A") else Color.WHITE
+        val ink = if (dark) Color.parseColor("#E8E8EF") else Color.parseColor("#1B1B1F")
+        val faint = if (dark) Color.parseColor("#2A2C36") else Color.parseColor("#E4E4EA")
+        val bodyPaint = TextPaint().apply {
+            isAntiAlias = true
+            color = ink
+            textSize = BODY_SIZE
+        }
+        val body = pdfBodyText(note)
+        val layout = StaticLayout.Builder.obtain(
+            body,
+            0,
+            body.length,
+            bodyPaint,
+            (PAGE_WIDTH - MARGIN * 2).toInt(),
+        )
+            .setAlignment(Layout.Alignment.ALIGN_NORMAL)
+            .setLineSpacing(6f, 1f)
+            .setIncludePad(false)
+            .build()
+
+        var pageNumber = firstPageNumber
+        var line = 0
+        var contentTop = 0f
+        val strokes = repo.inkOf(note)
+        val inkLeft = minOf(0f, strokes.minOfOrNull { it.stroke.shape.computeBoundingBox()?.xMin ?: 0f } ?: 0f)
+        val inkRight = maxOf(1f, strokes.maxOfOrNull { it.stroke.shape.computeBoundingBox()?.xMax ?: 0f } ?: 1f)
+        val inkScale = minOf(BODY_SIZE / 16f, (PAGE_WIDTH - MARGIN * 2) / (inkRight - inkLeft))
+        val inkBottom = strokes.maxOfOrNull { (it.stroke.shape.computeBoundingBox()?.yMax ?: 0f) * inkScale } ?: 0f
+        do {
             val info = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNumber++).create()
             val page = document.startPage(info)
-            drawNotePage(page.canvas, note, ownAttachments, dark, 0)
-            document.finishPage(page)
+            try {
+                page.canvas.drawColor(background)
+                drawPaper(page.canvas, note.paperStyle, faint)
+                val bodyTop = drawPdfHeader(page.canvas, note, dark)
+                val availableHeight = (PAGE_HEIGHT - MARGIN - bodyTop).coerceAtLeast(1f)
+                val firstLineTop = contentTop.toInt()
+                var endLine = line
+                while (endLine < layout.lineCount &&
+                    layout.getLineBottom(endLine) - firstLineTop <= availableHeight
+                ) {
+                    endLine++
+                }
+                if (endLine == line && line < layout.lineCount) endLine++
+
+                page.canvas.save()
+                page.canvas.clipRect(
+                    MARGIN,
+                    bodyTop,
+                    PAGE_WIDTH - MARGIN,
+                    PAGE_HEIGHT - MARGIN,
+                )
+                page.canvas.translate(MARGIN, bodyTop - firstLineTop)
+                layout.draw(page.canvas)
+                page.canvas.restore()
+
+                page.canvas.save()
+                page.canvas.clipRect(MARGIN, bodyTop, PAGE_WIDTH - MARGIN, PAGE_HEIGHT - MARGIN)
+                val transform = android.graphics.Matrix().apply {
+                    setScale(inkScale, inkScale)
+                    postTranslate(MARGIN - inkLeft * inkScale, bodyTop - contentTop)
+                }
+                page.canvas.concat(transform)
+                strokes.forEach { inkRenderer.draw(page.canvas, it.stroke, transform) }
+                page.canvas.restore()
+                line = endLine
+                contentTop = if (endLine < layout.lineCount) layout.getLineTop(endLine).toFloat()
+                    else contentTop + availableHeight
+            } finally { document.finishPage(page) }
+        } while (line < layout.lineCount || contentTop < inkBottom)
+
+        return pageNumber
+    }
+
+    /** Adds attachment pages so images are never silently dropped when the note body is full. */
+    private fun drawAttachmentPages(
+        document: PdfDocument,
+        note: NoteEntity,
+        attachments: List<AttachmentEntity>,
+        dark: Boolean,
+        firstPageNumber: Int,
+    ): Int {
+        var pageNumber = firstPageNumber
+        val background = if (dark) Color.parseColor("#12131A") else Color.WHITE
+        val faint = if (dark) Color.parseColor("#2A2C36") else Color.parseColor("#E4E4EA")
+        attachments.filter { it.type == AttachmentType.IMAGE && it.pageIndex == null }.forEach { attachment ->
+            val info = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNumber++).create()
+            val page = document.startPage(info)
+            try {
+                page.canvas.drawColor(background)
+                drawPaper(page.canvas, note.paperStyle, faint)
+                val top = drawPdfHeader(page.canvas, note, dark) + 20f
+                val bitmap = MediaStore.decodeImage(File(attachment.path))
+                try {
+                    val maxWidth = PAGE_WIDTH - MARGIN * 2
+                    val maxHeight = PAGE_HEIGHT - top - MARGIN
+                    val scale = minOf(maxWidth / bitmap.width, maxHeight / bitmap.height, 1f)
+                    val target = android.graphics.RectF(
+                        MARGIN,
+                        top,
+                        MARGIN + bitmap.width * scale,
+                        top + bitmap.height * scale,
+                    )
+                    page.canvas.drawBitmap(bitmap, null, target, null)
+                } finally { bitmap.recycle() }
+            } finally { document.finishPage(page) }
         }
-        val file = outFile(notes.first(), "pdf")
-        file.outputStream().use { document.writeTo(it) }
-        document.close()
-        return file
+        return pageNumber
+    }
+
+    private fun pdfBodyText(note: NoteEntity): String = when (note.type) {
+        NoteType.CHECKLIST -> repo.checklistOf(note).joinToString("\n") {
+            "${if (it.checked) "[x]" else "[ ]"}  ${it.text}"
+        }
+        else -> note.body
+    }
+
+    /** Draws the title and updated timestamp and returns the first body baseline. */
+    private fun drawPdfHeader(canvas: Canvas, note: NoteEntity, dark: Boolean): Float {
+        val ink = if (dark) Color.parseColor("#E8E8EF") else Color.parseColor("#1B1B1F")
+        var y = MARGIN
+        val titlePaint = TextPaint().apply {
+            isAntiAlias = true
+            color = ink
+            textSize = TITLE_SIZE
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        }
+        y = drawWrapped(canvas, note.title.ifBlank { "Untitled" }, titlePaint, y, maxLines = 3)
+        y += 12f
+        val metaPaint = TextPaint().apply {
+            isAntiAlias = true
+            color = if (dark) Color.parseColor("#8A8C99") else Color.parseColor("#6C6E7A")
+            textSize = 22f
+        }
+        y = drawWrapped(canvas, stamp(note.updatedAt), metaPaint, y)
+        return y + 28f
     }
 
     // ---- notebook pages ----------------------------------------------------
 
     /** How many sheets the ink reaches, at least one so an empty notebook still exports a page. */
-    private fun notebookPageCount(strokes: List<InkStroke>, spec: PageSpec): Int {
-        var lastPage = 0
-        strokes.forEach { inkStroke ->
-            val box = inkStroke.stroke.shape.computeBoundingBox() ?: return@forEach
-            lastPage = maxOf(lastPage, NotebookLayout.pageIndexAt(box.yMax, spec))
+    private fun notebookPageCount(note: NoteEntity): Int {
+        // Page creation is explicit. Stroke bounds can contain legacy screen coordinates and must
+        // never turn an empty notebook into a seven-page export.
+        return if (note.pagesExplicitlyCreated) {
+            note.pageCount.coerceIn(1, MAX_NOTEBOOK_PAGES)
+        } else {
+            1
         }
-        return (lastPage + 1).coerceIn(1, MAX_NOTEBOOK_PAGES)
     }
 
     /**
@@ -201,6 +381,7 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
         spec: PageSpec,
         sheetWidth: Int,
         sheetHeight: Int,
+        attachments: List<AttachmentEntity> = emptyList(),
     ) {
         val background = when {
             dark -> Color.parseColor("#12131A")
@@ -214,24 +395,36 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
         }
         canvas.drawColor(background)
 
-        val scale = PDF_PIXELS_PER_POINT
+        val scale = sheetWidth / spec.widthDp
         val pageTop = NotebookLayout.topOf(pageIndex, spec)
 
         drawNotebookPaper(canvas, note, faint, scale, sheetWidth, sheetHeight)
 
-        if (strokes.isEmpty()) return
-        val transform = android.graphics.Matrix().apply {
-            setTranslate(0f, -pageTop)
-            postScale(scale, scale)
-        }
         canvas.save()
-        // Clipped to the sheet, so a stroke that runs past the bottom edge stays on its own page.
-        canvas.clipRect(0f, 0f, sheetWidth.toFloat(), sheetHeight.toFloat())
-        canvas.concat(transform)
-        strokes.forEach { inkStroke ->
-            runCatching { inkRenderer.draw(canvas, inkStroke.stroke, transform) }
+        canvas.scale(scale, scale)
+        attachments.filter { it.pageIndex == pageIndex }.forEach { image ->
+            val bitmap = MediaStore.decodeImage(File(image.path))
+            try {
+                canvas.drawBitmap(bitmap, null, android.graphics.RectF(image.pageX, image.pageY,
+                    image.pageX + image.pageWidth, image.pageY + image.pageHeight), Paint(Paint.FILTER_BITMAP_FLAG))
+            } finally { bitmap.recycle() }
         }
         canvas.restore()
+
+        if (strokes.isNotEmpty()) {
+            val transform = android.graphics.Matrix().apply {
+                setTranslate(0f, -pageTop)
+                postScale(scale, scale)
+            }
+            canvas.save()
+            // Clipped to the sheet, so a stroke that runs past the bottom edge stays on its own page.
+            canvas.clipRect(0f, 0f, sheetWidth.toFloat(), sheetHeight.toFloat())
+            canvas.concat(transform)
+            strokes.forEach { inkStroke ->
+                inkRenderer.draw(canvas, inkStroke.stroke, transform)
+            }
+            canvas.restore()
+        }
     }
 
     /** Rules for a notebook sheet: full bleed, at the spacing the note was written on. */
@@ -300,7 +493,7 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
             textSize = TITLE_SIZE
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         }
-        y = drawWrapped(canvas, note.title.ifBlank { "Untitled" }, titlePaint, y)
+        y = drawWrapped(canvas, note.title.ifBlank { "Untitled" }, titlePaint, y, maxLines = 3)
         y += 12f
 
         val metaPaint = TextPaint().apply {
@@ -328,15 +521,15 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
         }
 
         // Ink sits on top of the text, matching how the editor layers them.
-        drawInk(canvas, repo.inkOf(note))
-
-        if (pageIndex == 0) drawImages(canvas, attachments, y)
+        drawInk(canvas, repo.inkOf(note), y + 24f, attachments, PageSpec.decode(note.pageFormat))
     }
 
-    private fun drawWrapped(canvas: Canvas, text: String, paint: TextPaint, top: Float): Float {
+    private fun drawWrapped(canvas: Canvas, text: String, paint: TextPaint, top: Float, maxLines: Int = Int.MAX_VALUE): Float {
         if (text.isEmpty()) return top
         val width = (PAGE_WIDTH - MARGIN * 2).toInt()
         val layout = StaticLayout.Builder.obtain(text, 0, text.length, paint, width)
+            .setMaxLines(maxLines)
+            .setEllipsize(android.text.TextUtils.TruncateAt.END)
             .setAlignment(Layout.Alignment.ALIGN_NORMAL)
             .setLineSpacing(6f, 1f)
             .setIncludePad(false)
@@ -398,8 +591,10 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
      * area is measured and scaled to fit inside the margins. Scale is uniform and never enlarges
      * past 1:1, which keeps small sketches at their natural size instead of blowing them up.
      */
-    private fun drawInk(canvas: Canvas, strokes: List<InkStroke>) {
-        if (strokes.isEmpty()) return
+    private fun drawInk(canvas: Canvas, strokes: List<InkStroke>, bodyTop: Float,
+        attachments: List<AttachmentEntity> = emptyList(), spec: PageSpec = PageSpec.Default) {
+        val images = attachments.filter { it.pageIndex != null }
+        if (strokes.isEmpty() && images.isEmpty()) return
 
         var left = Float.MAX_VALUE
         var top = Float.MAX_VALUE
@@ -412,10 +607,15 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
             right = maxOf(right, box.xMax)
             bottom = maxOf(bottom, box.yMax)
         }
+        images.forEach { image ->
+            val y = NotebookLayout.topOf(image.pageIndex ?: 0, spec) + image.pageY
+            left = minOf(left, image.pageX); top = minOf(top, y)
+            right = maxOf(right, image.pageX + image.pageWidth); bottom = maxOf(bottom, y + image.pageHeight)
+        }
         if (left > right || top > bottom) return
 
         val available = PAGE_WIDTH - MARGIN * 2
-        val availableHeight = PAGE_HEIGHT - MARGIN * 2
+        val availableHeight = (PAGE_HEIGHT - MARGIN - bodyTop).coerceAtLeast(1f)
         val scale = minOf(
             available / (right - left).coerceAtLeast(1f),
             availableHeight / (bottom - top).coerceAtLeast(1f),
@@ -425,25 +625,40 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
         val transform = android.graphics.Matrix().apply {
             setTranslate(-left, -top)
             postScale(scale, scale)
-            postTranslate(MARGIN, MARGIN)
+            postTranslate(MARGIN, bodyTop)
         }
         // As on screen, the transform has to be on the canvas — the renderer only reads it to
         // choose a level of detail, it does not reposition the stroke.
         canvas.save()
+        canvas.clipRect(MARGIN, bodyTop, PAGE_WIDTH - MARGIN, PAGE_HEIGHT - MARGIN)
         canvas.concat(transform)
+        images.forEach { image ->
+            val bitmap = MediaStore.decodeImage(File(image.path))
+            try {
+                val y = NotebookLayout.topOf(image.pageIndex ?: 0, spec) + image.pageY
+                canvas.drawBitmap(bitmap, null, android.graphics.RectF(image.pageX, y,
+                    image.pageX + image.pageWidth, y + image.pageHeight), Paint(Paint.FILTER_BITMAP_FLAG))
+            } finally { bitmap.recycle() }
+        }
         strokes.forEach { inkStroke ->
-            runCatching { inkRenderer.draw(canvas, inkStroke.stroke, transform) }
+            inkRenderer.draw(canvas, inkStroke.stroke, transform)
         }
         canvas.restore()
     }
 
-    private fun drawImages(canvas: Canvas, attachments: List<AttachmentEntity>, top: Float) {
+    private fun drawImages(
+        canvas: Canvas,
+        attachments: List<AttachmentEntity>,
+        top: Float,
+        pageWidth: Int,
+        pageHeight: Int,
+    ) {
         var y = top + 24f
-        attachments.filter { it.type == AttachmentType.IMAGE }.forEach { attachment ->
-            if (y > PAGE_HEIGHT - MARGIN - 100) return
+        attachments.filter { it.type == AttachmentType.IMAGE && it.pageIndex == null }.forEach { attachment ->
+            if (y > pageHeight - MARGIN - 100) return
             val bitmap = BitmapFactory.decodeFile(attachment.path) ?: return@forEach
-            val maxWidth = PAGE_WIDTH - MARGIN * 2
-            val scale = minOf(maxWidth / bitmap.width, (PAGE_HEIGHT - MARGIN - y) / bitmap.height, 1f)
+            val maxWidth = pageWidth - MARGIN * 2
+            val scale = minOf(maxWidth / bitmap.width, (pageHeight - MARGIN - y) / bitmap.height, 1f)
             val target = android.graphics.RectF(
                 MARGIN, y,
                 MARGIN + bitmap.width * scale,
@@ -457,10 +672,15 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
 
     // ---- sharing -----------------------------------------------------------
 
-    private fun outFile(note: NoteEntity, extension: String): File {
-        val dir = File(context.cacheDir, "exports").apply { if (!exists()) mkdirs() }
-        val safe = note.title.ifBlank { "note" }.replace(Regex("[^A-Za-z0-9 _-]"), "").take(40).trim()
-        return File(dir, "${safe.ifBlank { "note" }}-${System.currentTimeMillis()}.$extension")
+    private fun outFile(note: NoteEntity, extension: String, baseName: String? = null): File {
+        val dir = File(context.cacheDir, "exports/${java.util.UUID.randomUUID()}").apply { mkdirs() }
+        val safe = ExportNames.safeBase(baseName ?: note.title)
+        return File(dir, "$safe.$extension")
+    }
+
+    private fun List<NoteEntity>.fileBaseName(): String = when {
+        size == 1 -> first().title.ifBlank { "note" }
+        else -> "Notes ($size)"
     }
 
     fun shareIntent(file: File, mime: String): Intent {

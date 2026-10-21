@@ -55,6 +55,25 @@ enum class InkTool {
     val isBrush: Boolean get() = this == PEN || this == MARKER || this == HIGHLIGHTER || this == DASHED
 }
 
+/** Physical buttons exposed by Android for active styluses, including the Xiaomi Pen. */
+enum class PenButton {
+    PRIMARY,
+    SECONDARY,
+    TERTIARY,
+}
+
+/** Actions that can be assigned to a Xiaomi Pen button. */
+enum class PenButtonAction(val label: String) {
+    NONE("Do nothing"),
+    TOGGLE_ERASER("Toggle eraser"),
+    UNDO("Undo"),
+    REDO("Redo"),
+    PEN("Pen"),
+    MARKER("Marker"),
+    HIGHLIGHTER("Highlighter"),
+    PAN("Pan page"),
+}
+
 /**
  * One slot in the pen tray.
  *
@@ -71,22 +90,26 @@ data class PenPreset(
 
 /** Default tray, left to right, mirroring the source app's pen row. */
 val DefaultPenTray: List<PenPreset> = listOf(
-    PenPreset(InkTool.PEN, 0xFF1B1B1F.toInt(), 2.5f),
-    PenPreset(InkTool.PEN, 0xFF2F6FED.toInt(), 2.5f),
-    PenPreset(InkTool.PEN, 0xFFE23B3B.toInt(), 2.5f),
-    PenPreset(InkTool.MARKER, 0xFF1B1B1F.toInt(), 6f),
-    PenPreset(InkTool.MARKER, 0xFF2E9E5B.toInt(), 6f),
-    PenPreset(InkTool.HIGHLIGHTER, 0xFFFFE14D.toInt(), 18f),
-    PenPreset(InkTool.HIGHLIGHTER, 0xFF7BE0A6.toInt(), 18f),
-    PenPreset(InkTool.DASHED, 0xFF8E44AD.toInt(), 3f),
+    PenPreset(InkTool.PEN, 0xFF171B23.toInt(), 2.5f),
+    PenPreset(InkTool.PEN, 0xFF7B818A.toInt(), 2.5f),
+    PenPreset(InkTool.PEN, 0xFF2386DC.toInt(), 2.5f),
+    PenPreset(InkTool.PEN, 0xFFE84158.toInt(), 2.5f),
+    PenPreset(InkTool.PEN, 0xFF299B62.toInt(), 2.5f),
+    PenPreset(InkTool.PEN, 0xFFF18432.toInt(), 2.5f),
+    PenPreset(InkTool.HIGHLIGHTER, 0xFFFFDF43.toInt(), 18f),
+    PenPreset(InkTool.HIGHLIGHTER, 0xFF9ADD70.toInt(), 18f),
+    PenPreset(InkTool.MARKER, 0xFF9C5B31.toInt(), 6f),
+    PenPreset(InkTool.DASHED, 0xFFC75AA4.toInt(), 3f),
 )
 
-/** Colour choices offered for the selected pen. */
+/** Professional, high-contrast inks and softer annotation colors. */
 val InkColors: List<Int> = listOf(
-    0xFF1B1B1F.toInt(), 0xFF5A5A66.toInt(), 0xFF2F6FED.toInt(), 0xFF1B9AAA.toInt(),
-    0xFF2E9E5B.toInt(), 0xFFE8A317.toInt(), 0xFFE23B3B.toInt(), 0xFF8E44AD.toInt(),
-    0xFFFFE14D.toInt(), 0xFF7BE0A6.toInt(), 0xFFFFAFCC.toInt(), 0xFFFFFFFF.toInt(),
+    0xFF171B23.toInt(), 0xFF7B818A.toInt(), 0xFFD1D5DB.toInt(), 0xFFFFFFFF.toInt(),
+    0xFF2386DC.toInt(), 0xFFE84158.toInt(), 0xFF299B62.toInt(), 0xFFFFDF43.toInt(),
+    0xFFF18432.toInt(), 0xFFC75AA4.toInt(), 0xFF9C5B31.toInt(), 0xFFFFBC7E.toInt(),
+    0xFF9ADD70.toInt(), 0xFF44BF42.toInt(), 0xFF7954A1.toInt(), 0xFF279DA8.toInt(),
 )
+
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 

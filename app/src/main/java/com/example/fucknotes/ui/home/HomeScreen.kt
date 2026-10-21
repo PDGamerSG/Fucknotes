@@ -2,17 +2,19 @@ package com.example.fucknotes.ui.home
 
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
@@ -27,7 +29,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.fucknotes.data.backup.BackupManager
@@ -55,6 +59,7 @@ fun HomeScreen(
     onOpenSettings: () -> Unit,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     val message by viewModel.message.collectAsStateWithLifecycle()
     val drawerState = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -67,15 +72,33 @@ fun HomeScreen(
     var showMoveDialog by remember { mutableStateOf(false) }
     var showColorDialog by remember { mutableStateOf(false) }
     var showNewNotebook by remember { mutableStateOf(false) }
-    var showStationery by remember { mutableStateOf(false) }
 
-    val pickImage = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickVisualMedia()
-    ) { uri -> uri?.let { viewModel.createNoteFromImage(it, onOpenNote) } }
+    val pickPdf = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let { viewModel.importPdf(it, onOpenNote) }
+    }
+    var exportTarget by remember { mutableStateOf<HomeExportTarget?>(null) }
+    val savePdf = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
+        val request = viewModel.pendingExport
+        viewModel.pendingExport = null
+        if (uri != null && request != null) viewModel.saveExport(request, uri)
+    }
+    val saveZip = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        val request = viewModel.pendingExport
+        viewModel.pendingExport = null
+        if (uri != null && request != null) viewModel.saveExport(request, uri)
+    }
+    val saveFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        val request = viewModel.pendingExport
+        viewModel.pendingExport = null
+        if (uri != null && request != null) viewModel.saveExport(request, uri)
+    }
 
     val createBackup = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument(BackupManager.MIME)
     ) { uri -> uri?.let(viewModel::backupTo) }
+
+    val exportVisiblePdf: () -> Unit = { exportTarget = viewModel.exportTarget() }
+    val exportSelectedPdf: () -> Unit = { exportTarget = viewModel.exportTarget(selected = true) }
 
     LaunchedEffect(message) {
         message?.let {
@@ -89,14 +112,7 @@ fun HomeScreen(
     val onCreate: (CreateAction) -> Unit = { action ->
         when (action) {
             CreateAction.NEW_NOTEBOOK -> showNewNotebook = true
-            CreateAction.NEW_FOLDER -> {
-                newFolderParent = null
-                showNewFolder = true
-            }
-
-            CreateAction.IMAGE -> pickImage.launch(
-                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-            )
+            CreateAction.IMPORT_PDF -> pickPdf.launch(arrayOf("application/pdf"))
 
             else -> action.noteType()?.let { viewModel.createNote(it, onOpenNote) }
         }
@@ -120,7 +136,8 @@ fun HomeScreen(
             onRenameFolder = { renaming = it },
             onDeleteFolder = viewModel::deleteFolder,
             onDeleteTag = viewModel::deleteTag,
-            onStationery = { showStationery = true },
+            onExportFolder = { exportTarget = HomeExportTarget(it.name, folderId = it.id) },
+            onToggleTheme = { viewModel.toggleTheme() },
             onTrash = {
                 scope.launch { drawerState.close() }
                 onOpenTrash()
@@ -146,6 +163,8 @@ fun HomeScreen(
                 snackbar = snackbar,
                 onOpenRail = openRail,
                 onBackup = { createBackup.launch(BackupManager.suggestedFileName()) },
+                onExport = exportVisiblePdf,
+                onExportSelected = exportSelectedPdf,
                 onSearch = onOpenSearch,
                 onCreate = onCreate,
                 onNewNotebook = { showNewNotebook = true },
@@ -179,12 +198,13 @@ fun HomeScreen(
 
     if (showNewFolder) {
         TextPromptDialog(
-            title = if (newFolderParent == null) "New folder" else "New subfolder",
+            title = if (newFolderParent == null) "New collection" else "New folder",
             label = "Name",
             confirmText = "Create",
             onDismiss = { showNewFolder = false },
             onConfirm = {
                 viewModel.createFolder(it, newFolderParent)
+                newFolderParent?.let { expandedFolders = expandedFolders + it }
                 showNewFolder = false
             },
         )
@@ -237,13 +257,28 @@ fun HomeScreen(
         )
     }
 
-    if (showStationery) {
-        StationerySheet(
-            pens = state.settings.penTray,
-            onEditPen = viewModel::editPen,
-            onDismiss = { showStationery = false },
+    exportTarget?.let { target ->
+        HomeExportDialog(target.title, state.busy, onDismiss = { exportTarget = null }) { mode ->
+            exportTarget = null
+            val request = HomeExportRequest(target, mode)
+            viewModel.pendingExport = request
+            val name = com.example.fucknotes.export.ExportNames.safeBase(target.title)
+            when (mode) {
+                HomeExportMode.COMBINED -> savePdf.launch("$name.pdf")
+                HomeExportMode.ZIP -> saveZip.launch("$name.zip")
+                HomeExportMode.SEPARATE -> saveFolder.launch(null)
+            }
+        }
+    }
+    if (state.busy) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = {},
+            title = { androidx.compose.material3.Text("Please wait") },
+            text = { androidx.compose.material3.Text(state.progress ?: "Preparing documents?") },
+            confirmButton = {},
         )
     }
+
 }
 
 /** The right-hand pane: the action row, or the selection bar, above the shelf. */
@@ -254,6 +289,8 @@ private fun HomeSheet(
     snackbar: SnackbarHostState,
     onOpenRail: (() -> Unit)?,
     onBackup: () -> Unit,
+    onExport: () -> Unit,
+    onExportSelected: () -> Unit,
     onSearch: () -> Unit,
     onCreate: (CreateAction) -> Unit,
     onNewNotebook: () -> Unit,
@@ -261,6 +298,8 @@ private fun HomeSheet(
     onMove: () -> Unit,
     onColour: () -> Unit,
 ) {
+    var cornerCreateMenu by remember { mutableStateOf(false) }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
         containerColor = MaterialTheme.brand.sheet,
@@ -270,11 +309,8 @@ private fun HomeSheet(
                     count = state.selection.size,
                     archived = state.scope == Scope.Archive,
                     onClose = viewModel::clearSelection,
-                    onPin = { viewModel.pinSelected(true) },
-                    onUnpin = { viewModel.pinSelected(false) },
+                    onExport = onExportSelected,
                     onArchive = { viewModel.archiveSelected(state.scope != Scope.Archive) },
-                    onLock = { viewModel.lockSelected(true) },
-                    onUnlock = { viewModel.lockSelected(false) },
                     onColor = onColour,
                     onMove = onMove,
                     onDuplicate = viewModel::duplicateSelected,
@@ -288,6 +324,7 @@ private fun HomeSheet(
                     sort = state.sort,
                     onOpenRail = onOpenRail,
                     onBackup = onBackup,
+                    onExport = onExport,
                     onSearch = onSearch,
                     onToggleLayout = {
                         viewModel.setLayout(
@@ -295,22 +332,46 @@ private fun HomeSheet(
                         )
                     },
                     onSort = viewModel::setSort,
-                    onCreate = onCreate,
                 )
             }
         },
     ) { padding ->
-        HomeShelf(
-            state = state,
-            previewOf = viewModel::previewOf,
-            onOpenNote = onOpenNote,
-            onToggleSelect = viewModel::toggleSelected,
-            onNewNotebook = onNewNotebook,
-            modifier = Modifier
+        Box(
+            Modifier
                 .padding(padding)
                 .fillMaxSize()
                 .background(MaterialTheme.brand.sheet),
-        )
+        ) {
+            HomeShelf(
+                state = state,
+                previewOf = viewModel::previewOf,
+                onOpenNote = onOpenNote,
+                onToggleSelect = viewModel::toggleSelected,
+                onNewNotebook = onNewNotebook,
+                modifier = Modifier.fillMaxSize(),
+            )
+
+            // FreeNotes-style corner affordance: the same complete create menu is always within
+            // reach, including when the top bar has scrolled out of view on a small display.
+            Box(
+                Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(24.dp),
+            ) {
+                FloatingActionButton(
+                    onClick = { cornerCreateMenu = true },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                ) {
+                    Icon(Icons.Outlined.Add, contentDescription = "Create")
+                }
+                CreateMenu(
+                    expanded = cornerCreateMenu,
+                    onDismiss = { cornerCreateMenu = false },
+                    onPick = { cornerCreateMenu = false; onCreate(it) },
+                )
+            }
+        }
     }
 }
 

@@ -14,14 +14,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.outlined.Alarm
 import androidx.compose.material.icons.outlined.Brush
 import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material.icons.outlined.CheckBox
 import androidx.compose.material.icons.outlined.Image
-import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Mic
-import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -96,20 +93,10 @@ fun NoteCard(
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(20.dp),
                     )
-                } else if (note.pinned) {
-                    Icon(Icons.Outlined.PushPin, contentDescription = "Pinned", modifier = Modifier.size(16.dp))
                 }
             }
 
             when {
-                note.locked -> Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    Icon(Icons.Outlined.Lock, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Text("Locked note", style = MaterialTheme.typography.bodySmall)
-                }
-
                 preview.isNotBlank() -> Text(
                     text = preview,
                     style = MaterialTheme.typography.bodySmall,
@@ -148,9 +135,7 @@ fun NoteCard(
                 badge(note.type)?.let { Icon(it, contentDescription = null, modifier = Modifier.size(14.dp)) }
                 if (hasImages) Icon(Icons.Outlined.Image, contentDescription = null, modifier = Modifier.size(14.dp))
                 if (hasAudio) Icon(Icons.Outlined.Mic, contentDescription = null, modifier = Modifier.size(14.dp))
-                if (note.reminderAt != null) {
-                    Icon(Icons.Outlined.Alarm, contentDescription = null, modifier = Modifier.size(14.dp))
-                }
+
             }
         }
     }

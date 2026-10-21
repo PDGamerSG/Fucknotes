@@ -19,7 +19,8 @@ import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.automirrored.outlined.MenuOpen
 import androidx.compose.material.icons.automirrored.outlined.Notes
 import androidx.compose.material.icons.outlined.Archive
-import androidx.compose.material.icons.outlined.Brush
+import androidx.compose.material.icons.outlined.DarkMode
+import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Inbox
@@ -36,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Brush as PaintBrush
 import androidx.compose.ui.unit.dp
 import com.example.fucknotes.data.db.FolderEntity
@@ -64,7 +66,8 @@ fun HomeRail(
     onRenameFolder: (FolderEntity) -> Unit,
     onDeleteFolder: (Long) -> Unit,
     onDeleteTag: (Long) -> Unit,
-    onStationery: () -> Unit,
+    onExportFolder: (FolderEntity) -> Unit,
+    onToggleTheme: () -> Unit,
     onTrash: () -> Unit,
     onSettings: () -> Unit,
     modifier: Modifier = Modifier,
@@ -89,18 +92,12 @@ fun HomeRail(
         Column(Modifier.fillMaxHeight()) {
             RailHeader(onCollapse = onCollapse, onNewFolder = { onNewFolder(null) })
 
-            RailRow(
-                label = "Stationery",
-                icon = Icons.Outlined.Brush,
-                onClick = onStationery,
-            )
-
             Column(
                 Modifier
                     .weight(1f)
                     .verticalScroll(rememberScrollState())
             ) {
-                RailSectionLabel("Folder")
+                RailSectionLabel("Collections")
 
                 RailRow(
                     label = "All notes",
@@ -129,6 +126,7 @@ fun HomeRail(
                     onNewSubfolder = onNewFolder,
                     onRename = onRenameFolder,
                     onDelete = onDeleteFolder,
+                    onExport = onExportFolder,
                 )
 
                 RailRow(
@@ -164,6 +162,11 @@ fun HomeRail(
                 Spacer(Modifier.height(24.dp))
             }
 
+            RailRow(
+                label = if (MaterialTheme.colorScheme.background.luminance() < 0.5f) "Light mode" else "Dark mode",
+                icon = if (MaterialTheme.colorScheme.background.luminance() < 0.5f) Icons.Outlined.LightMode else Icons.Outlined.DarkMode,
+                onClick = onToggleTheme,
+            )
             RailRow(label = "Trash", icon = Icons.Outlined.Delete, onClick = onTrash)
 
             Row(
@@ -199,13 +202,13 @@ private fun RailHeader(onCollapse: (() -> Unit)?, onNewFolder: () -> Unit) {
                 onClick = onCollapse,
             )
         } else {
-            Spacer(Modifier.size(40.dp))
+            Text("Notes", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.brand.railText)
         }
         Spacer(Modifier.weight(1f))
         Box {
             ToolButton(
                 icon = Icons.Outlined.CreateNewFolder,
-                label = "New folder",
+                label = "New collection",
                 onClick = onNewFolder,
             )
             Box(

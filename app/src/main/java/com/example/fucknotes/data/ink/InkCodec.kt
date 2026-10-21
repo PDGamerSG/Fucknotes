@@ -2,6 +2,7 @@ package com.example.fucknotes.data.ink
 
 import android.util.Base64
 import androidx.ink.brush.Brush
+import androidx.ink.brush.ExperimentalInkCustomBrushApi
 import androidx.ink.brush.BrushFamily
 import androidx.ink.brush.StockBrushes
 import androidx.ink.storage.decode
@@ -45,6 +46,10 @@ object InkCodec {
      */
     private val encodedCache: MutableMap<Stroke, String> =
         Collections.synchronizedMap(WeakHashMap())
+
+    private val brushTools: MutableMap<Brush, InkTool> = Collections.synchronizedMap(WeakHashMap())
+
+    fun toolForStroke(stroke: Stroke, fallback: InkTool): InkTool = brushTools[stroke.brush] ?: fallback
 
     @Serializable
     private data class Page(
@@ -93,7 +98,7 @@ object InkCodec {
                     .use { StrokeInputBatch.decode(it) }
                 val brush = Brush.createWithColorIntArgb(
                     family = familyForTool(tool),
-                    colorIntArgb = dto.colorArgb,
+                    colorIntArgb = colorForTool(tool, dto.colorArgb),
                     size = dto.size,
                     epsilon = dto.epsilon,
                 )
@@ -112,13 +117,25 @@ object InkCodec {
     fun brushFor(tool: InkTool, colorArgb: Int, widthDp: Float, worldToScreenScale: Float): Brush =
         Brush.createWithColorIntArgb(
             family = familyForTool(tool),
-            colorIntArgb = colorArgb,
+            colorIntArgb = colorForTool(tool, colorArgb),
             size = widthDp.coerceAtLeast(0.5f),
             epsilon = (0.1f / worldToScreenScale.coerceAtLeast(0.05f)).coerceIn(0.001f, 1f),
-        )
+        ).also { brushTools[it] = tool }
 
+    /** Clamp rather than multiply alpha: repeated saves must never fade a highlight. */
+    internal fun colorForTool(tool: InkTool, argb: Int): Int =
+        if (tool == InkTool.HIGHLIGHTER) {
+            (argb and 0x00FFFFFF) or (minOf(argb ushr 24, 96) shl 24)
+        } else argb
+
+    @OptIn(ExperimentalInkCustomBrushApi::class)
     private fun familyForTool(tool: InkTool): BrushFamily = when (tool) {
-        InkTool.PEN -> StockBrushes.pressurePen()
+        // The stock pressure pen uses the raw input model.  On a large, high-density tablet that
+        // can make tiny digitiser samples visible as a wobble, especially at slow handwriting
+        // speed.  Reusing its coat with Ink's spring input model keeps pressure and tilt behaviour
+        // while smoothing the path before it is tessellated.  The same family is used on decode so
+        // saved strokes retain the exact rendering behaviour of newly written strokes.
+        InkTool.PEN -> StockBrushes.pressurePen().copy(inputModel = BrushFamily.SPRING_MODEL)
         InkTool.MARKER -> StockBrushes.marker()
         InkTool.HIGHLIGHTER -> StockBrushes.highlighter()
         InkTool.DASHED -> StockBrushes.dashedLine()

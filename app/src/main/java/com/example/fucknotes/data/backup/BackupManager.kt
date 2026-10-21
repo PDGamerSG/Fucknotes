@@ -54,6 +54,8 @@ class BackupManager(private val context: Context, private val db: AppDatabase) {
         val lineColorArgb: Int = 0,
         val lineSpacingDp: Int = 0,
         val pageFormat: String = "A4",
+        val pageCount: Int = 1,
+        val pagesExplicitlyCreated: Boolean = false,
     )
 
     @Serializable
@@ -69,6 +71,8 @@ class BackupManager(private val context: Context, private val db: AppDatabase) {
     data class AttachmentDto(
         val id: Long, val noteId: Long, val fileName: String,
         val type: String, val durationMs: Long, val createdAt: Long,
+        val pageIndex: Int? = null, val pageX: Float = 0f, val pageY: Float = 0f,
+        val pageWidth: Float = 0f, val pageHeight: Float = 0f,
     )
 
     /** Writes a full backup zip to [target] (a SAF document uri). Returns the note count written. */
@@ -81,7 +85,8 @@ class BackupManager(private val context: Context, private val db: AppDatabase) {
             tags = db.tagDao().allTags().map { TagDto(it.id, it.name, it.colorArgb) },
             noteTags = db.tagDao().allCrossRefs().map { NoteTagDto(it.noteId, it.tagId) },
             attachments = attachments.map {
-                AttachmentDto(it.id, it.noteId, File(it.path).name, it.type.name, it.durationMs, it.createdAt)
+                AttachmentDto(it.id, it.noteId, File(it.path).name, it.type.name, it.durationMs, it.createdAt,
+                    it.pageIndex, it.pageX, it.pageY, it.pageWidth, it.pageHeight)
             },
         )
 
@@ -91,7 +96,7 @@ class BackupManager(private val context: Context, private val db: AppDatabase) {
                 zip.write(json.encodeToString(payload).toByteArray())
                 zip.closeEntry()
 
-                attachments.forEach { attachment ->
+                attachments.distinctBy { it.path }.forEach { attachment ->
                     val file = File(attachment.path)
                     if (!file.exists()) return@forEach
                     zip.putNextEntry(ZipEntry("$DIR_MEDIA${file.name}"))
@@ -147,6 +152,8 @@ class BackupManager(private val context: Context, private val db: AppDatabase) {
                     type = runCatching { AttachmentType.valueOf(it.type) }.getOrDefault(AttachmentType.IMAGE),
                     durationMs = it.durationMs,
                     createdAt = it.createdAt,
+                    pageIndex = it.pageIndex, pageX = it.pageX, pageY = it.pageY,
+                    pageWidth = it.pageWidth, pageHeight = it.pageHeight,
                 )
             }
         )
@@ -157,7 +164,7 @@ class BackupManager(private val context: Context, private val db: AppDatabase) {
     private fun NoteEntity.toDto() = NoteDto(
         id, title, body, type.name, checklistJson, drawingJson, folderId, colorArgb,
         paperStyle.name, pinned, archived, locked, deletedAt, reminderAt, createdAt, updatedAt,
-        lineColorArgb, lineSpacingDp, pageFormat,
+        lineColorArgb, lineSpacingDp, pageFormat, pageCount, pagesExplicitlyCreated,
     )
 
     private fun NoteDto.toEntity() = NoteEntity(
@@ -170,16 +177,18 @@ class BackupManager(private val context: Context, private val db: AppDatabase) {
         folderId = folderId,
         colorArgb = colorArgb,
         paperStyle = runCatching { PaperStyle.valueOf(paperStyle) }.getOrDefault(PaperStyle.PLAIN),
-        pinned = pinned,
+        pinned = false,
         archived = archived,
-        locked = locked,
+        locked = false,
         deletedAt = deletedAt,
-        reminderAt = reminderAt,
+        reminderAt = null,
         createdAt = createdAt,
         updatedAt = updatedAt,
         lineColorArgb = lineColorArgb,
         lineSpacingDp = lineSpacingDp,
         pageFormat = pageFormat,
+        pageCount = if (pagesExplicitlyCreated) pageCount else 1,
+        pagesExplicitlyCreated = pagesExplicitlyCreated,
     )
 
     companion object {

@@ -1,21 +1,17 @@
 package com.example.fucknotes.ui.editor.ink
 
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AutoFixNormal
-import androidx.compose.material.icons.outlined.Draw
-import androidx.compose.material.icons.outlined.FormatPaint
-import androidx.compose.material.icons.outlined.Image
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.BorderColor
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.PanTool
-import androidx.compose.material.icons.outlined.TouchApp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -25,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.fucknotes.data.model.InkTool
+import com.example.fucknotes.data.model.InkColors
 import com.example.fucknotes.data.model.PenPreset
 import com.example.fucknotes.ui.common.FloatingPanel
 import com.example.fucknotes.ui.common.ToolButton
@@ -43,28 +40,26 @@ fun InkToolbar(
     pens: List<PenPreset>,
     selectedPen: Int,
     tool: InkTool,
-    fingerDrawing: Boolean,
-    zoomLocked: Boolean,
+    compact: Boolean,
     onSelectPen: (Int) -> Unit,
     onEditPen: (index: Int, colorArgb: Int, widthDp: Float) -> Unit,
     onSelectTool: (InkTool) -> Unit,
-    onToggleFingerDrawing: () -> Unit,
-    onToggleZoomLock: () -> Unit,
-    onAddImage: () -> Unit,
-    onPaperStyle: () -> Unit,
+    onToggleCompact: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var editingPen by remember { mutableIntStateOf(-1) }
 
     FloatingPanel(modifier) {
         Row(
-            Modifier
-                .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 8.dp),
+            Modifier.padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            ToolButton(icon = Icons.Outlined.Edit, label = "Pen", selected = tool == InkTool.PEN,
+                onClick = { onSelectTool(InkTool.PEN) })
+            ToolButton(icon = Icons.Outlined.BorderColor, label = "Highlighter", selected = tool == InkTool.HIGHLIGHTER,
+                onClick = { onSelectTool(InkTool.HIGHLIGHTER) })
             ToolButton(
-                icon = Icons.Outlined.AutoFixNormal,
+                icon = EraserIcon,
                 label = "Eraser",
                 selected = tool == InkTool.ERASER,
                 onClick = { onSelectTool(InkTool.ERASER) },
@@ -75,37 +70,32 @@ fun InkToolbar(
                 selected = tool == InkTool.PAN,
                 onClick = { onSelectTool(InkTool.PAN) },
             )
-            // Stylus-only mode. Off, a finger scrolls the page instead of drawing on it, so a hand
-            // can rest on the glass while the pen writes.
-            ToolButton(
-                icon = if (fingerDrawing) Icons.Outlined.TouchApp else Icons.Outlined.Draw,
-                label = if (fingerDrawing) "Finger drawing is on" else "Stylus only",
-                selected = fingerDrawing,
-                onClick = onToggleFingerDrawing,
-            )
-
             ToolDivider()
 
+            val pen = pens.getOrElse(selectedPen) { pens.first() }
+            val colors = (InkColors + pen.colorArgb).distinct()
             Row(
-                Modifier.height(52.dp),
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                Modifier.weight(1f).horizontalScroll(rememberScrollState()).height(48.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                pens.forEachIndexed { index, pen ->
+                colors.forEachIndexed { index, color ->
                     Box {
                         PenGlyph(
-                            pen = pen,
-                            active = tool.isBrush && index == selectedPen,
+                            pen = pen.copy(colorArgb = color),
+                            active = tool.isBrush && color == pen.colorArgb,
                             onClick = {
-                                if (tool.isBrush && index == selectedPen) editingPen = index
-                                else onSelectPen(index)
+                                if (tool.isBrush && color == pen.colorArgb) editingPen = index
+                                else {
+                                    onSelectPen(selectedPen)
+                                    onEditPen(selectedPen, color, pen.widthDp)
+                                }
                             },
                         )
                         if (editingPen == index) {
                             PenEditorPopup(
                                 pen = pen,
                                 onDismiss = { editingPen = -1 },
-                                onChange = { color, width -> onEditPen(index, color, width) },
+                                onChange = { nextColor, width -> onEditPen(selectedPen, nextColor, width) },
                             )
                         }
                     }
@@ -114,15 +104,12 @@ fun InkToolbar(
 
             ToolDivider()
 
-            ToolButton(icon = Icons.Outlined.Image, label = "Add a picture", onClick = onAddImage)
-            ToolButton(icon = Icons.Outlined.FormatPaint, label = "Paper", onClick = onPaperStyle)
-            // Locked, the page still scrolls but keeps its scale, so handwriting stays the size the
-            // user set it to.
+            // Keep the compact-mode escape visible while the color tray scrolls.
             ToolButton(
-                icon = if (zoomLocked) Icons.Outlined.Lock else Icons.Outlined.LockOpen,
-                label = if (zoomLocked) "Zoom is locked" else "Lock the zoom",
-                selected = zoomLocked,
-                onClick = onToggleZoomLock,
+                icon = if (compact) Icons.Outlined.LockOpen else Icons.Outlined.Lock,
+                label = if (compact) "Show all controls" else "Hide extra controls",
+                selected = compact,
+                onClick = onToggleCompact,
             )
         }
     }

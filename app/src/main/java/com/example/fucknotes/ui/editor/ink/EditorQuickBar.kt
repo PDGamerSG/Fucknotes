@@ -7,7 +7,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Redo
 import androidx.compose.material.icons.automirrored.outlined.Undo
 import androidx.compose.material.icons.filled.MoreHoriz
-import androidx.compose.material.icons.outlined.CenterFocusStrong
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.NoteAdd
 import androidx.compose.runtime.Composable
@@ -34,7 +33,6 @@ fun EditorQuickBar(
     onUndo: () -> Unit,
     onRedo: () -> Unit,
     onAddPage: () -> Unit,
-    onResetView: () -> Unit,
     onMore: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -67,13 +65,8 @@ fun EditorQuickBar(
             ToolDivider()
 
             if (notebook) {
-                ToolButton(icon = Icons.Outlined.NoteAdd, label = "Go to a new page", onClick = onAddPage)
+                ToolButton(icon = Icons.Outlined.NoteAdd, label = "Add a new page", onClick = onAddPage)
             }
-            ToolButton(
-                icon = Icons.Outlined.CenterFocusStrong,
-                label = "Fit the page",
-                onClick = onResetView,
-            )
             ToolButton(icon = Icons.Filled.MoreHoriz, label = "More", onClick = onMore)
         }
     }

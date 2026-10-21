@@ -17,10 +17,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
@@ -44,9 +47,11 @@ import com.example.fucknotes.ServiceLocator
 import com.example.fucknotes.data.backup.BackupManager
 import com.example.fucknotes.data.model.AccentPreset
 import com.example.fucknotes.data.model.PaperStyle
+import com.example.fucknotes.data.model.PenButton
+import com.example.fucknotes.data.model.PenButtonAction
 import com.example.fucknotes.data.model.ThemeMode
 import com.example.fucknotes.data.repo.SettingsRepository
-import com.example.fucknotes.ui.components.ConfirmDialog
+import com.example.fucknotes.input.PenInputBus
 import com.example.fucknotes.ui.components.OptionListDialog
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -82,12 +87,11 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     fun setFingerDrawing(v: Boolean) = viewModelScope.launch { settingsRepo.setFingerDrawing(v) }
     fun setConfirmDelete(v: Boolean) = viewModelScope.launch { settingsRepo.setConfirmDelete(v) }
     fun setAutoBackup(v: Boolean) = viewModelScope.launch { settingsRepo.setAutoBackup(v) }
-    fun setBiometricUnlock(v: Boolean) = viewModelScope.launch { settingsRepo.setBiometricUnlock(v) }
+    fun setPenPrimaryAction(v: PenButtonAction) = viewModelScope.launch { settingsRepo.setPenPrimaryAction(v) }
+    fun setPenSecondaryAction(v: PenButtonAction) = viewModelScope.launch { settingsRepo.setPenSecondaryAction(v) }
+    fun setPenTertiaryAction(v: PenButtonAction) = viewModelScope.launch { settingsRepo.setPenTertiaryAction(v) }
 
-    fun unlockAllNotes() = viewModelScope.launch {
-        notesRepo.unlockAll()
-        _message.value = "All locked notes have been unlocked"
-    }
+
 
     fun exportBackup(target: Uri) = viewModelScope.launch {
         _busy.value = true
@@ -118,6 +122,7 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
 @Composable
 fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val lastPenInput by PenInputBus.lastDebugEvent.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
     val busy by viewModel.busy.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
@@ -126,7 +131,7 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
     var showTheme by remember { mutableStateOf(false) }
     var showAccent by remember { mutableStateOf(false) }
     var showPaper by remember { mutableStateOf(false) }
-    var confirmUnlockAll by remember { mutableStateOf(false) }
+    var showPenControls by remember { mutableStateOf(false) }
 
     val createBackup = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument(BackupManager.MIME)
@@ -221,18 +226,24 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
             )
 
             HorizontalDivider()
-            SectionHeader("Note lock")
-
-            SwitchRow(
-                title = "Unlock with biometrics",
-                subtitle = "Fingerprint, face or device passcode",
-                checked = settings.biometricUnlock,
-                onChange = viewModel::setBiometricUnlock,
+            SectionHeader("Xiaomi Pen buttons")
+            Text(
+                "Assign shortcuts to the pen buttons. The primary button is the one most Xiaomi Pens expose.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(20.dp, 0.dp, 20.dp, 8.dp),
             )
             SettingRow(
-                title = "Unlock all notes",
-                subtitle = "Removes the lock from every locked note",
-                onClick = { confirmUnlockAll = true },
+                title = "Customize pen buttons",
+                subtitle = "Primary: ${settings.penPrimaryAction.label}  ·  Secondary: ${settings.penSecondaryAction.label}  ·  Tertiary: ${settings.penTertiaryAction.label}",
+                onClick = { showPenControls = true },
+            )
+            Text(
+                text = lastPenInput?.let { "Last raw input: $it" }
+                    ?: "Press a Xiaomi pen button while this screen is open to identify its input.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(20.dp, 0.dp, 20.dp, 12.dp),
             )
 
             HorizontalDivider()
@@ -267,7 +278,7 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                 onClick = {},
             )
             Text(
-                "Notes, folders, tags, ink, reminders and backups all live on this device. " +
+                "Notes, folders, tags, ink and backups all live on this device. " +
                     "Nothing is uploaded anywhere.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -306,18 +317,17 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
         )
     }
 
-    if (confirmUnlockAll) {
-        ConfirmDialog(
-            title = "Unlock all notes?",
-            message = "All locked notes will be unlocked.",
-            confirmText = "Unlock all",
-            onDismiss = { confirmUnlockAll = false },
-            onConfirm = {
-                confirmUnlockAll = false
-                viewModel.unlockAllNotes()
-            },
+    if (showPenControls) {
+        PenButtonControlsSheet(
+            settings = settings,
+            onPrimary = viewModel::setPenPrimaryAction,
+            onSecondary = viewModel::setPenSecondaryAction,
+            onTertiary = viewModel::setPenTertiaryAction,
+            onDismiss = { showPenControls = false },
         )
     }
+
+
 }
 
 @Composable
@@ -328,6 +338,95 @@ private fun SectionHeader(text: String) {
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier.padding(20.dp, 20.dp, 20.dp, 6.dp),
     )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PenButtonControlsSheet(
+    settings: SettingsRepository.Settings,
+    onPrimary: (PenButtonAction) -> Unit,
+    onSecondary: (PenButtonAction) -> Unit,
+    onTertiary: (PenButtonAction) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var editing by remember { mutableStateOf<PenButton?>(null) }
+
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(start = 20.dp, end = 20.dp, bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text("Xiaomi Pen", style = MaterialTheme.typography.headlineSmall)
+            Text(
+                "Use the pen buttons for quick actions while writing. Changes apply immediately in every ink note.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            PenButtonCard("1", "Primary button", settings.penPrimaryAction) { editing = PenButton.PRIMARY }
+            PenButtonCard("2", "Secondary button", settings.penSecondaryAction) { editing = PenButton.SECONDARY }
+            PenButtonCard("3", "Tertiary button", settings.penTertiaryAction) { editing = PenButton.TERTIARY }
+            Text(
+                "If your pen has one button, use Primary. Some Xiaomi firmware reports the same control as a stylus button event or a key event; both are supported.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+
+    editing?.let { button ->
+        val selected = when (button) {
+            PenButton.PRIMARY -> settings.penPrimaryAction
+            PenButton.SECONDARY -> settings.penSecondaryAction
+            PenButton.TERTIARY -> settings.penTertiaryAction
+        }
+        OptionListDialog(
+            title = when (button) {
+                PenButton.PRIMARY -> "Primary pen button"
+                PenButton.SECONDARY -> "Secondary pen button"
+                PenButton.TERTIARY -> "Tertiary pen button"
+            },
+            options = PenButtonAction.entries.map { it.label },
+            selectedIndex = PenButtonAction.entries.indexOf(selected),
+            onDismiss = { editing = null },
+            onPick = { index ->
+                val action = PenButtonAction.entries[index]
+                when (button) {
+                    PenButton.PRIMARY -> onPrimary(action)
+                    PenButton.SECONDARY -> onSecondary(action)
+                    PenButton.TERTIARY -> onTertiary(action)
+                }
+                editing = null
+            },
+        )
+    }
+}
+
+@Composable
+private fun PenButtonCard(
+    number: String,
+    title: String,
+    action: PenButtonAction,
+    onClick: () -> Unit,
+) {
+    Card(
+        onClick = onClick,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+    ) {
+        Row(
+            Modifier.fillMaxWidth().padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(number, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+            Column(Modifier.weight(1f).padding(start = 16.dp)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(action.label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text("Change", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge)
+        }
+    }
 }
 
 @Composable

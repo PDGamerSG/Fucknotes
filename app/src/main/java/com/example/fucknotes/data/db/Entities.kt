@@ -33,6 +33,10 @@ data class NoteEntity(
     val lineSpacingDp: Int = 0,
     /** Sheet size and direction, encoded by `PageSpec.encode()` — "A4", "A5_L" and so on. */
     val pageFormat: String = "A4",
+    /** Number of notebook sheets explicitly created, including empty sheets. */
+    val pageCount: Int = 1,
+    /** True once the user has used the page controls; protects the count from legacy stroke bounds. */
+    val pagesExplicitlyCreated: Boolean = false,
     val pinned: Boolean = false,
     val archived: Boolean = false,
     val locked: Boolean = false,
@@ -112,4 +116,10 @@ data class AttachmentEntity(
     /** Recording length in millis for AUDIO; 0 for images. */
     val durationMs: Long = 0,
     val createdAt: Long = System.currentTimeMillis(),
+    /** Null for a standalone attachment; otherwise an image placed underneath the page's ink. */
+    val pageIndex: Int? = null,
+    val pageX: Float = 0f,
+    val pageY: Float = 0f,
+    val pageWidth: Float = 0f,
+    val pageHeight: Float = 0f,
 )

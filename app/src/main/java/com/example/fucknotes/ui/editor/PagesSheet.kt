@@ -1,5 +1,6 @@
 package com.example.fucknotes.ui.editor
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,20 +26,27 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.fucknotes.data.ink.PageSpec
+import com.example.fucknotes.data.ink.InkStroke
+import com.example.fucknotes.data.ink.NotebookLayout
 import com.example.fucknotes.data.model.PaperStyle
 import com.example.fucknotes.ui.common.PaperPreview
 import com.example.fucknotes.ui.common.paperColorOr
 import com.example.fucknotes.ui.theme.brand
+import androidx.compose.runtime.remember
+import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
 
 /**
  * Every page of the notebook, to jump between.
  *
- * The thumbnails are paper only — rendering the ink of a long notebook at thumbnail size would cost
- * a full stroke pass per sheet — so the page number does the identifying. It is a way of moving,
- * not a way of reading.
+ * Each thumbnail includes the ink that belongs to that page. The same Ink renderer is used as the
+ * editor, with a page-local transform, so the preview is an actual miniature of the sheet rather
+ * than a blank paper placeholder.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,6 +58,8 @@ fun PagesSheet(
     lineColorArgb: Int,
     spacingDp: Float,
     page: PageSpec,
+    strokes: List<InkStroke>,
+    attachments: List<com.example.fucknotes.data.db.AttachmentEntity>,
     onGoToPage: (Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -80,6 +90,8 @@ fun PagesSheet(
                         lineColorArgb = lineColorArgb,
                         spacingDp = spacingDp,
                         page = page,
+                        strokes = strokes,
+                        attachments = attachments.filter { it.pageIndex == index },
                         onClick = { onGoToPage(index) },
                     )
                 }
@@ -97,13 +109,18 @@ private fun PageThumb(
     lineColorArgb: Int,
     spacingDp: Float,
     page: PageSpec,
+    strokes: List<InkStroke>,
+    attachments: List<com.example.fucknotes.data.db.AttachmentEntity>,
     onClick: () -> Unit,
 ) {
+    val renderer = remember { CanvasStrokeRenderer.create() }
+    val images = com.example.fucknotes.ui.editor.ink.rememberPageImages(attachments, 512)
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier
                 .fillMaxWidth()
                 .aspectRatio(page.widthDp / page.heightDp)
+                .clip(RoundedCornerShape(8.dp))
                 .clickable(onClick = onClick)
                 .then(
                     if (current) {
@@ -122,6 +139,35 @@ private fun PageThumb(
                 zoom = 0.16f,
                 corner = 8.dp,
             )
+            Canvas(Modifier.fillMaxSize()) {
+                val scale = size.width / page.widthDp.coerceAtLeast(1f)
+                val pageTop = NotebookLayout.topOf(index, page)
+                val pageBottom = pageTop + page.heightDp
+                val transform = android.graphics.Matrix().apply {
+                    setScale(scale, scale)
+                    postTranslate(0f, -pageTop * scale)
+                }
+                drawIntoCanvas { canvas ->
+                    val native = canvas.nativeCanvas
+                    native.save()
+                    native.clipRect(0f, 0f, size.width, size.height)
+                    native.concat(transform)
+                    attachments.forEach { image ->
+                        images[image.id]?.let { bitmap ->
+                            com.example.fucknotes.ui.editor.ink.drawPageImage(native, image, bitmap, page)
+                        }
+                    }
+                    strokes.forEach { inkStroke ->
+                        val box = inkStroke.stroke.shape.computeBoundingBox() ?: return@forEach
+                        if (box.xMax >= 0f && box.xMin <= page.widthDp &&
+                            box.yMax >= pageTop && box.yMin <= pageBottom
+                        ) {
+                            runCatching { renderer.draw(native, inkStroke.stroke, transform) }
+                        }
+                    }
+                    native.restore()
+                }
+            }
         }
         Spacer(Modifier.height(4.dp))
         Text(

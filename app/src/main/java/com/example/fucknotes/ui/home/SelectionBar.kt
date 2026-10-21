@@ -8,12 +8,10 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.outlined.Archive
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.Folder
-import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.Merge
 import androidx.compose.material.icons.outlined.Palette
-import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material.icons.outlined.Unarchive
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -40,11 +38,8 @@ fun SelectionBar(
     count: Int,
     archived: Boolean,
     onClose: () -> Unit,
-    onPin: () -> Unit,
-    onUnpin: () -> Unit,
+    onExport: () -> Unit,
     onArchive: () -> Unit,
-    onLock: () -> Unit,
-    onUnlock: () -> Unit,
     onColor: () -> Unit,
     onMove: () -> Unit,
     onDuplicate: () -> Unit,
@@ -61,8 +56,8 @@ fun SelectionBar(
             }
         },
         actions = {
-            IconButton(onClick = onPin) { Icon(Icons.Outlined.PushPin, contentDescription = "Pin") }
             IconButton(onClick = onColor) { Icon(Icons.Outlined.Palette, contentDescription = "Colour") }
+            IconButton(onClick = onExport) { Icon(Icons.Outlined.FileDownload, contentDescription = "Export selected notes") }
             IconButton(onClick = onDelete) { Icon(Icons.Outlined.Delete, contentDescription = "Move to trash") }
             Box {
                 IconButton(onClick = { more = true }) {
@@ -75,11 +70,6 @@ fun SelectionBar(
                         onClick = { more = false; onSelectAll() },
                     )
                     DropdownMenuItem(
-                        text = { Text("Unpin") },
-                        leadingIcon = { Icon(Icons.Outlined.PushPin, null) },
-                        onClick = { more = false; onUnpin() },
-                    )
-                    DropdownMenuItem(
                         text = { Text(if (archived) "Take out of the archive" else "Archive") },
                         leadingIcon = {
                             Icon(if (archived) Icons.Outlined.Unarchive else Icons.Outlined.Archive, null)
@@ -90,16 +80,6 @@ fun SelectionBar(
                         text = { Text("Move to a folder") },
                         leadingIcon = { Icon(Icons.Outlined.Folder, null) },
                         onClick = { more = false; onMove() },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Lock") },
-                        leadingIcon = { Icon(Icons.Outlined.Lock, null) },
-                        onClick = { more = false; onLock() },
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Unlock") },
-                        leadingIcon = { Icon(Icons.Outlined.LockOpen, null) },
-                        onClick = { more = false; onUnlock() },
                     )
                     DropdownMenuItem(
                         text = { Text("Duplicate") },

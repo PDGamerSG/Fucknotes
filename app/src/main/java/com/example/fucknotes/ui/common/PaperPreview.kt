@@ -77,7 +77,7 @@ private fun DrawScope.drawPaperPattern(style: PaperStyle, color: Color, step: Fl
         while (y < size.height) {
             var x = step
             while (x < size.width) {
-                drawCircle(color, radius = 1.1f, center = Offset(x, y))
+                drawCircle(color, radius = 1.4f, center = Offset(x, y))
                 x += step
             }
             y += step

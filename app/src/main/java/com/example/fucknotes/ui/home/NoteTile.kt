@@ -19,14 +19,11 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.outlined.Alarm
 import androidx.compose.material.icons.outlined.Brush
 import androidx.compose.material.icons.outlined.CheckBox
 import androidx.compose.material.icons.outlined.Image
-import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Mic
-import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -97,7 +94,6 @@ fun NoteTile(
                     .padding(6.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                if (note.pinned) TileBadge(Icons.Outlined.PushPin, "Pinned")
                 typeBadge(note.type)?.let { TileBadge(it, note.type.name.lowercase()) }
                 if (selectionMode && selected) {
                     Icon(
@@ -128,7 +124,6 @@ fun NoteTile(
             )
             if (hasImages) MetaIcon(Icons.Outlined.Image, "Has images")
             if (hasAudio) MetaIcon(Icons.Outlined.Mic, "Has a recording")
-            if (note.reminderAt != null) MetaIcon(Icons.Outlined.Alarm, "Has a reminder")
         }
     }
 }
@@ -154,15 +149,6 @@ fun NotePagePreview(note: NoteEntity, preview: String, modifier: Modifier = Modi
         )
 
         when {
-            note.locked -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Icon(
-                    Icons.Outlined.Lock,
-                    contentDescription = "Locked",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(22.dp),
-                )
-            }
-
             preview.isNotBlank() -> Text(
                 preview,
                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 7.sp, lineHeight = 11.sp),

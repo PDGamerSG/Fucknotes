@@ -196,15 +196,16 @@ private fun ChecklistBody(state: EditorUiState, viewModel: EditorViewModel) {
 }
 
 @Composable
-private fun AttachmentStrip(
+internal fun AttachmentStrip(
     attachments: List<AttachmentEntity>,
     playingPath: String?,
     onPlay: (String) -> Unit,
     onRemove: (AttachmentEntity) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     if (attachments.isEmpty()) return
     LazyRow(
-        Modifier
+        modifier
             .fillMaxWidth()
             .padding(vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),

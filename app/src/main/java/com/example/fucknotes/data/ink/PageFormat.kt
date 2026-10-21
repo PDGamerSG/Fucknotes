@@ -23,18 +23,30 @@ enum class PageFormat(val label: String, val shortSideDp: Float, val longSideDp:
 data class PageSpec(
     val format: PageFormat = PageFormat.A4,
     val landscape: Boolean = false,
+    val customWidth: Float? = null,
+    val customHeight: Float? = null,
 ) {
-    val widthDp: Float get() = if (landscape) format.longSideDp else format.shortSideDp
-    val heightDp: Float get() = if (landscape) format.shortSideDp else format.longSideDp
+    val widthDp: Float get() = customWidth ?: if (landscape) format.longSideDp else format.shortSideDp
+    val heightDp: Float get() = customHeight ?: if (landscape) format.shortSideDp else format.longSideDp
 
     /** Stored on the note as one string, so a size change is a single column write. */
-    fun encode(): String = if (landscape) "${format.name}_L" else format.name
+    fun encode(): String = if (customWidth != null && customHeight != null) "PDF_${customWidth}_${customHeight}"
+        else if (landscape) "${format.name}_L" else format.name
 
     companion object {
         val Default = PageSpec()
 
         fun decode(raw: String?): PageSpec {
             if (raw.isNullOrBlank()) return Default
+            if (raw.startsWith("PDF_")) {
+                val parts = raw.split('_')
+                val width = parts.getOrNull(1)?.toFloatOrNull()
+                val height = parts.getOrNull(2)?.toFloatOrNull()
+                if (width != null && height != null && width.isFinite() && height.isFinite() &&
+                    width in 72f..2000f && height in 72f..2000f) {
+                    return PageSpec(customWidth = width, customHeight = height)
+                }
+            }
             val landscape = raw.endsWith("_L")
             return PageSpec(PageFormat.byName(raw.removeSuffix("_L")), landscape)
         }

@@ -47,11 +47,14 @@ class InkCamera(density: Float) {
     var columnWidthDp: Float = 0f
         private set
 
-    private var viewportWidthPx = 0f
+    var viewportWidthPx by mutableFloatStateOf(0f)
+        private set
 
     /** Read by the page counter, which has to know how much of the column is on screen. */
-    var viewportHeightPx: Float = 0f
+    var viewportHeightPx: Float by mutableFloatStateOf(0f)
         private set
+
+    private var columnHeightDp = 0f
 
     /** A notebook opens with its page fitted to the window; after that the user's zoom stands. */
     private var fittedColumn = false
@@ -60,14 +63,15 @@ class InkCamera(density: Float) {
     val scale: Float get() = density * zoom
 
     /** Told by the surface on every layout; re-clamps in case the window or the mode changed. */
-    fun configure(columnWidthDp: Float, viewportWidthPx: Float, viewportHeightPx: Float) {
+    fun configure(columnWidthDp: Float, viewportWidthPx: Float, viewportHeightPx: Float, columnHeightDp: Float = 0f) {
         val changed = this.columnWidthDp != columnWidthDp ||
             this.viewportWidthPx != viewportWidthPx ||
-            this.viewportHeightPx != viewportHeightPx
+            this.viewportHeightPx != viewportHeightPx || this.columnHeightDp != columnHeightDp
         if (!changed) return
         this.columnWidthDp = columnWidthDp
         this.viewportWidthPx = viewportWidthPx
         this.viewportHeightPx = viewportHeightPx
+        this.columnHeightDp = columnHeightDp
         if (columnWidthDp <= 0f) {
             fittedColumn = false
         } else if (!fittedColumn) {
@@ -117,6 +121,8 @@ class InkCamera(density: Float) {
     /** Puts the top of [index] just below the top of the window. */
     fun goToPage(index: Int, spec: PageSpec) {
         val target = index.coerceAtLeast(0)
+        // Page controls may append immediately before the layout reports its new height.
+        columnHeightDp = maxOf(columnHeightDp, NotebookLayout.topOf(target, spec) + spec.heightDp)
         panY = -NotebookLayout.topOf(target, spec) * scale
         clampToColumn()
     }
@@ -145,7 +151,9 @@ class InkCamera(density: Float) {
         } else {
             panX.coerceIn(viewportWidthPx - columnPx, 0f)
         }
-        panY = panY.coerceAtMost(0f)
+        panY = if (columnHeightDp > 0f) {
+            panY.coerceIn(minOf(0f, viewportHeightPx - columnHeightDp * scale), 0f)
+        } else panY.coerceAtMost(0f)
     }
 
     /** Screen pixels to world units — what Ink calls `pointerEventToWorldTransform`. */

@@ -1,5 +1,6 @@
 package com.example.fucknotes.data.repo
 
+import androidx.room.withTransaction
 import com.example.fucknotes.data.db.AppDatabase
 import com.example.fucknotes.data.db.AttachmentEntity
 import com.example.fucknotes.data.db.FolderEntity
@@ -11,6 +12,7 @@ import com.example.fucknotes.data.ink.InkStroke
 import com.example.fucknotes.data.ink.PageSpec
 import com.example.fucknotes.data.model.ChecklistItem
 import com.example.fucknotes.data.model.NoteType
+import com.example.fucknotes.data.model.MAX_NOTEBOOK_PAGES
 import com.example.fucknotes.data.model.PaperStyle
 import com.example.fucknotes.data.model.SortOrder
 import kotlinx.coroutines.flow.Flow
@@ -35,6 +37,28 @@ class NotesRepository(private val db: AppDatabase) {
     fun observeNote(id: Long): Flow<NoteEntity?> = notes.observeNote(id)
 
     suspend fun getNote(id: Long): NoteEntity? = notes.getNote(id)
+
+    suspend fun createImportedNotebook(
+        title: String, folderId: Long?, page: PageSpec, backgrounds: List<AttachmentEntity>,
+    ): Long = db.withTransaction {
+        val id = createNote(NoteType.NOTEBOOK, folderId, title, paperStyle = PaperStyle.PLAIN,
+            pageSpec = page, pageCount = backgrounds.size, pagesExplicitlyCreated = true)
+        backgrounds.forEach { attachments.insert(it.copy(noteId = id)) }
+        id
+    }
+
+    /** Includes descendants so exporting a collection never silently omits its folders. */
+    suspend fun notesInFolderTree(folderId: Long): List<NoteEntity> {
+        val all = folders.allFolders()
+        val ids = mutableSetOf(folderId)
+        var changed: Boolean
+        do {
+            changed = false
+            all.filter { it.parentId in ids }.forEach { if (ids.add(it.id)) changed = true }
+        } while (changed)
+        return notes.allNotes().filter { it.folderId in ids && it.deletedAt == null }
+            .sortedWith(compareBy({ it.folderId }, { it.title.lowercase() }, { it.id }))
+    }
 
     fun search(query: String): Flow<List<NoteEntity>> = notes.search(query.trim())
 
@@ -63,8 +87,11 @@ class NotesRepository(private val db: AppDatabase) {
         lineColorArgb: Int = 0,
         lineSpacingDp: Int = 0,
         pageSpec: PageSpec = PageSpec.Default,
+        pageCount: Int = 1,
+        pagesExplicitlyCreated: Boolean = false,
     ): Long {
         val now = System.currentTimeMillis()
+        val storedPageCount = if (type == NoteType.NOTEBOOK) pageCount.coerceIn(1, MAX_NOTEBOOK_PAGES) else 1
         return notes.insert(
             NoteEntity(
                 title = title.trim(),
@@ -82,6 +109,8 @@ class NotesRepository(private val db: AppDatabase) {
                 lineColorArgb = lineColorArgb,
                 lineSpacingDp = lineSpacingDp,
                 pageFormat = pageSpec.encode(),
+                pageCount = storedPageCount,
+                pagesExplicitlyCreated = type == NoteType.NOTEBOOK && pagesExplicitlyCreated,
             )
         )
     }
@@ -113,6 +142,9 @@ class NotesRepository(private val db: AppDatabase) {
 
     suspend fun setLocked(ids: List<Long>, locked: Boolean) =
         notes.setLocked(ids, locked, System.currentTimeMillis())
+
+    suspend fun setPageState(id: Long, pageCount: Int, explicit: Boolean = true) =
+        notes.setPageState(id, pageCount.coerceIn(1, MAX_NOTEBOOK_PAGES), explicit, System.currentTimeMillis())
 
     suspend fun unlockAll() = notes.unlockAll(System.currentTimeMillis())
 
@@ -232,13 +264,20 @@ class NotesRepository(private val db: AppDatabase) {
 
     suspend fun addAttachment(attachment: AttachmentEntity): Long = attachments.insert(attachment)
 
+    suspend fun updateAttachment(attachment: AttachmentEntity) = attachments.update(attachment)
+
     suspend fun deleteAttachment(attachment: AttachmentEntity) {
-        runCatching { java.io.File(attachment.path).delete() }
         attachments.delete(attachment.id)
+        if (attachments.allAttachments().none { it.path == attachment.path }) {
+            runCatching { java.io.File(attachment.path).delete() }
+        }
     }
 
     private suspend fun removeAttachmentFiles(noteId: Long) {
-        attachments.forNote(noteId).forEach { runCatching { java.io.File(it.path).delete() } }
+        val shared = attachments.allAttachments().filter { it.noteId != noteId }.map { it.path }.toSet()
+        attachments.forNote(noteId).filter { it.path !in shared }.forEach {
+            runCatching { java.io.File(it.path).delete() }
+        }
     }
 
     // ---- helpers -----------------------------------------------------------

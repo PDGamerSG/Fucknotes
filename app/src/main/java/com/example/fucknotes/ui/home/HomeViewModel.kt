@@ -16,6 +16,8 @@ import com.example.fucknotes.data.model.NoteType
 import com.example.fucknotes.data.model.NotebookDraft
 import com.example.fucknotes.data.model.SortOrder
 import com.example.fucknotes.data.repo.SettingsRepository
+import com.example.fucknotes.export.ExportFormat
+import com.example.fucknotes.export.NoteExporter
 import com.example.fucknotes.media.MediaStore
 import com.example.fucknotes.reminder.ReminderScheduler
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -28,6 +30,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.io.File
 
 /** Which collection of notes the list is currently showing. */
 sealed interface Scope {
@@ -55,6 +58,8 @@ data class HomeUiState(
     /** Live note tally per folder id, for the rail's row counts. */
     val countByFolder: Map<Long?, Int> = emptyMap(),
     val loading: Boolean = true,
+    val progress: String? = null,
+    val busy: Boolean = false,
 ) {
     val inSelectionMode: Boolean get() = selection.isNotEmpty()
     val title: String
@@ -74,8 +79,11 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = ServiceLocator.notes(app)
     private val settingsRepo = ServiceLocator.settings(app)
     private val backup = ServiceLocator.backup(app)
+    private val exporter = NoteExporter(app, repo)
 
     private val _message = MutableStateFlow<String?>(null)
+    private val progress = MutableStateFlow<String?>(null)
+    var pendingExport: HomeExportRequest? = null
 
     /** One-shot text for the snackbar: the result of a backup, and nothing else so far. */
     val message: StateFlow<String?> = _message.asStateFlow()
@@ -121,9 +129,9 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         notesFlow,
         combine(repo.observeFolders(), repo.observeTags()) { folders, tags -> folders to tags },
         settingsRepo.settings,
-        combine(scope, selection) { s, sel -> s to sel },
+        combine(scope, selection, progress) { s, sel, progress -> Triple(s, sel, progress) },
         decorations,
-    ) { notes, (folders, tags), settings, (currentScope, sel), decor ->
+    ) { notes, (folders, tags), settings, (currentScope, sel, progress), decor ->
         HomeUiState(
             notes = notes,
             folders = folders,
@@ -138,6 +146,8 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             mediaByNote = decor.mediaByNote,
             countByFolder = decor.countByFolder,
             loading = false,
+            progress = progress,
+            busy = progress != null,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
 
@@ -186,6 +196,8 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                 lineColorArgb = draft.lineColorArgb,
                 lineSpacingDp = draft.spacingDp,
                 pageSpec = draft.page,
+                pageCount = draft.initialPageCount,
+                pagesExplicitlyCreated = true,
             )
         )
     }
@@ -199,7 +211,11 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun createNoteFromImage(uri: Uri, onCreated: (Long) -> Unit) = viewModelScope.launch {
         val app = getApplication<Application>()
-        val file = MediaStore.importImage(app, uri) ?: return@launch
+        val file = MediaStore.importImage(app, uri)
+        if (file == null) {
+            _message.value = "That image could not be imported"
+            return@launch
+        }
         val id = repo.createNote(NoteType.TEXT, currentFolderId())
         repo.addAttachment(
             AttachmentEntity(noteId = id, path = file.absolutePath, type = AttachmentType.IMAGE)
@@ -225,6 +241,25 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             .onFailure { _message.value = "Backup failed: ${it.message}" }
     }
 
+    /** Exports the notes currently shown on the home shelf as a title-based PDF. */
+    fun exportVisiblePdf(onReady: (File, String) -> Unit) = exportPdf(state.value.notes, onReady)
+
+    /** Exports only the notes selected in the home shelf. */
+    fun exportSelectedPdf(onReady: (File, String) -> Unit) =
+        exportPdf(state.value.notes.filter { it.id in selection.value }, onReady)
+
+    fun shareIntentFor(file: File, mime: String) = exporter.shareIntent(file, mime)
+
+    private fun exportPdf(notes: List<NoteEntity>, onReady: (File, String) -> Unit) = viewModelScope.launch {
+        if (notes.isEmpty()) {
+            _message.value = "There are no notes to export"
+            return@launch
+        }
+        runCatching { exporter.exportAll(notes, ExportFormat.PDF) }
+            .onSuccess { onReady(it, ExportFormat.PDF.mime) }
+            .onFailure { _message.value = "Export failed: ${it.message}" }
+    }
+
     /** The folder a new note should land in: the one being viewed, or none. */
     private fun currentFolderId(): Long? = (scope.value as? Scope.Folder)?.id
 
@@ -239,11 +274,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         repo.trash(ids)
     }
 
-    fun pinSelected(pinned: Boolean) = withSelection { repo.setPinned(it, pinned) }
-
     fun archiveSelected(archived: Boolean) = withSelection { repo.setArchived(it, archived) }
-
-    fun lockSelected(locked: Boolean) = withSelection { repo.setLocked(it, locked) }
 
     fun colorSelected(color: Int) = withSelection { repo.setColor(it, color) }
 
@@ -267,6 +298,55 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             block(ids)
             selection.value = emptySet()
         }
+    }
+
+    fun toggleTheme() = viewModelScope.launch {
+        val theme = state.value.settings.themeMode
+        val systemDark = (getApplication<Application>().resources.configuration.uiMode and
+            android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+        val dark = theme == com.example.fucknotes.data.model.ThemeMode.DARK ||
+            (theme == com.example.fucknotes.data.model.ThemeMode.SYSTEM && systemDark)
+        settingsRepo.setThemeMode(if (dark) com.example.fucknotes.data.model.ThemeMode.LIGHT else com.example.fucknotes.data.model.ThemeMode.DARK)
+    }
+
+    fun importPdf(uri: Uri, onCreated: (Long) -> Unit) = viewModelScope.launch {
+        if (progress.value != null) return@launch
+        val folder = currentFolderId()
+        progress.value = "Opening PDF?"
+        try {
+            val id = com.example.fucknotes.media.PdfImporter(getApplication(), repo).import(uri, folder) { page, total ->
+                progress.value = "Importing page $page of $total?"
+            }
+            onCreated(id)
+        } catch (error: Exception) {
+            if (error is kotlinx.coroutines.CancellationException) throw error
+            _message.value = "PDF import failed: ${error.message ?: "The file may be damaged or password protected"}"
+        } finally { progress.value = null }
+    }
+
+    fun exportTarget(selected: Boolean = false): HomeExportTarget {
+        val s = state.value
+        if (!selected && s.scope is Scope.Folder) return HomeExportTarget(s.scope.name, folderId = s.scope.id)
+        val notes = s.notes.filter { !selected || it.id in s.selection }
+        return HomeExportTarget(if (notes.size == 1) notes.first().title.ifBlank { "Untitled" } else s.title,
+            noteIds = notes.map { it.id })
+    }
+
+    fun saveExport(request: HomeExportRequest, destination: Uri) = viewModelScope.launch {
+        if (progress.value != null) return@launch
+        progress.value = "Preparing PDFs?"
+        try {
+            val target = request.target
+            val notes = target.folderId?.let { repo.notesInFolderTree(it) }
+                ?: target.noteIds.mapNotNull { repo.getNote(it) }
+            com.example.fucknotes.export.FolderExporter(getApplication(), exporter).save(
+                notes, state.value.folders, target.folderId, target.title, request.mode, destination,
+            ) { done, total -> progress.value = "Exporting note $done of $total?" }
+            _message.value = "Saved ${notes.size} ${if (notes.size == 1) "note" else "notes"}"
+        } catch (error: Exception) {
+            if (error is kotlinx.coroutines.CancellationException) throw error
+            _message.value = "Export failed: ${error.message}"
+        } finally { progress.value = null }
     }
 
     // ---- preferences -------------------------------------------------------
@@ -298,12 +378,21 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun renameFolder(folder: FolderEntity, name: String) = viewModelScope.launch {
-        if (name.isNotBlank()) repo.renameFolder(folder, name.trim())
+        if (name.isNotBlank()) {
+            repo.renameFolder(folder, name.trim())
+            if ((scope.value as? Scope.Folder)?.id == folder.id) scope.value = Scope.Folder(folder.id, name.trim())
+        }
     }
 
     fun deleteFolder(id: Long) = viewModelScope.launch {
+        val removed = mutableSetOf(id)
+        var changed: Boolean
+        do {
+            changed = false
+            state.value.folders.filter { it.parentId in removed }.forEach { if (removed.add(it.id)) changed = true }
+        } while (changed)
         repo.deleteFolderTree(id)
-        if ((scope.value as? Scope.Folder)?.id == id) scope.value = Scope.All
+        if ((scope.value as? Scope.Folder)?.id in removed) scope.value = Scope.All
     }
 
     fun deleteTag(id: Long) = viewModelScope.launch {

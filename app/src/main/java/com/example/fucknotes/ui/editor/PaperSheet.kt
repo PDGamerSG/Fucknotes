@@ -91,7 +91,7 @@ fun PaperSheet(
                 onChange = onSpacing,
             )
 
-            if (notebook) {
+            if (notebook && page.customWidth == null) {
                 Spacer(Modifier.height(18.dp))
                 PageSizeRow(page = page, onPage = onPage)
             }

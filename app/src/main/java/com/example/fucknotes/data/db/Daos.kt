@@ -122,6 +122,13 @@ interface NoteDao {
     @Query("UPDATE notes SET locked = :locked, updatedAt = :now WHERE id IN (:ids)")
     suspend fun setLocked(ids: List<Long>, locked: Boolean, now: Long)
 
+    /** Persists notebook sheet creation without waiting for the editor's debounced full save. */
+    @Query(
+        "UPDATE notes SET pageCount = :pageCount, pagesExplicitlyCreated = :explicit, " +
+            "updatedAt = :now WHERE id = :id"
+    )
+    suspend fun setPageState(id: Long, pageCount: Int, explicit: Boolean, now: Long)
+
     @Query("UPDATE notes SET locked = 0, updatedAt = :now WHERE locked = 1")
     suspend fun unlockAll(now: Long)
 
@@ -264,6 +271,9 @@ interface AttachmentDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(attachment: AttachmentEntity): Long
+
+    @Update
+    suspend fun update(attachment: AttachmentEntity)
 
     @Upsert
     suspend fun upsertAll(attachments: List<AttachmentEntity>)

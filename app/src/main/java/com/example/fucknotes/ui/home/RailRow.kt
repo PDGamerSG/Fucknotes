@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -16,6 +17,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -54,6 +57,7 @@ fun RailRow(
     expanded: Boolean = false,
     onToggleExpand: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
+    onMore: (() -> Unit)? = null,
     leading: (@Composable () -> Unit)? = null,
 ) {
     val brand = MaterialTheme.brand
@@ -61,6 +65,7 @@ fun RailRow(
     Row(
         modifier
             .fillMaxWidth()
+            .heightIn(min = 48.dp)
             .padding(horizontal = 10.dp, vertical = 2.dp)
             .padding(start = (depth * 14).dp)
             .then(
@@ -73,10 +78,17 @@ fun RailRow(
             .clip(shape)
             .background(if (selected) brand.railSelected else Color.Transparent)
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(start = 12.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
+
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        if (expandable && onToggleExpand != null) {
+            IconButton(onClick = onToggleExpand, modifier = Modifier.size(40.dp)) {
+                Icon(Icons.Filled.ChevronRight, if (expanded) "Collapse $label" else "Expand $label",
+                    Modifier.size(20.dp).rotate(if (expanded) 90f else 0f), tint = brand.railText)
+            }
+        }
         when {
             leading != null -> leading()
             icon != null -> Icon(
@@ -101,24 +113,12 @@ fun RailRow(
             CountBadge(count = count, highlighted = selected)
         }
 
-        if (expandable && onToggleExpand != null) {
-            Box(
-                Modifier
-                    .size(22.dp)
-                    .clip(CircleShape)
-                    .combinedClickable(onClick = onToggleExpand),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.Filled.ChevronRight,
-                    contentDescription = if (expanded) "Collapse $label" else "Expand $label",
-                    modifier = Modifier
-                        .size(18.dp)
-                        .rotate(if (expanded) 90f else 0f),
-                    tint = brand.railMuted,
-                )
+        onMore?.let {
+            IconButton(onClick = it, modifier = Modifier.size(44.dp)) {
+                Icon(Icons.Filled.MoreVert, "Options for $label", tint = brand.railText)
             }
         }
+
     }
 }
 

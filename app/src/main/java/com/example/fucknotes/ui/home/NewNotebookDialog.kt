@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -33,7 +34,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.text.input.KeyboardType
 import com.example.fucknotes.data.model.LineColors
+import com.example.fucknotes.data.model.MAX_INITIAL_NOTEBOOK_PAGES
 import com.example.fucknotes.data.model.NotebookDraft
 import com.example.fucknotes.data.model.PaperColors
 import com.example.fucknotes.data.model.PaperStyle
@@ -62,6 +65,9 @@ fun NewNotebookDialog(
     onCreate: (NotebookDraft) -> Unit,
 ) {
     var draft by remember { mutableStateOf(NotebookDraft(title = initialTitle)) }
+    var pageCountText by remember { mutableStateOf(draft.initialPageCount.toString()) }
+    val initialPageCount = pageCountText.toIntOrNull()
+    val pageCountValid = initialPageCount in 1..MAX_INITIAL_NOTEBOOK_PAGES
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(
@@ -80,7 +86,21 @@ fun NewNotebookDialog(
                 NotebookSummary(
                     draft = draft,
                     onTitle = { draft = draft.copy(title = it) },
-                    onCreate = { onCreate(draft) },
+                    pageCountText = pageCountText,
+                    pageCountValid = pageCountValid,
+                    onPageCountText = { raw ->
+                        if (raw.length <= 3 && raw.all { it.isDigit() }) {
+                            pageCountText = raw
+                            raw.toIntOrNull()?.takeIf { it in 1..MAX_INITIAL_NOTEBOOK_PAGES }?.let {
+                                draft = draft.copy(initialPageCount = it)
+                            }
+                        }
+                    },
+                    onCreate = {
+                        initialPageCount?.takeIf { it in 1..MAX_INITIAL_NOTEBOOK_PAGES }?.let {
+                            onCreate(draft.copy(initialPageCount = it))
+                        }
+                    },
                 )
                 HorizontalDivider()
 
@@ -160,6 +180,9 @@ private fun DialogHeader(onDismiss: () -> Unit) {
 private fun NotebookSummary(
     draft: NotebookDraft,
     onTitle: (String) -> Unit,
+    pageCountText: String,
+    pageCountValid: Boolean,
+    onPageCountText: (String) -> Unit,
     onCreate: () -> Unit,
 ) {
     Row(
@@ -190,10 +213,22 @@ private fun NotebookSummary(
                 shape = RoundedCornerShape(Radii.chip),
                 modifier = Modifier.fillMaxWidth(),
             )
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(10.dp))
+            OutlinedTextField(
+                value = pageCountText,
+                onValueChange = onPageCountText,
+                label = { Text("Empty pages at start") },
+                supportingText = { Text("Choose 1–$MAX_INITIAL_NOTEBOOK_PAGES blank pages") },
+                isError = pageCountText.isNotEmpty() && !pageCountValid,
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                shape = RoundedCornerShape(Radii.chip),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Spacer(Modifier.height(8.dp))
             Button(
                 onClick = onCreate,
-                enabled = draft.title.isNotBlank(),
+                enabled = draft.title.isNotBlank() && pageCountValid,
                 shape = RoundedCornerShape(Radii.chip),
             ) {
                 Text("Create")

@@ -12,6 +12,8 @@ import com.example.fucknotes.data.ink.PageSpec
 data class NotebookDraft(
     val title: String = "",
     val type: NoteType = NoteType.NOTEBOOK,
+    /** Number of blank sheets to create before the notebook is opened. */
+    val initialPageCount: Int = 1,
     val paperStyle: PaperStyle = PaperStyle.DOTTED,
     val paperColorArgb: Int = PaperColors.first(),
     val lineColorArgb: Int = LineColors.first(),
@@ -19,8 +21,13 @@ data class NotebookDraft(
     val page: PageSpec = PageSpec.Default,
 )
 
+/** Upper bound used by the creation form and the persisted notebook page controls. */
+const val MAX_NOTEBOOK_PAGES = 500
+const val MAX_INITIAL_NOTEBOOK_PAGES = MAX_NOTEBOOK_PAGES
+
 /** Paper tones offered at creation: white, cream and a dark sheet for night writing. */
 val PaperColors: List<Int> = listOf(
+    0xFFF1F5FA.toInt(),
     0xFFFFFFFF.toInt(),
     0xFFFBF3DE.toInt(),
     0xFFEDF3EC.toInt(),
@@ -29,7 +36,7 @@ val PaperColors: List<Int> = listOf(
 
 /** Rule tones: the default grey, a soft blue, and a red for margins. */
 val LineColors: List<Int> = listOf(
-    0xFFD3D6DE.toInt(),
+    0xFFAFBAC9.toInt(),
     0xFFA9C8F0.toInt(),
     0xFFE58A8A.toInt(),
     0xFF6C4CE0.toInt(),

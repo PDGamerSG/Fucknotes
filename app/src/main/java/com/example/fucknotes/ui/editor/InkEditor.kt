@@ -3,8 +3,9 @@ package com.example.fucknotes.ui.editor
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -14,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.ink.strokes.Stroke
+import com.example.fucknotes.data.db.AttachmentEntity
 import com.example.fucknotes.data.ink.InkStroke
 import com.example.fucknotes.data.model.InkTool
 import com.example.fucknotes.data.model.NoteType
@@ -60,13 +62,16 @@ fun InkEditor(
     onSelectPen: (Int) -> Unit,
     onEditPen: (index: Int, colorArgb: Int, widthDp: Float) -> Unit,
     onSelectTool: (InkTool) -> Unit,
-    onToggleFingerDrawing: () -> Unit,
     onToggleZoomLock: () -> Unit,
+    compact: Boolean,
+    onToggleCompact: () -> Unit,
     onAppendPage: () -> Int,
     onBack: () -> Unit,
     onPages: () -> Unit,
-    onPaper: () -> Unit,
-    onAddImage: () -> Unit,
+    attachments: List<AttachmentEntity>,
+    playingPath: String?,
+    onPlayAttachment: (String) -> Unit,
+    onRemoveAttachment: (AttachmentEntity) -> Unit,
     onMore: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -76,6 +81,8 @@ fun InkEditor(
     Box(modifier.fillMaxSize().background(brand.desk)) {
         InkSurface(
             strokes = strokes,
+            attachments = attachments,
+            pageCount = pageCount,
             camera = camera,
             tool = state.tool,
             colorArgb = state.activePen.colorArgb,
@@ -96,49 +103,36 @@ fun InkEditor(
             pageColor = state.colorArgb.paperColorOr(PaperWhite),
         )
 
-        // Both bars share one row rather than being pinned to opposite corners: on a phone the pen
-        // tray is wider than the space left over, and a corner-pinned tray would simply cover the
-        // quick bar. Here the tray takes what is left and scrolls inside it.
-        Row(
-            Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.Top,
-        ) {
+        val quickBar: @Composable () -> Unit = {
             EditorQuickBar(
-                canUndo = canUndo,
-                canRedo = canRedo,
-                notebook = notebook,
-                onBack = onBack,
-                onPages = onPages,
-                onUndo = onUndo,
-                onRedo = onRedo,
-                onAddPage = { camera.goToPage(onAppendPage(), state.page) },
-                onResetView = camera::reset,
-                onMore = onMore,
-            )
-
-            Spacer(Modifier.weight(1f))
-
-            InkToolbar(
-                pens = state.pens,
-                selectedPen = state.selectedPen,
-                tool = state.tool,
-                fingerDrawing = state.fingerDrawing,
-                zoomLocked = state.zoomLocked,
-                onSelectPen = onSelectPen,
-                onEditPen = onEditPen,
-                onSelectTool = onSelectTool,
-                onToggleFingerDrawing = onToggleFingerDrawing,
-                onToggleZoomLock = onToggleZoomLock,
-                onAddImage = onAddImage,
-                onPaperStyle = onPaper,
+                canUndo = canUndo, canRedo = canRedo, notebook = notebook,
+                onBack = onBack, onPages = onPages, onUndo = onUndo, onRedo = onRedo,
+                onAddPage = { onAppendPage() }, onMore = onMore,
             )
         }
+        val penBar: @Composable (Modifier) -> Unit = { barModifier ->
+            InkToolbar(
+                pens = state.pens, selectedPen = state.selectedPen, tool = state.tool,
+                compact = compact, onSelectPen = onSelectPen, onEditPen = onEditPen,
+                onSelectTool = onSelectTool, onToggleCompact = onToggleCompact, modifier = barModifier,
+            )
+        }
+        BoxWithConstraints(Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(8.dp)) {
+            if (compact) penBar(Modifier.fillMaxWidth())
+            else if (maxWidth < 900.dp) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    quickBar()
+                    penBar(Modifier.fillMaxWidth())
+                }
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    quickBar()
+                    penBar(Modifier.weight(1f))
+                }
+            }
+        }
 
-        ZoomReadout(
+        if (!compact) ZoomReadout(
             camera = camera,
             locked = state.zoomLocked,
             onToggleLock = onToggleZoomLock,
@@ -147,7 +141,7 @@ fun InkEditor(
                 .padding(16.dp),
         )
 
-        if (notebook) {
+        if (notebook && !compact) {
             PageCounter(
                 camera = camera,
                 state = state,
@@ -158,6 +152,19 @@ fun InkEditor(
                     .padding(16.dp),
             )
         }
+
+        // Ink notes used to accept a picked image but offered no attachment surface, which made
+        // the successful import look like a no-op. Keep the strip on the page so pictures and
+        // recordings are visible immediately and can be removed without leaving the notebook.
+        if (!compact) AttachmentStrip(
+            attachments = attachments.filter { it.pageIndex == null },
+            playingPath = playingPath,
+            onPlay = onPlayAttachment,
+            onRemove = onRemoveAttachment,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = if (notebook) 76.dp else 16.dp),
+        )
     }
 }
 
@@ -188,12 +195,16 @@ private fun PageCounter(
 ) {
     val current = camera.pageAtCentre(state.page)
     val total = pageCount()
+    // A freehand drag can carry the camera past the last created sheet. Keep the controls bound to
+    // the real notebook range so the counter and previous/next actions never point at a phantom
+    // page.
+    val boundedCurrent = current.coerceIn(0, (total - 1).coerceAtLeast(0))
     PageIndicator(
-        current = (current + 1).coerceAtMost(total),
+        current = boundedCurrent + 1,
         total = total,
-        onPrevious = { camera.goToPage(current - 1, state.page) },
+        onPrevious = { camera.goToPage(boundedCurrent - 1, state.page) },
         onNext = {
-            val next = current + 1
+            val next = boundedCurrent + 1
             if (next >= total) camera.goToPage(onAppendPage(), state.page)
             else camera.goToPage(next, state.page)
         },

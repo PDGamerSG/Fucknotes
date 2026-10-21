@@ -12,6 +12,7 @@ import com.example.fucknotes.data.model.DefaultPenTray
 import com.example.fucknotes.data.model.LayoutMode
 import com.example.fucknotes.data.model.PaperStyle
 import com.example.fucknotes.data.model.PenPreset
+import com.example.fucknotes.data.model.PenButtonAction
 import com.example.fucknotes.data.model.SortOrder
 import com.example.fucknotes.data.model.ThemeMode
 import kotlinx.coroutines.flow.Flow
@@ -43,6 +44,9 @@ class SettingsRepository(private val context: Context) {
         val zoomLocked = booleanPreferencesKey("zoom_locked")
         val penTray = stringPreferencesKey("pen_tray")
         val selectedPen = intPreferencesKey("selected_pen")
+        val penPrimaryAction = stringPreferencesKey("pen_primary_action")
+        val penSecondaryAction = stringPreferencesKey("pen_secondary_action")
+        val penTertiaryAction = stringPreferencesKey("pen_tertiary_action")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -86,6 +90,9 @@ class SettingsRepository(private val context: Context) {
         val penTray: List<PenPreset> = DefaultPenTray,
         /** Which tray slot is in hand, so a note opens with the pen last written with. */
         val selectedPen: Int = 0,
+        val penPrimaryAction: PenButtonAction = PenButtonAction.TOGGLE_ERASER,
+        val penSecondaryAction: PenButtonAction = PenButtonAction.UNDO,
+        val penTertiaryAction: PenButtonAction = PenButtonAction.REDO,
     )
 
     val settings: Flow<Settings> = context.dataStore.data.map { it.toSettings() }
@@ -113,6 +120,9 @@ class SettingsRepository(private val context: Context) {
             ?.takeIf { it.isNotEmpty() }
             ?: DefaultPenTray,
         selectedPen = this[Keys.selectedPen] ?: 0,
+        penPrimaryAction = enumOr(this[Keys.penPrimaryAction], PenButtonAction.TOGGLE_ERASER),
+        penSecondaryAction = enumOr(this[Keys.penSecondaryAction], PenButtonAction.UNDO),
+        penTertiaryAction = enumOr(this[Keys.penTertiaryAction], PenButtonAction.REDO),
     )
 
     private inline fun <reified T : Enum<T>> enumOr(raw: String?, fallback: T): T =
@@ -134,6 +144,9 @@ class SettingsRepository(private val context: Context) {
     suspend fun setZoomLocked(v: Boolean) = edit { it[Keys.zoomLocked] = v }
     suspend fun setPenTray(pens: List<PenPreset>) = edit { it[Keys.penTray] = json.encodeToString(pens) }
     suspend fun setSelectedPen(index: Int) = edit { it[Keys.selectedPen] = index }
+    suspend fun setPenPrimaryAction(v: PenButtonAction) = edit { it[Keys.penPrimaryAction] = v.name }
+    suspend fun setPenSecondaryAction(v: PenButtonAction) = edit { it[Keys.penSecondaryAction] = v.name }
+    suspend fun setPenTertiaryAction(v: PenButtonAction) = edit { it[Keys.penTertiaryAction] = v.name }
 
     // ---- note lock ---------------------------------------------------------
 

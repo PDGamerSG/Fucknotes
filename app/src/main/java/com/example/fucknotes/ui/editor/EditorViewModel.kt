@@ -9,21 +9,22 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.fucknotes.ServiceLocator
 import com.example.fucknotes.data.db.AttachmentEntity
-import com.example.fucknotes.data.db.NoteEntity
 import com.example.fucknotes.data.db.TagEntity
 import androidx.ink.strokes.Stroke
 import com.example.fucknotes.data.ink.DEFAULT_RULE_SPACING_DP
 import com.example.fucknotes.data.ink.InkCodec
 import com.example.fucknotes.data.ink.InkStroke
-import com.example.fucknotes.data.ink.NotebookLayout
 import com.example.fucknotes.data.ink.PageSpec
 import com.example.fucknotes.data.model.AttachmentType
 import com.example.fucknotes.data.model.ChecklistItem
 import com.example.fucknotes.data.model.DefaultPenTray
 import com.example.fucknotes.data.model.InkTool
 import com.example.fucknotes.data.model.NoteType
+import com.example.fucknotes.data.model.MAX_NOTEBOOK_PAGES
 import com.example.fucknotes.data.model.PaperStyle
 import com.example.fucknotes.data.model.PenPreset
+import com.example.fucknotes.data.model.PenButton
+import com.example.fucknotes.data.model.PenButtonAction
 import com.example.fucknotes.export.ExportFormat
 import com.example.fucknotes.export.NoteExporter
 import com.example.fucknotes.media.AudioRecorder
@@ -31,6 +32,9 @@ import com.example.fucknotes.media.MediaStore
 import com.example.fucknotes.reminder.ReminderScheduler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -73,6 +77,10 @@ data class EditorUiState(
     val fingerDrawing: Boolean = true,
     /** Mirrors the app-wide setting; true pins the page scale against stray pinches. */
     val zoomLocked: Boolean = false,
+    /** Actions assigned to the physical Xiaomi Pen controls. */
+    val penPrimaryAction: PenButtonAction = PenButtonAction.TOGGLE_ERASER,
+    val penSecondaryAction: PenButtonAction = PenButtonAction.UNDO,
+    val penTertiaryAction: PenButtonAction = PenButtonAction.REDO,
     val recording: Boolean = false,
     val recordingElapsedMs: Long = 0,
     val message: String? = null,
@@ -128,6 +136,8 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
      * stroke bounds rather than stored, and kept as snapshot state next to [strokes] so the page
      * counter updates in the same frame a stroke lands on a new sheet.
      */
+    // Pages are created explicitly from the page controls. Deriving this from stroke bounds makes
+    // camera settling or legacy screen coordinates create phantom pages on an empty notebook.
     var pageCount: Int by mutableStateOf(1)
         private set
 
@@ -140,6 +150,7 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
     private val undoStack = ArrayDeque<List<InkStroke>>()
     private val redoStack = ArrayDeque<List<InkStroke>>()
 
+    private val saveMutex = Mutex()
     private var saveJob: Job? = null
     private var penSaveJob: Job? = null
     private var recordingTicker: Job? = null
@@ -164,6 +175,9 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
                     zoomLocked = s.zoomLocked,
                     pens = s.penTray,
                     selectedPen = index,
+                    penPrimaryAction = s.penPrimaryAction,
+                    penSecondaryAction = s.penSecondaryAction,
+                    penTertiaryAction = s.penTertiaryAction,
                     // The restored slot picks the tool once, as the note opens. After that the
                     // user's current tool stands: a later tray write must not take the eraser out
                     // of their hand mid-page.
@@ -189,13 +203,19 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
                 lineColorArgb = note.lineColorArgb,
                 lineSpacingDp = note.lineSpacingDp,
                 page = PageSpec.decode(note.pageFormat),
-                pinned = note.pinned,
-                locked = note.locked,
+                pinned = false,
+                locked = false,
                 archived = note.archived,
-                reminderAt = note.reminderAt,
+                reminderAt = null,
                 updatedAt = note.updatedAt,
                 inkMode = note.type.isInk,
             )
+            reachedPages = if (note.pagesExplicitlyCreated) {
+                note.pageCount.coerceIn(1, MAX_NOTEBOOK_PAGES)
+            } else {
+                1
+            }
+            pagesExplicitlyCreated = note.pagesExplicitlyCreated
             recountPages()
         }
         repo.observeAttachments(noteId)
@@ -301,9 +321,20 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
     fun setTool(tool: InkTool) {
         // Tapping an active eraser or pan button a second time returns to the last pen.
         val next = if (_state.value.tool == tool && !tool.isBrush) InkTool.PEN else tool
-        _state.value = _state.value.copy(
-            tool = if (next.isBrush) _state.value.activePen.tool else next,
-        )
+        if (next.isBrush) {
+            // A tool shortcut (including a Xiaomi Pen button) should also move the tray selection
+            // to a slot of that family. Otherwise a Marker action would leave the blue Pen slot
+            // highlighted and silently use its colour and width.
+            val index = _state.value.pens.indexOfFirst { it.tool == next }
+            if (index >= 0) {
+                _state.value = _state.value.copy(selectedPen = index, tool = next)
+                viewModelScope.launch { settings.setSelectedPen(index) }
+            } else {
+                _state.value = _state.value.copy(tool = _state.value.activePen.tool)
+            }
+        } else {
+            _state.value = _state.value.copy(tool = next)
+        }
     }
 
     /**
@@ -315,6 +346,27 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
     fun toggleEraser() {
         val s = _state.value
         _state.value = s.copy(tool = if (s.tool == InkTool.ERASER) s.activePen.tool else InkTool.ERASER)
+    }
+
+    /** Applies the action assigned to a physical Xiaomi Pen button. */
+    fun handlePenButton(button: PenButton) {
+        if (!_state.value.inkActive) return
+        val current = _state.value
+        val action = when (button) {
+            PenButton.PRIMARY -> current.penPrimaryAction
+            PenButton.SECONDARY -> current.penSecondaryAction
+            PenButton.TERTIARY -> current.penTertiaryAction
+        }
+        when (action) {
+            PenButtonAction.NONE -> Unit
+            PenButtonAction.TOGGLE_ERASER -> toggleEraser()
+            PenButtonAction.UNDO -> undo()
+            PenButtonAction.REDO -> redo()
+            PenButtonAction.PEN -> setTool(InkTool.PEN)
+            PenButtonAction.MARKER -> setTool(InkTool.MARKER)
+            PenButtonAction.HIGHLIGHTER -> setTool(InkTool.HIGHLIGHTER)
+            PenButtonAction.PAN -> setTool(InkTool.PAN)
+        }
     }
 
     /** Turns finger drawing on or off for every note; a finger still pans while it is off. */
@@ -361,7 +413,7 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
         if (finished.isEmpty()) return
         val tool = _state.value.tool.takeIf { it.isBrush } ?: _state.value.activePen.tool
         pushUndo()
-        applyStrokes(strokes + finished.map { InkStroke(it, tool) })
+        applyStrokes(strokes + finished.map { InkStroke(it, InkCodec.toolForStroke(it, tool)) })
     }
 
     /** The eraser removes whole strokes it touches, which is what suits a note-sized page. */
@@ -415,22 +467,22 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
      * so "new page" produces a sheet that stays until the note is closed empty.
      */
     private fun recountPages() {
-        val spec = _state.value.page
-        var last = 0
-        strokes.forEach { inkStroke ->
-            val box = inkStroke.stroke.shape.computeBoundingBox() ?: return@forEach
-            last = maxOf(last, NotebookLayout.pageIndexAt(box.yMax, spec))
-        }
-        pageCount = maxOf(last + 1, reachedPages)
+        pageCount = reachedPages.coerceAtLeast(1)
     }
 
     /** The furthest page the user has scrolled to this session. */
     private var reachedPages = 1
+    private var pagesExplicitlyCreated = false
 
     /** Claims one more sheet at the end of the column, and reports its index. */
     fun appendPage(): Int {
-        reachedPages = pageCount + 1
+        reachedPages = maxOf(reachedPages, (pageCount + 1).coerceAtMost(MAX_NOTEBOOK_PAGES))
+        pagesExplicitlyCreated = true
         pageCount = reachedPages
+        // Page creation is an explicit user action. Persist it immediately in the process scope so
+        // a quick back/navigation cannot cancel the normal 400 ms editor autosave and lose sheets.
+        flushPendingSave()
+        scheduleSave()
         return pageCount - 1
     }
 
@@ -471,34 +523,6 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
         scheduleSave()
     }
 
-    fun togglePinned() {
-        _state.value = _state.value.copy(pinned = !_state.value.pinned)
-        scheduleSave()
-    }
-
-    fun setArchived(archived: Boolean) {
-        _state.value = _state.value.copy(archived = archived)
-        scheduleSave()
-    }
-
-    fun setLocked(locked: Boolean) {
-        _state.value = _state.value.copy(locked = locked)
-        scheduleSave()
-    }
-
-    fun setReminder(atMillis: Long?) = viewModelScope.launch {
-        _state.value = _state.value.copy(reminderAt = atMillis)
-        repo.setReminder(noteId, atMillis)
-        val context = getApplication<Application>()
-        if (atMillis == null) {
-            ReminderScheduler.cancel(context, noteId)
-            emit("Reminder removed")
-        } else {
-            ReminderScheduler.schedule(context, noteId, _state.value.title.ifBlank { "Note reminder" }, atMillis)
-            emit("Reminder set")
-        }
-    }
-
     // ---- tags --------------------------------------------------------------
 
     fun addTag(name: String) = viewModelScope.launch { repo.addTagToNote(noteId, name) }
@@ -507,13 +531,30 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
 
     // ---- attachments -------------------------------------------------------
 
-    fun attachImage(uri: Uri) = viewModelScope.launch {
+    fun attachImage(uri: Uri, pageIndex: Int = 0) = viewModelScope.launch {
         val file = MediaStore.importImage(getApplication<Application>(), uri)
         if (file == null) {
             emit("That image could not be read")
             return@launch
         }
-        repo.addAttachment(AttachmentEntity(noteId = noteId, path = file.absolutePath, type = AttachmentType.IMAGE))
+        try {
+            val s = _state.value
+            val attachment = if (s.type.isInk) {
+                val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    android.graphics.BitmapFactory.decodeFile(file.absolutePath, bounds)
+                }
+                com.example.fucknotes.media.pageImage(noteId, file,
+                    if (s.type == NoteType.NOTEBOOK) pageIndex.coerceIn(0, pageCount - 1) else 0,
+                    s.page, bounds.outWidth, bounds.outHeight)
+            } else AttachmentEntity(noteId = noteId, path = file.absolutePath, type = AttachmentType.IMAGE)
+            repo.addAttachment(attachment)
+            emit("Image added")
+        } catch (error: Exception) {
+            file.delete()
+            if (error is kotlinx.coroutines.CancellationException) throw error
+            emit("Image could not be added: ${error.message}")
+        }
     }
 
     fun attachCameraPhoto(file: File) = viewModelScope.launch {
@@ -525,6 +566,11 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
         file.copyTo(stored, overwrite = true)
         file.delete()
         repo.addAttachment(AttachmentEntity(noteId = noteId, path = stored.absolutePath, type = AttachmentType.IMAGE))
+    }
+
+    fun updatePageImage(image: AttachmentEntity) = viewModelScope.launch {
+        if (image.noteId != noteId || image.pageIndex == null) return@launch
+        repo.updateAttachment(image)
     }
 
     fun removeAttachment(attachment: AttachmentEntity) = viewModelScope.launch {
@@ -608,13 +654,13 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
     }
 
     /** Drops an untouched note so backing out of "new note" does not litter the list. */
-    fun discardIfEmpty() = viewModelScope.launch {
+    suspend fun discardIfEmpty() {
         saveNow()
         val s = _state.value
         val empty = s.title.isBlank() && s.body.isBlank() &&
             s.checklist.none { it.text.isNotBlank() } &&
             strokes.isEmpty() && s.attachments.isEmpty()
-        if (empty) repo.deleteForever(listOf(noteId))
+        if (s.loaded && empty && !pagesExplicitlyCreated) repo.deleteForever(listOf(noteId))
     }
 
     fun consumeMessage() {
@@ -633,38 +679,55 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
         }
     }
 
-    suspend fun saveNow() {
-        val s = _state.value
-        if (!s.loaded) return
-        val existing = repo.getNote(noteId) ?: return
-
-        // Encoding compresses every input batch, so only pay for it when the ink actually moved,
-        // and never on the main thread.
-        if (inkDirty) {
-            encodedInk = withContext(Dispatchers.Default) { InkCodec.encode(strokes) }
-            inkDirty = false
+    fun flushPendingSave() {
+        saveJob?.cancel()
+        ServiceLocator.persistenceScope().launch {
+            runCatching { saveNow() }.onFailure {
+                android.util.Log.e("NotesSave", "Could not save note $noteId", it)
+            }
         }
+    }
 
-        repo.save(
-            existing.copy(
-                title = s.title,
-                body = s.body,
-                type = s.type,
-                checklistJson = repo.encodeChecklist(s.checklist),
-                drawingJson = encodedInk,
-                paperStyle = s.paperStyle,
-                colorArgb = s.colorArgb,
-                lineColorArgb = s.lineColorArgb,
-                lineSpacingDp = s.lineSpacingDp,
-                pageFormat = s.page.encode(),
-                pinned = s.pinned,
-                archived = s.archived,
-                locked = s.locked,
+    suspend fun saveNow() = withContext(NonCancellable + Dispatchers.Main.immediate) {
+        saveMutex.withLock {
+            val s = _state.value
+            if (!s.loaded) return@withLock
+            val snapshot = strokes
+            val snapshotPageCount = pageCount
+            val snapshotExplicitPages = pagesExplicitlyCreated
+            val existing = repo.getNote(noteId) ?: return@withLock
+
+            // Encoding compresses every input batch, so only pay for it when the ink actually moved,
+            // and never on the main thread.
+            if (inkDirty) {
+                encodedInk = withContext(Dispatchers.Default) { InkCodec.encode(snapshot) }
+                inkDirty = strokes !== snapshot
+            }
+
+            repo.save(
+                existing.copy(
+                    title = s.title,
+                    body = s.body,
+                    type = s.type,
+                    checklistJson = repo.encodeChecklist(s.checklist),
+                    drawingJson = encodedInk,
+                    paperStyle = s.paperStyle,
+                    colorArgb = s.colorArgb,
+                    lineColorArgb = s.lineColorArgb,
+                    lineSpacingDp = s.lineSpacingDp,
+                    pageFormat = s.page.encode(),
+                    pageCount = snapshotPageCount.coerceAtLeast(1),
+                    pagesExplicitlyCreated = snapshotExplicitPages,
+                    pinned = s.pinned,
+                    archived = s.archived,
+                    locked = s.locked,
+                )
             )
-        )
+        }
     }
 
     override fun onCleared() {
+        flushPendingSave()
         recordingTicker?.cancel()
         if (recorder.isRecording) recorder.cancel()
         super.onCleared()

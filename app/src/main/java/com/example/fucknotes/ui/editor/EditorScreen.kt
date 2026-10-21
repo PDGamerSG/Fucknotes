@@ -3,7 +3,6 @@ package com.example.fucknotes.ui.editor
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -37,6 +37,7 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.fucknotes.data.model.NoteType
 import com.example.fucknotes.data.model.PaperStyle
+import com.example.fucknotes.input.PenInputBus
 import com.example.fucknotes.export.ExportFormat
 import com.example.fucknotes.media.AudioPlayer
 import com.example.fucknotes.media.MediaStore
@@ -47,7 +48,6 @@ import com.example.fucknotes.ui.components.TextPromptDialog
 import com.example.fucknotes.ui.editor.ink.DefaultRuleColor
 import com.example.fucknotes.ui.editor.ink.InkCamera
 import com.example.fucknotes.ui.editor.ink.InkSurface
-import com.example.fucknotes.ui.editor.ink.PaperWhite
 import com.example.fucknotes.ui.editor.tabs.EditorTabBar
 import com.example.fucknotes.ui.editor.tabs.OpenTabs
 import com.example.fucknotes.ui.theme.brand
@@ -75,9 +75,11 @@ fun EditorScreen(
     var playing by remember { mutableStateOf<String?>(null) }
 
     // Pan and zoom belong to the view, not the note, so the camera is remembered here.
-    val camera = remember { InkCamera(LocalDensity.current.density) }
+    val density = LocalDensity.current.density
+    val camera = remember(density) { InkCamera(density) }
 
     val isInkNote = state.type.isInk
+    var compact by rememberSaveable(state.noteId) { mutableStateOf(false) }
 
     // Handed to the ink surface as a stable lambda so committing a stroke does not recompose it.
     val inkStrokes = remember(viewModel) { { viewModel.strokes } }
@@ -86,18 +88,27 @@ fun EditorScreen(
     var showColor by remember { mutableStateOf(false) }
     var showPaper by remember { mutableStateOf(false) }
     var showPages by remember { mutableStateOf(false) }
+    var showPageImages by remember { mutableStateOf(false) }
     var showExport by remember { mutableStateOf(false) }
     var showTagDialog by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
-    var showInfo by remember { mutableStateOf(false) }
     var pendingCameraFile by remember { mutableStateOf<java.io.File?>(null) }
 
-    // Notes flagged as locked stay hidden until this session unlocks them.
-    var unlocked by remember { mutableStateOf(false) }
-
     val pickImage = rememberLauncherForActivityResult(
-        ActivityResultContracts.PickVisualMedia()
-    ) { uri: Uri? -> uri?.let(viewModel::attachImage) }
+        // The returned URI is consumed and copied immediately; GetContent works with the tablet's
+        // provider even when the newer Photo Picker is unavailable or disabled by a ROM.
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        uri?.let {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    it,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                )
+            }
+            viewModel.attachImage(it, camera.pageAtCentre(state.page))
+        }
+    }
 
     val takePhoto = rememberLauncherForActivityResult(
         ActivityResultContracts.TakePicture()
@@ -121,14 +132,15 @@ fun EditorScreen(
         }
     }
 
+    // Hardware stylus buttons are delivered by the activity and consumed only by the visible
+    // editor. This also keeps button presses out of text notes and the home screen.
+    LaunchedEffect(viewModel) {
+        PenInputBus.buttons.collect(viewModel::handlePenButton)
+    }
+
     // The tab bar names notes by their title, and a note is usually named after it is started.
     LaunchedEffect(state.noteId, state.title) {
         OpenTabs.open(state.noteId, state.title.ifBlank { "Untitled" })
-    }
-
-    if (state.locked && !unlocked) {
-        LockedNoteGate(onUnlock = { unlocked = true }, onBack = onBack)
-        return
     }
 
     val leaveNote: () -> Unit = {
@@ -139,12 +151,17 @@ fun EditorScreen(
         }
     }
 
+    androidx.activity.compose.BackHandler { leaveNote() }
+    androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_STOP) {
+        viewModel.flushPendingSave()
+    }
+
     val closeTab: (Long) -> Unit = { id ->
         val next = OpenTabs.close(id)
         when {
             id != state.noteId -> Unit
             next == null -> leaveNote()
-            else -> onOpenNote(next)
+            else -> scope.launch { viewModel.saveNow(); onOpenNote(next) }.let { Unit }
         }
     }
 
@@ -152,10 +169,10 @@ fun EditorScreen(
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             Column {
-                EditorTabBar(
+                if (!compact) EditorTabBar(
                     tabs = OpenTabs.tabs,
                     activeNoteId = state.noteId,
-                    onSelect = { if (it != state.noteId) onOpenNote(it) },
+                    onSelect = { id -> if (id != state.noteId) scope.launch { viewModel.saveNow(); onOpenNote(id) } },
                     onClose = closeTab,
                 )
                 // A typed note keeps an ordinary bar; an ink note's controls float over its page.
@@ -189,8 +206,9 @@ fun EditorScreen(
                                     onColor = { showColor = true },
                                     onPaper = { showPaper = true },
                                     onTags = { showTagDialog = true },
+                                    onAddImage = { pickImage.launch(arrayOf("image/*")) },
+                                    onPageImages = if (isInkNote) ({ showPageImages = true }) else null,
                                     onExport = { showExport = true },
-                                    onInfo = { showInfo = true },
                                     onDelete = { showDeleteConfirm = true },
                                     onOpenNote = onOpenNote,
                                 )
@@ -205,9 +223,7 @@ fun EditorScreen(
                 EditorBottomBar(
                     state = state,
                     onAddImage = {
-                        pickImage.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                        )
+                        pickImage.launch(arrayOf("image/*"))
                     },
                     onTakePhoto = {
                         val file = MediaStore.newFile(context, "jpg")
@@ -246,17 +262,19 @@ fun EditorScreen(
                     onSelectPen = viewModel::selectPen,
                     onEditPen = viewModel::editPen,
                     onSelectTool = viewModel::setTool,
-                    onToggleFingerDrawing = viewModel::toggleFingerDrawing,
                     onToggleZoomLock = viewModel::toggleZoomLock,
+                    compact = compact,
+                    onToggleCompact = { compact = !compact },
                     onAppendPage = viewModel::appendPage,
                     onBack = leaveNote,
                     onPages = { showPages = true },
-                    onPaper = { showPaper = true },
-                    onAddImage = {
-                        pickImage.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                        )
+                    attachments = state.attachments,
+                    playingPath = playing,
+                    onPlayAttachment = { path ->
+                        player.toggle(path) { playing = null }
+                        playing = player.playingPath
                     },
+                    onRemoveAttachment = viewModel::removeAttachment,
                     onMore = { overflow = true },
                 )
 
@@ -275,8 +293,9 @@ fun EditorScreen(
                         onColor = { showColor = true },
                         onPaper = { showPaper = true },
                         onTags = { showTagDialog = true },
+                                    onAddImage = { pickImage.launch(arrayOf("image/*")) },
+                                    onPageImages = if (isInkNote) ({ showPageImages = true }) else null,
                         onExport = { showExport = true },
-                        onInfo = { showInfo = true },
                         onDelete = { showDeleteConfirm = true },
                         onOpenNote = onOpenNote,
                     )
@@ -347,15 +366,28 @@ fun EditorScreen(
         )
     }
 
+    if (showPageImages) {
+        val index = if (state.type == NoteType.NOTEBOOK) camera.pageAtCentre(state.page)
+            .coerceIn(0, (viewModel.pageCount - 1).coerceAtLeast(0)) else 0
+        PageImagesSheet(
+            images = state.attachments.filter { it.pageIndex == index }, page = state.page,
+            onChange = viewModel::updatePageImage, onRemove = viewModel::removeAttachment,
+            onDismiss = { showPageImages = false },
+        )
+    }
+
     if (showPages) {
         PagesSheet(
             pageCount = viewModel.pageCount,
-            currentPage = camera.pageAtCentre(state.page),
+            currentPage = camera.pageAtCentre(state.page)
+                .coerceIn(0, (viewModel.pageCount - 1).coerceAtLeast(0)),
             style = state.paperStyle,
             paperColorArgb = state.colorArgb,
             lineColorArgb = state.lineColorArgb,
             spacingDp = state.ruleSpacingDp,
             page = state.page,
+            strokes = viewModel.strokes,
+            attachments = state.attachments,
             onGoToPage = { index ->
                 camera.goToPage(index, state.page)
                 showPages = false
@@ -404,14 +436,6 @@ fun EditorScreen(
         )
     }
 
-    if (showInfo) {
-        NoteInfoDialog(
-            state = state,
-            strokeCount = viewModel.strokes.size,
-            pageCount = viewModel.pageCount,
-            onDismiss = { showInfo = false },
-        )
-    }
 }
 
 /**
@@ -430,29 +454,20 @@ private fun EditorMenu(
     onColor: () -> Unit,
     onPaper: () -> Unit,
     onTags: () -> Unit,
+    onAddImage: () -> Unit,
+    onPageImages: (() -> Unit)?,
     onExport: () -> Unit,
-    onInfo: () -> Unit,
     onDelete: () -> Unit,
     onOpenNote: (Long) -> Unit,
 ) {
     EditorOverflowMenu(
         expanded = expanded,
-        type = state.type,
-        locked = state.locked,
-        pinned = state.pinned,
-        hasReminder = state.reminderAt != null,
         onDismiss = onDismiss,
-        onConvert = { viewModel.convertType(it); onDismiss() },
-        onPin = { onDismiss(); viewModel.togglePinned() },
         onColor = { onDismiss(); onColor() },
         onPaper = { onDismiss(); onPaper() },
         onTags = { onDismiss(); onTags() },
-        onReminder = {
-            onDismiss()
-            pickDateTime(context) { millis -> viewModel.setReminder(millis) }
-        },
-        onClearReminder = { onDismiss(); viewModel.setReminder(null) },
-        onLock = { onDismiss(); viewModel.setLocked(!state.locked) },
+        onAddImage = { onDismiss(); onAddImage() },
+        onPageImages = onPageImages?.let { action -> { onDismiss(); action() } },
         onExport = { onDismiss(); onExport() },
         onExportPdf = {
             onDismiss()
@@ -477,7 +492,6 @@ private fun EditorMenu(
             }
         },
         onDuplicate = { onDismiss(); viewModel.duplicate(onOpenNote) },
-        onInfo = { onDismiss(); onInfo() },
         onDelete = { onDismiss(); onDelete() },
     )
 }

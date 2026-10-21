@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.outlined.PushPin
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -83,7 +82,7 @@ fun NoteRow(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (preview.isNotBlank() && !note.locked) {
+            if (preview.isNotBlank()) {
                 Text(
                     preview,
                     style = MaterialTheme.typography.bodySmall,
@@ -108,12 +107,6 @@ fun NoteRow(
                 modifier = Modifier.size(18.dp),
             )
 
-            note.pinned -> Icon(
-                Icons.Outlined.PushPin,
-                contentDescription = "Pinned",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(16.dp),
-            )
 
             else -> Box(Modifier.size(0.dp).background(Color.Transparent))
         }
