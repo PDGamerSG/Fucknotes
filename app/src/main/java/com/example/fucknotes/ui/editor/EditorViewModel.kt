@@ -528,10 +528,14 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
     // ---- attachments -------------------------------------------------------
 
     fun attachImage(uri: Uri, pageIndex: Int = 0) = viewModelScope.launch {
+        importPageImage(uri, pageIndex)
+    }
+
+    private suspend fun importPageImage(uri: Uri, pageIndex: Int) {
         val file = MediaStore.importImage(getApplication<Application>(), uri)
         if (file == null) {
             emit("That image could not be read")
-            return@launch
+            return
         }
         try {
             val s = _state.value
@@ -544,7 +548,8 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
                     if (s.type == NoteType.NOTEBOOK) pageIndex.coerceIn(0, pageCount - 1) else 0,
                     s.page, bounds.outWidth, bounds.outHeight)
             } else AttachmentEntity(noteId = noteId, path = file.absolutePath, type = AttachmentType.IMAGE)
-            repo.addAttachment(attachment)
+            // Finish the database handoff before cancellation can trigger file cleanup.
+            withContext(NonCancellable) { repo.addAttachment(attachment) }
             emit("Image added")
         } catch (error: Exception) {
             file.delete()
@@ -553,15 +558,12 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
         }
     }
 
-    fun attachCameraPhoto(file: File) = viewModelScope.launch {
-        if (!file.exists() || file.length() == 0L) {
-            file.delete()
-            return@launch
-        }
-        val stored = MediaStore.newFile(getApplication<Application>(), "jpg")
-        file.copyTo(stored, overwrite = true)
-        file.delete()
-        repo.addAttachment(AttachmentEntity(noteId = noteId, path = stored.absolutePath, type = AttachmentType.IMAGE))
+    fun attachCameraPhoto(file: File, pageIndex: Int = 0) = viewModelScope.launch {
+        try {
+            // Camera images need the same EXIF correction, bounded decoding and placement as
+            // gallery images; keeping the original JPEG bypassed all three.
+            importPageImage(Uri.fromFile(file), pageIndex)
+        } finally { file.delete() }
     }
 
     fun updatePageImage(image: AttachmentEntity) = viewModelScope.launch {

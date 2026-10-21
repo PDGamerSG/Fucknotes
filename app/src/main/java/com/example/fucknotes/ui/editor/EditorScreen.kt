@@ -99,11 +99,11 @@ fun EditorScreen(
     var showExport by remember { mutableStateOf(false) }
     var showTagDialog by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
-    var pendingCameraFile by remember { mutableStateOf<java.io.File?>(null) }
+    var pendingCameraPath by rememberSaveable(state.noteId) { mutableStateOf<String?>(null) }
 
     val pickImage = rememberLauncherForActivityResult(
-        // The returned URI is consumed and copied immediately; GetContent works with the tablet's
-        // provider even when the newer Photo Picker is unavailable or disabled by a ROM.
+        // Copy the provider's document immediately; this also works when the Photo Picker is
+        // unavailable or disabled by the tablet's ROM.
         ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         uri?.let {
@@ -120,9 +120,10 @@ fun EditorScreen(
     val takePhoto = rememberLauncherForActivityResult(
         ActivityResultContracts.TakePicture()
     ) { success ->
-        val file = pendingCameraFile
-        pendingCameraFile = null
-        if (success && file != null) viewModel.attachCameraPhoto(file) else file?.delete()
+        val file = pendingCameraPath?.let { java.io.File(it) }
+        pendingCameraPath = null
+        if (success && file != null) viewModel.attachCameraPhoto(file, camera.pageAtCentre(state.page))
+        else file?.delete()
     }
 
     val requestAudioPermission = rememberLauncherForActivityResult(
@@ -171,7 +172,7 @@ fun EditorScreen(
         when {
             id != state.noteId -> Unit
             next == null -> leaveNote()
-            else -> { scope.launch { viewModel.saveNow(); onOpenNote(next) }; Unit }
+            else -> { scope.launch { viewModel.saveNow(); onOpenNote(next) } }
         }
     }
 
@@ -245,9 +246,15 @@ fun EditorScreen(
                     },
                     onTakePhoto = {
                         val file = MediaStore.newFile(context, "jpg")
-                        pendingCameraFile = file
+                        pendingCameraPath = file.absolutePath
                         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-                        takePhoto.launch(uri)
+                        try {
+                            takePhoto.launch(uri)
+                        } catch (error: android.content.ActivityNotFoundException) {
+                            pendingCameraPath = null
+                            file.delete()
+                            scope.launch { snackbar.showSnackbar("No camera app is available") }
+                        }
                     },
                     onRecord = {
                         if (state.recording) viewModel.stopRecording()

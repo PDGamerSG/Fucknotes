@@ -4,8 +4,7 @@
 
     <!-- Voice notes. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <!-- Photos taken from inside a note. -->
-    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Photos use the system camera app, which owns the camera permission. -->
 
     <uses-feature
         android:name="android.hardware.camera"
