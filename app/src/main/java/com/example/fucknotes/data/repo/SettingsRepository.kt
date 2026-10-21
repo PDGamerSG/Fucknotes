@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.example.fucknotes.data.model.AccentPreset
 import com.example.fucknotes.data.model.DefaultPenTray
+import com.example.fucknotes.data.model.InkTool
 import com.example.fucknotes.data.model.LayoutMode
 import com.example.fucknotes.data.model.PaperStyle
 import com.example.fucknotes.data.model.PenPreset
@@ -23,13 +24,14 @@ import java.security.MessageDigest
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
 
-/** Keep the two highlighter choices available when loading a tray saved by an older build. */
+/** Keep five pen choices and two highlighter choices available after loading an older tray. */
 private fun normalizePenTray(stored: List<PenPreset>?): List<PenPreset> {
     val tray = stored?.takeIf { it.isNotEmpty() } ?: DefaultPenTray
-    val missing = (2 - tray.count { it.tool == com.example.fucknotes.data.model.InkTool.HIGHLIGHTER })
-        .coerceAtLeast(0)
-    return tray + DefaultPenTray.filter { it.tool == com.example.fucknotes.data.model.InkTool.HIGHLIGHTER }
-        .take(missing)
+    val missingPens = (5 - tray.count { it.tool == InkTool.PEN }).coerceAtLeast(0)
+    val missingHighlighters = (2 - tray.count { it.tool == InkTool.HIGHLIGHTER }).coerceAtLeast(0)
+    return tray +
+        DefaultPenTray.filter { it.tool == InkTool.PEN }.take(missingPens) +
+        DefaultPenTray.filter { it.tool == InkTool.HIGHLIGHTER }.take(missingHighlighters)
 }
 
 /** App-wide preferences: appearance, list behaviour and the note-lock passcode. */
