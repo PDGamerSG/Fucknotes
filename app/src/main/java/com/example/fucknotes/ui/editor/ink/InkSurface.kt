@@ -414,6 +414,12 @@ fun InkSurface(
 
         PageImages(attachments, camera, pageSpec, notebook)
 
+        // Cool only the page and imported backgrounds. Wet ink uses a separate front buffer;
+        // tinting the dry layer would change the ink's color as soon as the pen is lifted.
+        if (nightPaper && pageColor != Color.Transparent) {
+            Canvas(Modifier.fillMaxSize()) { drawRect(Color(0x38213249)) }
+        }
+
         // Dry ink.
         Canvas(Modifier.fillMaxSize()) {
             val matrix = camera.worldToScreen()
@@ -472,10 +478,6 @@ fun InkSurface(
             )
         }
 
-        // Display-only cooling includes imported PDFs, while exports keep the source colors.
-        if (nightPaper && pageColor != Color.Transparent) {
-            Canvas(Modifier.fillMaxSize()) { drawRect(Color(0x38213249)) }
-        }
     }
 }
 
