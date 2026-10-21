@@ -1,15 +1,17 @@
 # Notes workflow changes
 
-Code and test sources compile. Runtime tests and tablet installation are deferred at the user's request.
+Validated on the connected Xiaomi 2410CRP4CI (Android 16) on 2026-10-22. The current debug build is installed without clearing app data. The checks below distinguish automated coverage, interactive checks and remaining scenarios.
 
 ## Implemented
 
 - Compact editor controls, circular ink colors, custom eraser icon, and paper settings in the overflow menu.
-- Compact mode retains only colors, eraser, hand and the control toggle; expand it to change pen/highlighter families.
+- Right-aligned toolbar in both compact and expanded modes: three pen swatches, two highlighter presets, eraser, finger-input menu and the control toggle. Standalone Pen/Highlighter buttons are removed. Swatches retain their saved colors and nib widths; tapping the selected swatch opens its editor.
+- The finger menu offers Hand / move page, Write with fingers and Disabled. Disabled rejects finger drawing, scrolling, pinch and double-taps while stylus input and toolbar controls remain usable. The preference persists across restarts and migrates the previous Draw with finger switch.
+- Existing pen trays retain their slot indices and settings; missing pen/highlighter slots are supplemented for older builds.
 - Removed note locking, pinning, reminders, type-conversion and note-info controls; removed Stationery and the duplicate home create button.
 - Plus menu contains notebook, canvas, and PDF import.
 - Collection/folder hierarchy with visible menus, recursive export, and a home light/dark toggle.
-- Cooler page tones and display-only night shading, with stronger dotted-paper contrast.
+- Cooler page tones and display-only night shading, with stronger grid lines and larger paper dots. Night tint is below both live and committed ink, preventing the color from darkening after pen lift.
 - Translucent highlighting on new and reopened strokes.
 - Typed-note annotations remain visible while typing, scroll with their content, and have the same pen/highlighter/eraser controls as notebooks.
 - PDF import from the picker, Open with, and Share; pages become image backgrounds with editable ink above them. PDF text and links are rasterized during import. Mixed PDF page sizes are fitted proportionally into the notebook's first-page size.
@@ -23,24 +25,40 @@ Code and test sources compile. Runtime tests and tablet installation are deferre
 - Pending note saves complete when navigating away; saving and export share the persisted ink representation.
 - Pen motion buttons track held switches across tip lifts and hover, ignore release packets, and reset after focus loss. Complete `ACTION_MULTIPLE` key events do not remain latched. Only the resumed editor consumes shortcuts.
 
-## Compile checks
+## Executed checks
 
 ```powershell
-.\gradlew.bat :app:compileDebugKotlin :app:compileDebugUnitTestKotlin :app:compileDebugAndroidTestKotlin --no-daemon "-Dkotlin.incremental=false"
+.\gradlew.bat :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon "-Dkotlin.incremental=false"
+& $adb -s b86e61d8 shell am instrument -w com.example.fucknotes.test/androidx.test.runner.AndroidJUnitRunner
 git diff --check
 ```
 
-## Deferred execution
+- 13 JVM tests passed: page/highlight rules, export names/paths, pen-motion buttons and camera bounds.
+- 9 instrumented tests passed on the physical Xiaomi tablet (not the connected emulator).
+- PDF workflow tests verify original imported title, page count/backgrounds, exported page dimensions and background pixels, including legacy page counts.
+- Notebook rendering tests verify persisted ink and translucent highlighting over original PDF content, transparent PNG import, JPEG EXIF rotation, attachment preservation across duplicate-note removal, and readable nested ZIP PDFs with correct names/page counts.
+- Finger-input tests exercise the real Compose surface: hand touch pans without ink; disabled touch ignores swipe, double-tap and pinch; a stylus MotionEvent stream still creates ink with touch disabled; finger-writing mode creates ink without panning.
+- Toolbar tests verify exactly three pen swatches and two highlighters, absence of standalone Pen/Highlighter buttons, selection of both highlighters and a pen, and all three menu choices.
+- These Android tests use isolated surfaces or in-memory databases and do not edit the owner's notebooks.
 
-1. Run `:app:testDebugUnitTest` and `:app:connectedDebugAndroidTest`. The added PDF workflow test checks title preservation, imported page count, saved page backgrounds, exported dimensions and rendered background pixels.
-2. On the Xiaomi tablet, map Primary to Toggle eraser. Check single press, hold, release, repeat press, hover, pen contact, switching notes and returning from settings. Each physical press must produce exactly one action. A changing diagnostic keycode alone does not prove this works.
-3. Highlight typed text, handwriting, an image and a PDF page; save, reopen and export. Compare visibility while drawing, after the stroke finishes and in the PDF.
-4. Import portrait/landscape/mixed-page PDFs, a large PDF and a damaged/password-protected PDF. Check the progress/error states and annotate later pages.
-5. Import rotated camera images, PNGs with transparency and cloud-provider images. Move, resize, remove, duplicate and back up the note; removing one copy must not damage another.
-6. Export a collection with nested folders, same-name notes, Unicode names, empty pages, images and ink in each output mode. Reopen every output, compare page count/content, and verify cancellation and unwritable destinations.
-7. Add pages while viewing a middle page, reopen the notebook, and immediately leave after a final stroke. Confirm the camera, page count and final stroke are retained.
-8. Check compact/expanded controls, night shading, folder menus and all removed actions on narrow and wide windows.
-9. In an existing typed note, annotate several lines, scroll using a finger or the hand tool, switch back to typing, and reopen. Confirm the ink stays visible, moves with the text, and does not intercept typing or text selection while annotation mode is off.
-10. Upgrade/restore an older multi-page notebook and confirm every stored page remains accessible and exports, including notes that predate the explicit-page flag.
+## Interactive tablet checks
 
-No runtime result is claimed by the compile checks above.
+- Existing notes retained after each APK update. A pre-update databases/files snapshot is stored locally under the ignored `build/tablet-validation-20261022/` directory.
+- Created the isolated `Tablet_Validation_20261022` notebook with three pages. Adding a page kept the current page in view. The owner subsequently added handwriting/pages to this notebook; it is retained.
+- Plus menu shows New notebook, New canvas and Import PDF. Removed editor menu actions are absent; Paper is in the overflow menu.
+- Confirmed compact controls, right-aligned toolbar, fully visible swatches and increased dot size in tablet screenshots.
+- Opened the finger menu, selected Disabled, left the editor, restarted the app and reopened the notebook: Disabled was retained.
+- The owner confirmed the physical Xiaomi pen buttons work. Primary press/release was observed as KEY_PAGEDOWN on the Xiaomi Focus Pen Keyboard device.
+- The owner confirmed stroke color stays the same after pen lift following the night-tint fix.
+- Physical pen input and Android-injected stylus streams are recorded separately; synthetic input alone does not validate the Xiaomi hardware buttons.
+
+## Remaining manual coverage
+
+These scenarios are not implied by passing compilation or the automated tests:
+
+1. End-to-end system picker flows for PDF/image import and all three folder export modes, including cloud storage providers, cancellation and unwritable destinations.
+2. Large, damaged/password-protected and mixed-size PDFs; imported PDF text/links remain rasterized and mixed pages fit the first page's notebook dimensions.
+3. Image placement/resizing/removal from the page menu and camera rotation during capture.
+4. Long writing sessions, stylus-button holds/repeated presses across focus changes, and live highlight appearance with every paper/theme combination.
+5. Full phone/split-screen, large-text, portrait, and light-mode layout coverage. Current interactive screenshots are from the landscape Xiaomi tablet in dark mode.
+6. Backup restoration of older notebooks, and multi-page typed-note annotations while scrolling/editing text.
