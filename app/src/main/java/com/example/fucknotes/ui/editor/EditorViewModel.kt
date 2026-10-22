@@ -446,6 +446,26 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
         applyStrokes(strokes.filterIndexed { index, _ -> index !in indices })
     }
 
+    /** Drags circled strokes to a new place; one undo step for the whole move. */
+    fun moveStrokes(indices: Set<Int>, dx: Float, dy: Float) {
+        if (indices.isEmpty() || (dx == 0f && dy == 0f)) return
+        pushUndo()
+        applyStrokes(strokes.mapIndexed { index, stroke ->
+            if (index in indices) com.example.fucknotes.ui.editor.ink.Lasso.translate(stroke, dx, dy) else stroke
+        })
+    }
+
+    /** Copies circled strokes, offset a little, and reports the copies' indices so they are what is selected next. */
+    fun duplicateStrokes(indices: Set<Int>, dx: Float, dy: Float): Set<Int> {
+        if (indices.isEmpty()) return emptySet()
+        pushUndo()
+        val copies = indices.sorted().mapNotNull { strokes.getOrNull(it) }
+            .map { com.example.fucknotes.ui.editor.ink.Lasso.translate(it, dx, dy) }
+        val first = strokes.size
+        applyStrokes(strokes + copies)
+        return (first until first + copies.size).toSet()
+    }
+
     fun undo() {
         val previous = undoStack.removeLastOrNull() ?: return
         redoStack.addLast(strokes)

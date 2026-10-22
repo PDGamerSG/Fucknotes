@@ -24,6 +24,20 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import com.example.fucknotes.ui.editor.ink.LassoState
+import com.example.fucknotes.ui.editor.ink.Lasso
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -86,6 +100,10 @@ fun InkEditor(
     onToggleEraser: () -> Unit,
     onUndo: () -> Unit,
     onRedo: () -> Unit,
+    /** Circled strokes dragged: indices and the world-unit shift. */
+    onMoveStrokes: (Set<Int>, Float, Float) -> Unit = { _, _, _ -> },
+    /** Circled strokes copied with an offset; returns the copies' indices. */
+    onDuplicateStrokes: (Set<Int>, Float, Float) -> Set<Int> = { _, _, _ -> emptySet() },
     onSelectPen: (Int) -> Unit,
     onEditPen: (index: Int, colorArgb: Int, widthDp: Float) -> Unit,
     onSelectTool: (InkTool) -> Unit,
@@ -105,9 +123,12 @@ fun InkEditor(
 ) {
     val brand = MaterialTheme.brand
     val notebook = state.type == NoteType.NOTEBOOK
+    val lasso = remember { LassoState() }
 
     Box(modifier.fillMaxSize().background(brand.desk)) {
         InkSurface(
+            lasso = lasso,
+            onMoveStrokes = onMoveStrokes,
             strokes = strokes,
             attachments = attachments,
             pageCount = pageCount,
@@ -216,6 +237,18 @@ fun InkEditor(
             )
         }
 
+        // The circled part's own little bar: delete it, copy it, or let it go.
+        if (lasso.active && chrome != EditorChrome.READING) {
+            LassoActions(
+                lasso = lasso,
+                strokes = strokes,
+                camera = camera,
+                onDelete = { onErase(lasso.selection); lasso.clear() },
+                onDuplicate = { lasso.selection = onDuplicateStrokes(lasso.selection, 24f, 24f) },
+                onDismiss = lasso::clear,
+            )
+        }
+
         if (notebook) {
             PageCounter(
                 camera = camera,
@@ -310,4 +343,50 @@ private fun PageCounter(
         },
         modifier = modifier,
     )
+}
+
+
+/**
+ * The actions for a circled part, floating just above it and following it as it is dragged.
+ *
+ * Reads the strokes and the camera while the selection exists, and only then: a pan or a new
+ * stroke recomposes this little bar, not the editor around it.
+ */
+@Composable
+private fun LassoActions(
+    lasso: LassoState,
+    strokes: () -> List<InkStroke>,
+    camera: InkCamera,
+    onDelete: () -> Unit,
+    onDuplicate: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val bounds = Lasso.selectionBounds(strokes(), lasso.selection)?.translate(lasso.drag) ?: return
+    var panelSize by remember { mutableStateOf(IntSize.Zero) }
+    val density = LocalDensity.current
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val maxW = with(density) { maxWidth.toPx() }
+        val maxH = with(density) { maxHeight.toPx() }
+        val gap = with(density) { 12.dp.toPx() }
+        val edge = with(density) { 8.dp.toPx() }
+        val centreX = (bounds.left + bounds.right) / 2 * camera.scale + camera.panX
+        val topY = bounds.top * camera.scale + camera.panY
+        val bottomY = bounds.bottom * camera.scale + camera.panY
+        val x = (centreX - panelSize.width / 2).coerceIn(edge, (maxW - panelSize.width - edge).coerceAtLeast(edge))
+        // Above the box when there is room, below it otherwise, never off the page.
+        val above = topY - gap - panelSize.height
+        val y = (if (above >= edge) above else bottomY + gap).coerceIn(edge, (maxH - panelSize.height - edge).coerceAtLeast(edge))
+        FloatingPanel(
+            Modifier
+                .offset { IntOffset(x.toInt(), y.toInt()) }
+                .onSizeChanged { panelSize = it },
+            elevation = 8.dp,
+        ) {
+            Row(Modifier.padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                ToolButton(icon = Icons.Outlined.ContentCopy, label = "Duplicate the circled strokes", onClick = onDuplicate)
+                ToolButton(icon = Icons.Outlined.Delete, label = "Delete the circled strokes", onClick = onDelete)
+                ToolButton(icon = Icons.Outlined.Close, label = "Deselect", onClick = onDismiss)
+            }
+        }
+    }
 }

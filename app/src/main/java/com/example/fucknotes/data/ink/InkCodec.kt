@@ -145,6 +145,6 @@ object InkCodec {
         InkTool.HIGHLIGHTER -> StockBrushes.highlighter()
         InkTool.DASHED -> StockBrushes.dashedLine()
         // Not brush tools; fall back to the pen so callers never get a null family.
-        InkTool.ERASER, InkTool.PAN -> StockBrushes.pressurePen()
+        InkTool.ERASER, InkTool.PAN, InkTool.LASSO -> StockBrushes.pressurePen()
     }
 }

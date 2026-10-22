@@ -111,6 +111,14 @@ and export, first-page previews, dark reader, folder hierarchy, home export.
   into that app's info page. Android drops a stale default by itself when the candidate set
   changes, which is what happened on the tablet (Xodo held PDF and .ppt). `DocumentIntentTest`
   queries the resolver on device for every shape.
+- Select tool (`InkTool.LASSO`): `ui/editor/ink/Lasso.kt` holds the pure geometry and
+  `LassoState` (selection indices, loop, drag — all world units). `InkSurface` takes `lasso` and
+  `onMoveStrokes`; its gesture loop has a LASSO branch that consumes every touch (so wet ink never
+  sees it), and the dry layer draws selected strokes shifted by `drag` while a move is in
+  progress. `InkEditor` owns the state and the floating Duplicate / Delete / Deselect bar.
+  Selection indices refer to list positions, so every mutation must keep order (move does) or
+  clear the selection (undo/redo via the tool-change effect is not enough — the bar's Delete
+  clears explicitly).
 - Wet ink: `InProgressStrokes` in `InkSurface` must stay composed whenever `enabled`, whatever
   the tool. Removing it for the eraser/hand and recomposing it for a pen rebuilds the
   front-buffer surface and the first strokes after the switch are invisible until committed.

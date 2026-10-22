@@ -12,6 +12,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.runtime.LaunchedEffect
 import androidx.ink.brush.Brush
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberUpdatedState
@@ -133,6 +137,10 @@ fun InkSurface(
     pageCount: () -> Int = { 1 },
     /** When annotating typed content, scrolling moves the text and ink as one document. */
     contentScroll: ScrollState? = null,
+    /** The circle-and-move selection; null on a surface that has no Select tool. */
+    lasso: LassoState? = null,
+    /** Circled strokes were dragged: indices and the world-unit shift to apply. */
+    onMoveStrokes: (Set<Int>, Float, Float) -> Unit = { _, _, _ -> },
     /**
      * Reading mode: fingers always move the page.
      *
@@ -166,6 +174,10 @@ fun InkSurface(
     val currentOnErase by rememberUpdatedState(onErase)
     val currentOnToggleEraser by rememberUpdatedState(onToggleEraser)
     val currentContentScroll by rememberUpdatedState(contentScroll)
+    val currentLasso by rememberUpdatedState(lasso)
+    val currentOnMoveStrokes by rememberUpdatedState(onMoveStrokes)
+    // Leaving the Select tool drops the selection; a pen stroke on a circled word is just a stroke.
+    LaunchedEffect(tool) { if (tool != InkTool.LASSO) lasso?.clear() }
     val contentScrollOffset = contentScroll?.value
     val haptics = LocalHapticFeedback.current
 
@@ -235,6 +247,11 @@ fun InkSurface(
                 awaitPointerEventScope {
                     var lastErasePoint: Offset? = null
                     var outsidePageGesture = false
+                    // The Select tool: which pointer is drawing the loop or dragging the selection,
+                    // and where it was last, in world units.
+                    var lassoPointer: androidx.compose.ui.input.pointer.PointerId? = null
+                    var lassoMoving = false
+                    var lassoLast = Offset.Zero
 
                     // Double-tap tool swap, measured over a whole gesture: from the first pointer
                     // down to the last one up.
@@ -412,7 +429,48 @@ fun InkSurface(
                         val active = down.firstOrNull { it.type == PointerType.Stylus }
                             ?: fingers.firstOrNull()?.takeUnless { stylusDown }
 
+                        // The lasso pointer lifted: close the loop, or land the move.
+                        val lassoState = currentLasso
+                        if (lassoPointer != null && down.none { it.id == lassoPointer } && lassoState != null) {
+                            if (lassoMoving) {
+                                val drag = lassoState.drag
+                                lassoState.drag = Offset.Zero
+                                if (drag != Offset.Zero) currentOnMoveStrokes(lassoState.selection, drag.x, drag.y)
+                            } else {
+                                lassoState.selection = Lasso.select(lassoState.loop, currentStrokes())
+                                lassoState.loop = emptyList()
+                                if (lassoState.active) haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            }
+                            lassoPointer = null
+                            lassoMoving = false
+                        }
+
                         when {
+                            currentTool == InkTool.LASSO && active != null && lassoState != null -> {
+                                val world = camera.screenToWorld(active.position)
+                                if (lassoPointer != active.id) {
+                                    // A new touch: inside the selection it drags, anywhere else it
+                                    // starts a fresh loop (and lets the old selection go).
+                                    lassoPointer = active.id
+                                    val grab = Lasso.selectionBounds(currentStrokes(), lassoState.selection)
+                                        ?.let { it.copy(left = it.left - Lasso.GRAB_MARGIN, top = it.top - Lasso.GRAB_MARGIN, right = it.right + Lasso.GRAB_MARGIN, bottom = it.bottom + Lasso.GRAB_MARGIN) }
+                                    lassoMoving = lassoState.active && grab != null && grab.contains(world)
+                                    if (!lassoMoving) {
+                                        lassoState.selection = emptySet()
+                                        lassoState.loop = listOf(world)
+                                    }
+                                    lassoState.drag = Offset.Zero
+                                } else if (lassoMoving) {
+                                    lassoState.drag += world - lassoLast
+                                } else {
+                                    val last = lassoState.loop.lastOrNull()
+                                    if (last == null) lassoState.loop = listOf(world)
+                                    else if ((world - last).getDistance() >= 1.5f) lassoState.loop = lassoState.loop + world
+                                }
+                                lassoLast = world
+                                event.changes.forEach { it.consume() }
+                            }
+
                             currentTool == InkTool.PAN && active != null -> {
                                 panContent(active.positionChangeIgnoreConsumed())
                                 event.changes.forEach { it.consume() }
@@ -507,13 +565,18 @@ fun InkSurface(
                         )
                         native.concat(matrix)
                         val pageBounds = WorldRect(0f, top, pageWidthDp, bottom)
-                        currentStrokes().forEach { inkStroke ->
-                            if (isVisible(inkStroke.stroke, pageBounds)) {
+                        val selected = lasso?.selection.orEmpty()
+                        val drag = lasso?.drag ?: Offset.Zero
+                        currentStrokes().forEachIndexed { index, inkStroke ->
+                            val moving = drag != Offset.Zero && index in selected
+                            if (moving || isVisible(inkStroke.stroke, pageBounds)) {
+                                if (moving) { native.save(); native.translate(drag.x, drag.y) }
                                 renderer.draw(
                                     native,
                                     if (darkReader) inkStroke.forDarkReader() else inkStroke.stroke,
                                     matrix,
                                 )
+                                if (moving) native.restore()
                             }
                         }
                         native.restore()
@@ -522,13 +585,18 @@ fun InkSurface(
                 }
                 native.save()
                 native.concat(matrix)
-                currentStrokes().forEach { inkStroke ->
-                    if (isVisible(inkStroke.stroke, viewport)) {
+                val selected = lasso?.selection.orEmpty()
+                val drag = lasso?.drag ?: Offset.Zero
+                currentStrokes().forEachIndexed { index, inkStroke ->
+                    val moving = drag != Offset.Zero && index in selected
+                    if (moving || isVisible(inkStroke.stroke, viewport)) {
+                        if (moving) { native.save(); native.translate(drag.x, drag.y) }
                         renderer.draw(
                             native,
                             if (darkReader) inkStroke.forDarkReader() else inkStroke.stroke,
                             matrix,
                         )
+                        if (moving) native.restore()
                     }
                 }
                 native.restore()
@@ -556,6 +624,11 @@ fun InkSurface(
                 pointerEventToWorldTransform = screenToWorld,
                 onStrokesFinished = finishInDaylight,
             )
+        }
+
+        // The Select tool's marks: the loop while it is drawn, the box around what it took.
+        if (lasso != null && tool == InkTool.LASSO) {
+            LassoOverlay(lasso = lasso, camera = camera, strokes = currentStrokes)
         }
 
     }
@@ -758,3 +831,40 @@ val PaperWhite = Color(0xFFF1F5FA)
 
 /** Rules and dots: visible on paper, never competing with the ink. */
 val DefaultRuleColor = Color(0xFF8795AA)
+
+
+/**
+ * The lasso as the user sees it: a dashed loop following the pointer, then a dashed box with a
+ * faint fill around the circled strokes, carried along while they are dragged. Drawn in screen
+ * space from world coordinates, so it stays on the strokes through pans and zooms.
+ */
+@Composable
+private fun LassoOverlay(lasso: LassoState, camera: InkCamera, strokes: () -> List<InkStroke>) {
+    val accent = MaterialTheme.colorScheme.primary
+    val dash = remember { PathEffect.dashPathEffect(floatArrayOf(14f, 10f)) }
+    Canvas(Modifier.fillMaxSize()) {
+        val scale = camera.scale
+        val panX = camera.panX
+        val panY = camera.panY
+        fun toScreen(p: Offset) = Offset(p.x * scale + panX, p.y * scale + panY)
+
+        val loop = lasso.loop
+        if (loop.size >= 2) {
+            val path = Path()
+            path.moveTo(toScreen(loop.first()).x, toScreen(loop.first()).y)
+            loop.drop(1).forEach { val s = toScreen(it); path.lineTo(s.x, s.y) }
+            drawPath(path, accent.copy(alpha = 0.10f))
+            drawPath(path, accent, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.5f, pathEffect = dash))
+        }
+
+        if (lasso.active) {
+            val bounds = Lasso.selectionBounds(strokes(), lasso.selection) ?: return@Canvas
+            val shifted = bounds.translate(lasso.drag)
+            val topLeft = toScreen(Offset(shifted.left, shifted.top)) - Offset(10f, 10f)
+            val size = Size(shifted.width * scale + 20f, shifted.height * scale + 20f)
+            val corner = CornerRadius(12f, 12f)
+            drawRoundRect(accent.copy(alpha = 0.08f), topLeft, size, corner)
+            drawRoundRect(accent, topLeft, size, corner, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.5f, pathEffect = dash))
+        }
+    }
+}

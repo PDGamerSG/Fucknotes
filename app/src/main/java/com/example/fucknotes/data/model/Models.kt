@@ -50,6 +50,9 @@ enum class InkTool {
 
     /** Single-finger pan instead of drawing. */
     PAN,
+
+    /** Circle strokes to select them, then drag the circled part somewhere else. */
+    LASSO,
     ;
 
     val isBrush: Boolean get() = this == PEN || this == MARKER || this == HIGHLIGHTER || this == DASHED

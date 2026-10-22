@@ -3,7 +3,25 @@
 Validated on the connected Xiaomi 2410CRP4CI (Android 16) on 2026-10-22. The checks below
 distinguish automated coverage, interactive checks and remaining scenarios.
 
-## Latest pass (wet ink after switching from the eraser) — 2026-10-22, macOS
+## Latest pass (Select tool: circle and move) — 2026-10-23, macOS — code only
+
+- New **Select** tool in the pen bar (dashed-box icon, next to the eraser). Draw a loop around
+  strokes; the ones with at least half their points inside are selected and boxed. Drag from
+  inside the box (plus a 14-unit margin) to move them; the strokes follow the pointer live and
+  land on release as one undo step. A tap or a loop elsewhere lets the selection go. A small
+  bar floats above the box: Duplicate (copies offset 24 units and become the selection),
+  Delete, Deselect. Leaving the tool clears the selection; moving across notebook pages works
+  because strokes live in world units.
+- Stylus and fingers follow the same rules as the eraser: in Hand mode a finger pans and the
+  stylus circles; in Draw mode a finger circles too.
+- `ui/editor/ink/Lasso.kt`: geometry (even-odd point-in-polygon, fraction inside, bounds,
+  stroke translation that rebuilds the input batch with every pressure/tilt/time kept) and
+  `LassoState`. `EditorViewModel.moveStrokes` / `duplicateStrokes`. Gesture branch and overlay in
+  `InkSurface`, action bar in `InkEditor`.
+- Tests: `LassoTest` (JVM, 6) pass; `LassoDeviceTest` (stylus loop selects, drag reports the
+  world shift, tap elsewhere clears; translate keeps inputs) written, not run — tablet detached.
+
+## Previous pass (wet ink after switching from the eraser) — 2026-10-22, macOS
 
 Reported: after switching from the eraser to a pen, the first strokes sometimes showed nothing
 while writing and appeared only later. Cause: the wet-ink component was composed only while a

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.HighlightAlt
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Gesture
 import androidx.compose.material.icons.outlined.Lock
@@ -75,6 +76,13 @@ fun InkToolbar(
                 label = "Eraser",
                 selected = tool == InkTool.ERASER,
                 onClick = { onSelectTool(InkTool.ERASER) },
+                size = 48.dp,
+            )
+            ToolButton(
+                icon = Icons.Outlined.HighlightAlt,
+                label = "Select: circle strokes to move them",
+                selected = tool == InkTool.LASSO,
+                onClick = { onSelectTool(InkTool.LASSO) },
                 size = 48.dp,
             )
             ToolButton(

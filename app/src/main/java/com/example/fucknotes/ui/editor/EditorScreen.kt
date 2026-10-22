@@ -314,6 +314,8 @@ private fun EditorContent(
                     onStrokesFinished = viewModel::commitStrokes,
                     onErase = viewModel::eraseStrokes,
                     onToggleEraser = viewModel::toggleEraser,
+                    onMoveStrokes = viewModel::moveStrokes,
+                    onDuplicateStrokes = viewModel::duplicateStrokes,
                     onUndo = viewModel::undo,
                     onRedo = viewModel::redo,
                     onSelectPen = viewModel::selectPen,
