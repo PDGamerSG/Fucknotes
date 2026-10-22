@@ -46,7 +46,7 @@ fun ZoomChip(
             Modifier
                 .clickable(role = Role.Button, onClick = onToggleLock)
                 .semantics { contentDescription = if (locked) "Zoom ${(zoom * 100).toInt()}%, locked" else "Zoom ${(zoom * 100).toInt()}%, tap to lock" }
-                .padding(start = 14.dp, end = 10.dp, top = 8.dp, bottom = 8.dp),
+                .padding(start = 14.dp, end = 10.dp, top = 12.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
@@ -82,7 +82,7 @@ fun PageIndicator(
 ) {
     FloatingPanel(modifier, elevation = 6.dp) {
         Row(
-            Modifier.padding(horizontal = 4.dp),
+            Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             ToolButton(

@@ -4,7 +4,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.ui.draw.clip
+import com.example.fucknotes.ui.theme.brand
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -35,15 +38,25 @@ fun PenGlyph(
     highlighter: Boolean = false,
 ) {
     val color = Color(pen.colorArgb)
-    Box(modifier.size(48.dp).clickable(role = Role.Button, onClick = onClick).semantics {
+    val scheme = MaterialTheme.colorScheme
+    Box(modifier.size(48.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onClick).semantics {
         contentDescription = penLabel(pen)
         selected = active
     }, contentAlignment = Alignment.Center) {
+        // The ring sits outside a disc that never changes size, so selecting a pen adds a halo
+        // instead of eating into the colour; the ring's inner edge is one hairline of bar tone
+        // so a dark pen still reads against a light ring and a light pen against the bar.
+        if (active) Box(
+            Modifier
+                .size(38.dp)
+                .border(2.dp, scheme.onSurface, CircleShape)
+                .padding(2.dp)
+                .border(2.dp, MaterialTheme.brand.chrome, CircleShape),
+        )
         Box(Modifier.size(30.dp).background(color, CircleShape)
-            .border(if (active) 2.dp else 1.dp,
-                if (active) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outlineVariant, CircleShape),
+            .border(1.dp, if (active) Color.Transparent else scheme.outlineVariant, CircleShape),
             contentAlignment = Alignment.Center) {
-            if (active) Icon(Icons.Filled.Check, null, Modifier.size(18.dp),
+            if (active) Icon(Icons.Filled.Check, null, Modifier.size(16.dp),
                 tint = if (color.luminance() > 0.45f) Color(0xFF182332) else Color.White)
             else if (highlighter) Icon(
                 Icons.Outlined.BorderColor,

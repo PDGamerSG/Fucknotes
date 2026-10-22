@@ -260,7 +260,9 @@ private fun ReadingUnlock(onClick: () -> Unit, modifier: Modifier = Modifier) {
             label = EditorChrome.READING.lockLabel,
             selected = true,
             onClick = onClick,
-            size = 44.dp,
+            size = 56.dp,
+            discSize = 40.dp,
+            modifier = Modifier.padding(0.dp),
         )
     }
 }

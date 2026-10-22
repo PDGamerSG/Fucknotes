@@ -17,6 +17,12 @@ Changes:
   bar over the toolbar).
 - Settings is grouped into cards at a 760 dp maximum width. The home grid leaves room under the
   last row for the corner button; the rail's bottom rows sit on a wash so "Light mode" is legible.
+- Chrome alignment: every tool button draws its selected disc inside its touch target (disc =
+  target − 8 dp), so the eraser, the lock and the reading-mode unlock all sit the same 8 dp in
+  from a bar's rounded ends instead of a 48 dp disc filling the bar edge-to-edge at one end. A
+  selected pen keeps its 30 dp colour disc and gains a 38 dp ring with a hairline of bar tone
+  inside it, rather than shrinking. The note bar and the pen bar are both 56 dp tall with 48 dp
+  targets; the zoom readout and the page counter share one height at the bottom.
 - Performance, measured on the tablet with `dumpsys gfxinfo framestats` and a Perfetto trace of a
   shelf scroll (release build, now `profileable` so shell tools can trace it). Before: shelf frames
   20 ms median / 38 ms p99 — 0.2 ms on the UI thread, 11.6 ms on the RenderThread issuing GPU

@@ -76,16 +76,22 @@ fun ToolButton(
     enabled: Boolean = true,
     size: Dp = 40.dp,
     iconSize: Dp = 21.dp,
+    /**
+     * The selected disc, drawn inside the touch target rather than as all of it: a disc the size of
+     * the target touches the bar's edge wherever the button sits at an end, and reads as a bar
+     * that has been cut. Defaults to a ring of air equal to the pen swatches' own.
+     */
+    discSize: Dp = size - 8.dp,
 ) {
     val scheme = MaterialTheme.colorScheme
     Box(
         modifier
             .size(size)
             .clip(CircleShape)
-            .background(if (selected) scheme.primaryContainer else Color.Transparent)
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
+        if (selected) Box(Modifier.size(discSize).background(scheme.primaryContainer, CircleShape))
         Icon(
             icon,
             contentDescription = label,

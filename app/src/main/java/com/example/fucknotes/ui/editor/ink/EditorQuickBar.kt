@@ -36,15 +36,17 @@ fun EditorQuickBar(
     onMore: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // The same 56 dp as the pen bar, so the two bars share a baseline across the top of the page.
     FloatingPanel(modifier) {
-        Row(Modifier.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             ToolButton(
                 icon = Icons.AutoMirrored.Filled.ArrowBack,
                 label = "Back to notes",
                 onClick = onBack,
+                size = 48.dp,
             )
             if (notebook) {
-                ToolButton(icon = Icons.Outlined.GridView, label = "All pages", onClick = onPages)
+                ToolButton(icon = Icons.Outlined.GridView, label = "All pages", onClick = onPages, size = 48.dp)
             }
 
             ToolDivider()
@@ -54,20 +56,22 @@ fun EditorQuickBar(
                 label = "Undo",
                 enabled = canUndo,
                 onClick = onUndo,
+                size = 48.dp,
             )
             ToolButton(
                 icon = Icons.AutoMirrored.Outlined.Redo,
                 label = "Redo",
                 enabled = canRedo,
                 onClick = onRedo,
+                size = 48.dp,
             )
 
             ToolDivider()
 
             if (notebook) {
-                ToolButton(icon = Icons.Outlined.NoteAdd, label = "Add a new page", onClick = onAddPage)
+                ToolButton(icon = Icons.Outlined.NoteAdd, label = "Add a new page", onClick = onAddPage, size = 48.dp)
             }
-            ToolButton(icon = Icons.Filled.MoreHoriz, label = "More", onClick = onMore)
+            ToolButton(icon = Icons.Filled.MoreHoriz, label = "More", onClick = onMore, size = 48.dp)
         }
     }
 }

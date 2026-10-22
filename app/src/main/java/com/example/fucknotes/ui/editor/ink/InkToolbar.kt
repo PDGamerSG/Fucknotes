@@ -60,9 +60,12 @@ fun InkToolbar(
     var editingPen by remember { mutableIntStateOf(-1) }
 
     // Three pens, two highlighters and three fixed controls; only the swatches scroll on phones.
-    FloatingPanel(modifier.widthIn(max = 440.dp)) {
+    // 4 dp of bar beyond the 48 dp targets, each of which keeps 4 dp of its own air around its
+    // disc — so the eraser's halo, the lock's halo and a selected pen's ring all sit the same
+    // 8 dp in from the bar's rounded ends.
+    FloatingPanel(modifier.widthIn(max = 448.dp)) {
         Row(
-            Modifier.padding(horizontal = 4.dp),
+            Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             ToolButton(
