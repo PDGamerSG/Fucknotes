@@ -67,6 +67,15 @@ class SearchViewModel(app: Application) : AndroidViewModel(app) {
         .map { labels -> labels.groupBy({ it.noteId }, { it.name }) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
+    /** First-page images, so an imported PDF or deck shows its cover in the results. */
+    val firstPageImageByNote: StateFlow<Map<Long, String>> = repo.observeFirstPageImages()
+        .map { images -> images.groupBy { it.noteId }.mapValues { (_, list) -> list.first().path } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    val darkReader: StateFlow<Boolean> = ServiceLocator.settings(app).settings
+        .map { it.darkReader }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
     fun setQuery(value: String) {
         _query.value = value
     }
@@ -84,6 +93,8 @@ fun SearchScreen(
     val query by viewModel.query.collectAsStateWithLifecycle()
     val results by viewModel.results.collectAsStateWithLifecycle()
     val tags by viewModel.tagsByNote.collectAsStateWithLifecycle()
+    val covers by viewModel.firstPageImageByNote.collectAsStateWithLifecycle()
+    val darkReader by viewModel.darkReader.collectAsStateWithLifecycle()
     val focus = remember { FocusRequester() }
 
     LaunchedEffect(Unit) { focus.requestFocus() }
@@ -145,6 +156,8 @@ fun SearchScreen(
                         NoteRow(
                             note = note,
                             preview = viewModel.previewOf(note),
+                            firstPageImagePath = covers[note.id],
+                            darkReader = darkReader,
                             selected = false,
                             interaction = Modifier.clickable { onOpenNote(note.id) },
                         )

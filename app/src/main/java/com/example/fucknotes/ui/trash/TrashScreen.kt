@@ -40,6 +40,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import com.example.fucknotes.ui.editor.tabs.OpenTabs
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -50,6 +51,15 @@ class TrashViewModel(app: Application) : AndroidViewModel(app) {
 
     val notes: StateFlow<List<NoteEntity>> = repo.observeTrash()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** First-page images, so a trashed PDF or deck is recognisable by its cover. */
+    val firstPageImageByNote: StateFlow<Map<Long, String>> = repo.observeFirstPageImages()
+        .map { images -> images.groupBy { it.noteId }.mapValues { (_, list) -> list.first().path } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    val darkReader: StateFlow<Boolean> = ServiceLocator.settings(app).settings
+        .map { it.darkReader }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     fun restore(id: Long) = viewModelScope.launch { repo.restore(listOf(id)) }
 
@@ -71,6 +81,8 @@ class TrashViewModel(app: Application) : AndroidViewModel(app) {
 @Composable
 fun TrashScreen(viewModel: TrashViewModel, onBack: () -> Unit) {
     val notes by viewModel.notes.collectAsStateWithLifecycle()
+    val covers by viewModel.firstPageImageByNote.collectAsStateWithLifecycle()
+    val darkReader by viewModel.darkReader.collectAsStateWithLifecycle()
     var confirmEmpty by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf<NoteEntity?>(null) }
 
@@ -118,6 +130,8 @@ fun TrashScreen(viewModel: TrashViewModel, onBack: () -> Unit) {
                         NoteRow(
                             note = note,
                             preview = viewModel.previewOf(note),
+                            firstPageImagePath = covers[note.id],
+                            darkReader = darkReader,
                             selected = false,
                             interaction = Modifier.combinedClickable(
                                 onClick = { viewModel.restore(note.id) },
