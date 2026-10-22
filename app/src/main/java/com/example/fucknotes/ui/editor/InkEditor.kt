@@ -116,6 +116,7 @@ fun InkEditor(
             onToggleEraser = onToggleEraser,
             pageColor = state.colorArgb.paperColorOr(PaperWhite),
             darkReader = state.darkReader,
+            reading = chrome == EditorChrome.READING,
             modifier = Modifier
                 .fillMaxSize()
                 .then(if (state.zoomLocked) Modifier.systemGestureExclusion() else Modifier),

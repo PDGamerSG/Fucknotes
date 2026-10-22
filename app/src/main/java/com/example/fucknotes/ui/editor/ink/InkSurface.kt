@@ -128,6 +128,15 @@ fun InkSurface(
     pageCount: () -> Int = { 1 },
     /** When annotating typed content, scrolling moves the text and ink as one document. */
     contentScroll: ScrollState? = null,
+    /**
+     * Reading mode: fingers always move the page.
+     *
+     * The finger-mode preference and the zoom lock exist to keep a resting hand from marking or
+     * shifting a page that is being written on. A page that is being read has to scroll, so here
+     * one finger pans whatever the preference says, the zoom lock still refuses a pinch's scale
+     * but not its movement, and a finger never draws, erases or swaps tools. The stylus writes.
+     */
+    reading: Boolean = false,
 ) {
     camera.density = LocalDensity.current.density
 
@@ -143,7 +152,8 @@ fun InkSurface(
     val currentWidth by rememberUpdatedState(widthDp)
     val currentColor by rememberUpdatedState(colorArgb)
     val currentDarkReader by rememberUpdatedState(darkReader)
-    val currentFingerInputMode by rememberUpdatedState(fingerInputMode)
+    val currentFingerInputMode by rememberUpdatedState(if (reading) FingerInputMode.HAND else fingerInputMode)
+    val currentReading by rememberUpdatedState(reading)
     val currentZoomLocked by rememberUpdatedState(zoomLocked)
     val currentPageCount by rememberUpdatedState(pageCount)
     val currentPageSpec by rememberUpdatedState(pageSpec)
@@ -265,7 +275,7 @@ fun InkSurface(
                         // The corner lock is also a writing-surface lock: while it is on, every
                         // finger/palm packet is consumed here so the page cannot pan, pinch, or
                         // react to an accidental edge drag. The stylus remains fully usable.
-                        if (currentZoomLocked && !stylusInEvent) {
+                        if (currentZoomLocked && !stylusInEvent && !currentReading) {
                             event.changes.filter { it.type != PointerType.Stylus }.forEach { it.consume() }
                             gestureActive = false
                             lastTapMs = 0L
@@ -308,7 +318,7 @@ fun InkSurface(
                             // fingers, which always move the page, or one finger while the page is
                             // stylus-only. Anything a stylus touched is writing, never a swap — so
                             // a tap can never cost the user the dot they meant to draw.
-                            val claimed = !touchDisabled && !gestureHadStylus &&
+                            val claimed = !touchDisabled && !gestureHadStylus && !currentReading &&
                                 (gesturePointers == 2 || (gesturePointers == 1 &&
                                     currentFingerInputMode == FingerInputMode.HAND))
                             val tap = claimed &&

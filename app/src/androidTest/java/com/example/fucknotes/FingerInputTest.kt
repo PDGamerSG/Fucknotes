@@ -190,6 +190,42 @@ class FingerInputTest {
         }
     }
 
+    @Test fun readingModeLetsFingersScrollWithPenOnlyAndZoomLockOn() {
+        val camera = InkCamera(1f)
+        var strokes by mutableStateOf(emptyList<InkStroke>())
+        var swaps = 0
+        compose.setContent {
+            FucknotesTheme {
+                InkSurface(
+                    strokes = { strokes }, camera = camera, tool = InkTool.PEN,
+                    colorArgb = 0xFF2386DC.toInt(), widthDp = 3f, enabled = true,
+                    fingerInputMode = FingerInputMode.DISABLED, zoomLocked = true, notebook = false,
+                    paperStyle = PaperStyle.DOTTED, pageSpec = PageSpec.Default,
+                    ruleColor = Color.Gray, ruleSpacingDp = 24f, deskColor = Color.Gray,
+                    onStrokesFinished = { finished -> strokes = strokes + finished.map { InkStroke(it, InkTool.PEN) } },
+                    onErase = {}, onToggleEraser = { swaps++ }, reading = true,
+                    modifier = Modifier.fillMaxSize().testTag("reading-page"),
+                )
+            }
+        }
+        val page = compose.onNodeWithTag("reading-page")
+        page.performTouchInput { swipe(Offset(200f, 400f), Offset(200f, 650f)) }
+        compose.runOnIdle {
+            assertTrue("A finger must scroll a page being read", camera.panY > 100f)
+            assertTrue("A finger must not draw while reading", strokes.isEmpty())
+            camera.reset()
+        }
+        page.performTouchInput {
+            doubleClick(Offset(300f, 500f))
+            pinch(Offset(100f, 300f), Offset(400f, 300f), Offset(40f, 240f), Offset(460f, 360f))
+        }
+        compose.runOnIdle {
+            assertEquals("Reading must not swap tools on a double tap", 0, swaps)
+            assertEquals("The zoom lock still holds the scale while reading", 1f, camera.zoom, 0f)
+            assertTrue("A finger must not draw while reading", strokes.isEmpty())
+        }
+    }
+
     @Test fun zoomLockBlocksFingerGesturesButKeepsStylusWriting() {
         val camera = InkCamera(1f)
         var strokes by mutableStateOf(emptyList<InkStroke>())

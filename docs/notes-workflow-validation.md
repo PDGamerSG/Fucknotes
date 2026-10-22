@@ -17,6 +17,11 @@ Changes:
   bar over the toolbar).
 - Settings is grouped into cards at a 760 dp maximum width. The home grid leaves room under the
   last row for the corner button; the rail's bottom rows sit on a wash so "Light mode" is legible.
+- Reading mode scrolls with a finger whatever the finger-mode preference or zoom lock says: one
+  finger pans, a pinch moves but cannot change the scale while locked, a double tap never swaps
+  tools, and a finger never draws. The stylus still writes.
+- The New notebook dialog no longer asks for a number of empty pages; a notebook starts with one
+  sheet and grows from the page arrow.
 - Opening a note and leaving it no longer rewrites the row: `EditorViewModel.saveNow` skips the
   write when nothing differs, so "last edited" and the shelf order only change on real edits.
 
@@ -28,7 +33,8 @@ adb -s b86e61d8 shell am instrument -w -r com.example.fucknotes.test/androidx.te
 ```
 
 - 17 JVM tests passed (14 existing plus `EditorChromeTest`: cycle order, reachability, labels).
-- 11 instrumented tests passed on the physical tablet, including the new
+- 12 instrumented tests passed on the physical tablet, including the new
+  `FingerInputTest.readingModeLetsFingersScrollWithPenOnlyAndZoomLockOn`,
   `EditorChromeTest.lockCyclesControlsPenBarAndReadingWithPageCounterAlwaysPresent` (each state
   shows exactly its controls; the arrow past the last page adds a sheet) and the locked-surface
   test that the previous pass had not yet run on the device.

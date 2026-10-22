@@ -22,6 +22,10 @@ Xiaomi tablet attached over USB; earlier passes were done on Windows.
 - Settings is grouped into titled cards with a 760 dp max width.
 - Home: the grid/list leaves room under the last row for the corner FAB; the rail's bottom rows sit
   on a wash so "Light mode" is legible over the artwork; "Images on this page" has an icon.
+- `InkSurface(reading = true)` (set by `InkEditor` in `READING`) makes one finger pan regardless
+  of the finger-mode preference, lets a locked pinch move but not rescale, and blocks the double-tap
+  tool swap. Without this, "Pen only" plus the zoom lock left reading mode unable to scroll.
+- The New notebook dialog has only the title; the "Empty pages at start" box was removed.
 - `EditorViewModel.saveNow` only writes when the note row would actually change, so viewing a
   note no longer bumps `updatedAt` and reorders the shelf.
 
