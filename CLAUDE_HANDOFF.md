@@ -78,7 +78,8 @@ and export, first-page previews, dark reader, folder hierarchy, home export.
   this ROM. The shelf fix was `CompositingStrategy.Offscreen` on `Modifier.reorderItem` and the
   rail (`HomeRail`). Do not put Offscreen on the ink surface: its content changes every pan frame.
 - Night ink: `Brush.forNight(tool)` (DarkReader.kt) builds the wet brush and records the daylight
-  brush in a weak map; `Stroke.daylight()` swaps it back. `InkSurface` builds brushes in the real
+  brush in a bounded strong map (never weak — brushes compare by value and a weak key equal to a
+  live brush can be collected mid-stroke); `Stroke.daylight()` swaps it back. `InkSurface` builds brushes in the real
   colour, turns them to night for `InProgressStrokes`, and wraps `onStrokesFinished` so committed
   strokes are daylight. Never store a stroke straight from the wet layer while dark mode is on.
 - Dark mode for pages: `ui/editor/ink/DarkReader.kt` holds `NightPalette` (paper, rule,

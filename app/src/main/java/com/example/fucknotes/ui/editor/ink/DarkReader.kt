@@ -93,8 +93,20 @@ internal fun darkReaderArgb(argb: Int, tool: InkTool = InkTool.PEN): Int {
  * made from, and a finished stroke is handed back in that brush before it reaches the note —
  * otherwise the saved colour was already inverted, the dry layer inverted it again, and the
  * stroke changed shade the moment the pen lifted.
+ *
+ * This map holds its keys strongly, on purpose. It was a weak map once, and brushes compare by
+ * value: the second stroke with the same pen made a brush equal to the first, the map kept the
+ * *first* brush object as the key, that object had nothing left holding it, and the collector
+ * dropped the entry while the second stroke was still being written. The lookup then missed,
+ * the night colour was stored, and the stroke changed shade on pen lift — now and then, whenever
+ * a collection fell in between. A night-to-day mapping is a pure function of the pen, so a small
+ * bounded cache keyed by value is both correct and enough.
  */
-private val daylightBrushes: MutableMap<Brush, Brush> = Collections.synchronizedMap(WeakHashMap())
+private val daylightBrushes: MutableMap<Brush, Brush> = Collections.synchronizedMap(
+    object : LinkedHashMap<Brush, Brush>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Brush, Brush>?): Boolean = size > 512
+    }
+)
 
 /** This brush in night colour, remembering [this] as the colour to store. */
 internal fun Brush.forNight(tool: InkTool): Brush {

@@ -47,9 +47,23 @@ object InkCodec {
     private val encodedCache: MutableMap<Stroke, String> =
         Collections.synchronizedMap(WeakHashMap())
 
-    private val brushTools: MutableMap<Brush, InkTool> = Collections.synchronizedMap(WeakHashMap())
+    /**
+     * Which tool a brush was made for. Strong and bounded rather than weak: brushes compare by
+     * value, and a weak map keyed by an older equal brush could lose the entry under the feet of a
+     * stroke still being drawn. The brush family answers on its own when the map does not.
+     */
+    private val brushTools: MutableMap<Brush, InkTool> = Collections.synchronizedMap(
+        object : LinkedHashMap<Brush, InkTool>(64, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Brush, InkTool>?): Boolean = size > 512
+        }
+    )
 
-    fun toolForStroke(stroke: Stroke, fallback: InkTool): InkTool = brushTools[stroke.brush] ?: fallback
+    fun toolForStroke(stroke: Stroke, fallback: InkTool): InkTool =
+        brushTools[stroke.brush] ?: toolForFamily(stroke.brush.family) ?: fallback
+
+    /** The brush tool whose family this is, by value; null for a family this app never makes. */
+    fun toolForFamily(family: BrushFamily): InkTool? =
+        InkTool.entries.firstOrNull { it.isBrush && familyForTool(it) == family }
 
     @Serializable
     private data class Page(
@@ -133,18 +147,25 @@ object InkCodec {
 
     private const val HIGHLIGHTER_ALPHA = 64
 
+    // One instance per family, so lookups by family work by identity as well as by value.
     @OptIn(ExperimentalInkCustomBrushApi::class)
+    private val penFamily: BrushFamily by lazy { StockBrushes.pressurePen().copy(inputModel = BrushFamily.SPRING_MODEL) }
+    private val markerFamily: BrushFamily by lazy { StockBrushes.marker() }
+    private val highlighterFamily: BrushFamily by lazy { StockBrushes.highlighter() }
+    private val dashedFamily: BrushFamily by lazy { StockBrushes.dashedLine() }
+    private val plainPenFamily: BrushFamily by lazy { StockBrushes.pressurePen() }
+
     private fun familyForTool(tool: InkTool): BrushFamily = when (tool) {
         // The stock pressure pen uses the raw input model.  On a large, high-density tablet that
         // can make tiny digitiser samples visible as a wobble, especially at slow handwriting
         // speed.  Reusing its coat with Ink's spring input model keeps pressure and tilt behaviour
         // while smoothing the path before it is tessellated.  The same family is used on decode so
         // saved strokes retain the exact rendering behaviour of newly written strokes.
-        InkTool.PEN -> StockBrushes.pressurePen().copy(inputModel = BrushFamily.SPRING_MODEL)
-        InkTool.MARKER -> StockBrushes.marker()
-        InkTool.HIGHLIGHTER -> StockBrushes.highlighter()
-        InkTool.DASHED -> StockBrushes.dashedLine()
+        InkTool.PEN -> penFamily
+        InkTool.MARKER -> markerFamily
+        InkTool.HIGHLIGHTER -> highlighterFamily
+        InkTool.DASHED -> dashedFamily
         // Not brush tools; fall back to the pen so callers never get a null family.
-        InkTool.ERASER, InkTool.PAN, InkTool.LASSO -> StockBrushes.pressurePen()
+        InkTool.ERASER, InkTool.PAN, InkTool.LASSO -> plainPenFamily
     }
 }

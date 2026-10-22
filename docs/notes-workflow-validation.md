@@ -3,7 +3,19 @@
 Validated on the connected Xiaomi 2410CRP4CI (Android 16) on 2026-10-22. The checks below
 distinguish automated coverage, interactive checks and remaining scenarios.
 
-## Latest pass (Select tool: circle and move) — 2026-10-23, macOS — code only
+## Latest pass (pen colour still changing on lift, now and then) — 2026-10-23, macOS — code only
+
+Cause: the night-brush → daylight-brush map was a `WeakHashMap`, and brushes compare by value.
+The second stroke with the same pen made an equal brush; the map kept the *first* brush object
+as the key; nothing held that object any more; the collector dropped the entry while the second
+stroke was still being written; the lookup missed; the night colour was stored and the dry
+layer inverted it again. Whether it happened depended on when a collection fell — hence
+"sometimes". Fix: both brush maps (`daylightBrushes` in DarkReader.kt, `brushTools` in
+InkCodec.kt) are bounded, strongly-keyed LRU caches, and the tool is also recoverable from the
+brush family. Device test added to `NightInkTest` (forces collections between two equal night
+brushes). Not run: tablet detached.
+
+## Previous pass (Select tool: circle and move) — 2026-10-23, macOS — code only
 
 - New **Select** tool in the pen bar (dashed-box icon, next to the eraser). Draw a loop around
   strokes; the ones with at least half their points inside are selected and boxed. Drag from

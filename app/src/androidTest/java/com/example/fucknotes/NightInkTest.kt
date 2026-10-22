@@ -62,6 +62,24 @@ class NightInkTest {
         assertTrue(plain.daylight() === plain)
     }
 
+    @Test fun anEqualNightBrushStillComesHomeAfterTheFirstOneIsCollected() {
+        val blue = 0xFF2386DC.toInt()
+        val inputs = MutableStrokeInputBatch()
+        repeat(4) { inputs.add(InputToolType.STYLUS, 10f + it * 8f, 20f, it * 16L) }
+        // First stroke: made, finished, and every reference to its night brush dropped.
+        run {
+            val first = InkCodec.brushFor(InkTool.PEN, blue, 3f, 1f).forNight(InkTool.PEN)
+            assertEquals(blue, Stroke(first, inputs).daylight().brush.colorIntArgb)
+        }
+        // Give the collector every chance to take it before the second, equal, brush is used.
+        repeat(3) { System.gc(); Runtime.getRuntime().runFinalization(); Thread.sleep(50) }
+        val second = InkCodec.brushFor(InkTool.PEN, blue, 3f, 1f).forNight(InkTool.PEN)
+        repeat(3) { System.gc(); Thread.sleep(50) }
+        val stored = Stroke(second, inputs).daylight()
+        assertEquals("the second stroke is stored in the chosen colour too", blue, stored.brush.colorIntArgb)
+        assertEquals(InkTool.PEN, InkCodec.toolForStroke(stored, InkTool.MARKER))
+    }
+
     @Test fun strokeWrittenInDarkModeIsCommittedInTheChosenColour() {
         val camera = InkCamera(1f)
         val chosen = 0xFF171B23.toInt()
