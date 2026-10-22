@@ -379,6 +379,11 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
         viewModelScope.launch { settings.setFingerInputMode(mode) }
     }
 
+    /** Night colours for every page, image and stroke; app-wide, like the lock. */
+    fun toggleDarkReader() {
+        viewModelScope.launch { settings.setDarkReader(!_state.value.darkReader) }
+    }
+
     /** Pins or releases the page scale for every ink note. */
     fun toggleZoomLock() {
         viewModelScope.launch { settings.setZoomLocked(!_state.value.zoomLocked) }

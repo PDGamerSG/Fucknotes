@@ -240,6 +240,7 @@ fun InkEditor(
                 onPlay = onPlayAttachment,
                 onRemove = onRemoveAttachment,
                 modifier = Modifier.padding(start = 96.dp, end = 96.dp, bottom = 64.dp),
+                darkReader = state.darkReader,
             )
         }
     }

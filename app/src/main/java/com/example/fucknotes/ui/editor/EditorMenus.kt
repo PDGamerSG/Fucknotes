@@ -9,6 +9,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.DarkMode
+import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.FormatPaint
 import androidx.compose.material.icons.outlined.Palette
@@ -22,6 +24,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -50,8 +53,19 @@ fun EditorOverflowMenu(
     onShareText: () -> Unit,
     onDuplicate: () -> Unit,
     onDelete: () -> Unit,
+    darkReader: Boolean = false,
+    onToggleDarkReader: () -> Unit = {},
 ) {
     DropdownMenu(expanded, onDismissRequest = onDismiss) {
+        // Night colours for every page, image and stroke; the same switch as in Settings, here
+        // because it is reached for at night, in the middle of reading.
+        DropdownMenuItem(
+            text = { Text("Dark mode") },
+            leadingIcon = { Icon(if (darkReader) Icons.Outlined.LightMode else Icons.Outlined.DarkMode, null) },
+            trailingIcon = { Switch(checked = darkReader, onCheckedChange = { onToggleDarkReader() }) },
+            onClick = onToggleDarkReader,
+        )
+        HorizontalDivider()
         DropdownMenuItem(
             text = { Text("Paper") },
             leadingIcon = { Icon(Icons.Outlined.FormatPaint, null) },

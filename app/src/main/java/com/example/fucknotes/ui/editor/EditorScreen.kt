@@ -420,6 +420,7 @@ fun EditorScreen(
 
     if (showPages) {
         PagesSheet(
+            darkReader = state.darkReader,
             pageCount = viewModel.pageCount,
             currentPage = camera.pageAtCentre(state.page)
                 .coerceIn(0, (viewModel.pageCount - 1).coerceAtLeast(0)),
@@ -535,5 +536,7 @@ private fun EditorMenu(
         },
         onDuplicate = { onDismiss(); viewModel.duplicate(onOpenNote) },
         onDelete = { onDismiss(); onDelete() },
+        darkReader = state.darkReader,
+        onToggleDarkReader = { onDismiss(); viewModel.toggleDarkReader() },
     )
 }

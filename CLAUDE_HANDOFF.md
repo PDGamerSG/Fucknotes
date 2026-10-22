@@ -70,6 +70,13 @@ and export, first-page previews, dark reader, folder hierarchy, home export.
   `lockLabel` used as the lock button's content description (tests key off these strings).
 - `ui/editor/EditorScreen.kt`: owns `chrome` (`rememberSaveable` per note). Tab strip and the typed
   note's top bar show only in `FULL`. A typed note's lock is a plain `FULL ↔ COMPACT` toggle.
+- Dark mode for pages: `ui/editor/ink/DarkReader.kt` holds `NightPalette` (paper, rule,
+  `imageMatrix` for bitmaps, `applyImageMatrix` for JVM tests), `darkReaderArgb(argb, tool)`
+  (HSL lightness inversion, hue kept, highlighter exception) and `InkStroke.forDarkReader()`
+  (cached night `Stroke` per stroke). Toggle lives in the editor ⋯ menu (`EditorOverflowMenu`
+  `darkReader`/`onToggleDarkReader` → `EditorViewModel.toggleDarkReader`) and in Settings; both
+  write the one `darkReader` preference. Consumers: `InkSurface`, `PageImages`, `PagesSheet`,
+  `AttachmentStrip`, `NoteTile`/`NoteRow`, `TypedEditor`, and the theme (dark while on).
 - Back: `EditorScreen`'s `BackHandler` calls `leaveNote()` only in `EditorChrome.FULL` and
   swallows back otherwise; `InkEditor` applies `systemGestureExclusion()` to the surface when the
   chrome is not `FULL` (no longer tied to the zoom lock).

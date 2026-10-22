@@ -45,6 +45,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -57,6 +59,7 @@ import com.example.fucknotes.media.AudioRecorder
 import com.example.fucknotes.ui.components.PaperBackground
 import com.example.fucknotes.ui.common.paperColorOr
 import com.example.fucknotes.ui.editor.ink.DefaultRuleColor
+import com.example.fucknotes.ui.editor.ink.NightPalette
 
 /**
  * A typed note: title, body or checklist, then whatever is attached to it.
@@ -80,7 +83,7 @@ fun TypedEditor(
         modifier
             .fillMaxSize()
             .background(
-                if (state.darkReader) Color(0xFF202632)
+                if (state.darkReader) NightPalette.paper
                 else state.colorArgb.paperColorOr(MaterialTheme.colorScheme.background),
             )
     ) {
@@ -98,7 +101,7 @@ fun TypedEditor(
             PaperBackground(
                 style = state.paperStyle,
                 spacing = state.ruleSpacingDp.dp,
-                lineColor = if (state.darkReader) Color(0xFF566172)
+                lineColor = if (state.darkReader) NightPalette.rule
                 else state.lineColorArgb.paperColorOr(DefaultRuleColor),
                 modifier = Modifier.fillMaxSize(),
             ) {
@@ -120,6 +123,7 @@ fun TypedEditor(
                             playingPath = playingPath,
                             onPlay = onPlay,
                             onRemove = viewModel::removeAttachment,
+                            darkReader = state.darkReader,
                         )
                         Spacer(Modifier.height(80.dp))
                     }
@@ -139,6 +143,7 @@ fun TypedEditor(
                 playingPath = playingPath,
                 onPlay = onPlay,
                 onRemove = viewModel::removeAttachment,
+                darkReader = state.darkReader,
             )
         }
         TagStrip(state = state, onAdd = onAddTag, onRemove = viewModel::removeTag)
@@ -207,6 +212,8 @@ internal fun AttachmentStrip(
     onPlay: (String) -> Unit,
     onRemove: (AttachmentEntity) -> Unit,
     modifier: Modifier = Modifier,
+    /** Night colours for the pictures, like every other page image. */
+    darkReader: Boolean = false,
 ) {
     if (attachments.isEmpty()) return
     LazyRow(
@@ -223,6 +230,7 @@ internal fun AttachmentStrip(
                         painter = rememberAsyncImagePainter(attachment.path),
                         contentDescription = "Attached image",
                         contentScale = ContentScale.Crop,
+                        colorFilter = if (darkReader) ColorFilter.colorMatrix(ColorMatrix(NightPalette.imageMatrix)) else null,
                         modifier = Modifier
                             .size(110.dp)
                             .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp)),

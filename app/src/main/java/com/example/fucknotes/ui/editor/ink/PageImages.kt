@@ -112,14 +112,7 @@ internal fun drawPageImage(
     canvas.save()
     if (notebook) canvas.clipRect(0f, top, page.widthDp, top + page.heightDp)
     val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-    if (darkReader) {
-        paint.colorFilter = ColorMatrixColorFilter(ColorMatrix(floatArrayOf(
-            -1f, 0f, 0f, 0f, 255f,
-            0f, -1f, 0f, 0f, 255f,
-            0f, 0f, -1f, 0f, 255f,
-            0f, 0f, 0f, 1f, 0f,
-        )))
-    }
+    if (darkReader) paint.colorFilter = ColorMatrixColorFilter(ColorMatrix(NightPalette.imageMatrix))
     canvas.drawBitmap(
         bitmap,
         null,

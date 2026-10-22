@@ -17,6 +17,15 @@ Changes:
   bar over the toolbar).
 - Settings is grouped into cards at a 760 dp maximum width. The home grid leaves room under the
   last row for the corner button; the rail's bottom rows sit on a wash so "Light mode" is legible.
+- Dark mode for pages: "Dark mode" with a switch at the top of a note's ⋯ menu (same setting as
+  Settings → "Dark mode for pages", app-wide, persistent). Night colours are hue-preserving:
+  lightness is inverted and capped at 88 %, saturation eased, so black ink reads off-white, blue
+  stays blue, red stays red, and highlighters keep their colour (lifted if dark) instead of
+  becoming smears. Paper is a dark slate (#181C24) with dimmed rules. Imported PDF and slide
+  pages, home and search/trash thumbnails, the pages sheet thumbnails and attached pictures all go
+  through the same colour matrix (invert + half-turn hue rotation, eased towards the slate). Night
+  strokes are built once per stroke and cached (the old inversion re-tessellated every stroke
+  every frame). Export and stored data are untouched.
 - Back from a note: the system back gesture and back button leave the note only while every
   control is out (full chrome). In pen-bar-only and reading modes the writing surface opts out of
   the system's edge gestures and the back handler swallows a back press, so an edge swipe or a

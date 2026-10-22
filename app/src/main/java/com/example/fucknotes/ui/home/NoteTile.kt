@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import com.example.fucknotes.data.db.NoteEntity
 import com.example.fucknotes.data.model.NoteType
 import com.example.fucknotes.ui.common.PaperPreview
+import com.example.fucknotes.ui.editor.ink.NightPalette
 import com.example.fucknotes.ui.components.relativeStamp
 import com.example.fucknotes.ui.theme.Radii
 import com.example.fucknotes.ui.theme.brand
@@ -157,9 +158,10 @@ fun NotePagePreview(
         PaperPreview(
             style = note.paperStyle,
             modifier = Modifier.fillMaxSize(),
-            paperColor = if (darkReader) Color(0xFF202632)
+            paperColor = if (darkReader) NightPalette.paper
             else if (note.colorArgb != 0) Color(note.colorArgb) else brand.tile,
-            lineColor = if (note.lineColorArgb != 0) Color(note.lineColorArgb) else brand.tileBorder,
+            lineColor = if (darkReader) NightPalette.rule
+            else if (note.lineColorArgb != 0) Color(note.lineColorArgb) else brand.tileBorder,
             spacingDp = note.lineSpacingDp.takeIf { it > 0 }?.toFloat() ?: 24f,
             zoom = 0.22f,
             corner = 12.dp,
@@ -170,14 +172,7 @@ fun NotePagePreview(
                 painter = rememberAsyncImagePainter(firstPageImagePath),
                 contentDescription = "First page preview",
                 contentScale = ContentScale.Crop,
-                colorFilter = if (darkReader) ColorFilter.colorMatrix(
-                    ColorMatrix(floatArrayOf(
-                        -1f, 0f, 0f, 0f, 255f,
-                        0f, -1f, 0f, 0f, 255f,
-                        0f, 0f, -1f, 0f, 255f,
-                        0f, 0f, 0f, 1f, 0f,
-                    ))
-                ) else null,
+                colorFilter = if (darkReader) ColorFilter.colorMatrix(ColorMatrix(NightPalette.imageMatrix)) else null,
                 modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp)),
             )
         } else if (preview.isNotBlank()) {

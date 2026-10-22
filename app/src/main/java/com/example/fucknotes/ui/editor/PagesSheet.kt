@@ -41,6 +41,8 @@ import com.example.fucknotes.ui.common.paperColorOr
 import com.example.fucknotes.ui.theme.brand
 import androidx.compose.runtime.remember
 import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
+import com.example.fucknotes.ui.editor.ink.NightPalette
+import com.example.fucknotes.ui.editor.ink.forDarkReader
 
 /**
  * Every page of the notebook, to jump between.
@@ -63,6 +65,8 @@ fun PagesSheet(
     attachments: List<com.example.fucknotes.data.db.AttachmentEntity>,
     onGoToPage: (Int) -> Unit,
     onDismiss: () -> Unit,
+    /** Thumbnails follow the page: night colours when dark mode is on. */
+    darkReader: Boolean = false,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         ImmersiveDialogWindow()
@@ -95,6 +99,7 @@ fun PagesSheet(
                         strokes = strokes,
                         attachments = attachments.filter { it.pageIndex == index },
                         onClick = { onGoToPage(index) },
+                        darkReader = darkReader,
                     )
                 }
             }
@@ -114,6 +119,7 @@ private fun PageThumb(
     strokes: List<InkStroke>,
     attachments: List<com.example.fucknotes.data.db.AttachmentEntity>,
     onClick: () -> Unit,
+    darkReader: Boolean = false,
 ) {
     val renderer = remember { CanvasStrokeRenderer.create() }
     val images = com.example.fucknotes.ui.editor.ink.rememberPageImages(attachments, 512)
@@ -135,8 +141,8 @@ private fun PageThumb(
             PaperPreview(
                 style = style,
                 modifier = Modifier.fillMaxSize(),
-                paperColor = paperColorArgb.paperColorOr(Color.White),
-                lineColor = lineColorArgb.paperColorOr(MaterialTheme.brand.tileBorder),
+                paperColor = if (darkReader) NightPalette.paper else paperColorArgb.paperColorOr(Color.White),
+                lineColor = if (darkReader) NightPalette.rule else lineColorArgb.paperColorOr(MaterialTheme.brand.tileBorder),
                 spacingDp = spacingDp,
                 zoom = 0.16f,
                 corner = 8.dp,
@@ -156,7 +162,7 @@ private fun PageThumb(
                     native.concat(transform)
                     attachments.forEach { image ->
                         images[image.id]?.let { bitmap ->
-                            com.example.fucknotes.ui.editor.ink.drawPageImage(native, image, bitmap, page)
+                            com.example.fucknotes.ui.editor.ink.drawPageImage(native, image, bitmap, page, darkReader = darkReader)
                         }
                     }
                     strokes.forEach { inkStroke ->
@@ -164,7 +170,7 @@ private fun PageThumb(
                         if (box.xMax >= 0f && box.xMin <= page.widthDp &&
                             box.yMax >= pageTop && box.yMin <= pageBottom
                         ) {
-                            runCatching { renderer.draw(native, inkStroke.stroke, transform) }
+                            runCatching { renderer.draw(native, if (darkReader) inkStroke.forDarkReader() else inkStroke.stroke, transform) }
                         }
                     }
                     native.restore()

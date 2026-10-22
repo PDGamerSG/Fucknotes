@@ -179,7 +179,7 @@ fun InkSurface(
     val brush = remember(tool, colorArgb, widthDp, camera.scale, darkReader) {
         if (tool.isBrush) InkCodec.brushFor(
             tool,
-            if (darkReader) darkReaderArgb(colorArgb) else colorArgb,
+            if (darkReader) darkReaderArgb(colorArgb, tool) else colorArgb,
             widthDp,
             camera.scale,
         ) else null
@@ -200,7 +200,7 @@ fun InkSurface(
         {
             InkCodec.brushFor(
                 tool = currentTool.takeIf { it.isBrush } ?: InkTool.PEN,
-                colorArgb = if (currentDarkReader) darkReaderArgb(currentColor) else currentColor,
+                colorArgb = if (currentDarkReader) darkReaderArgb(currentColor, currentTool) else currentColor,
                 widthDp = currentWidth,
                 worldToScreenScale = camera.scale,
             )
@@ -442,11 +442,9 @@ fun InkSurface(
 
         // Paper.
         val renderedPageColor = if (darkReader && pageColor != Color.Transparent) {
-            Color(0xFF202632)
+            NightPalette.paper
         } else pageColor
-        val renderedRuleColor = if (darkReader) {
-            ruleColor.copy(alpha = 0.62f)
-        } else ruleColor
+        val renderedRuleColor = if (darkReader) NightPalette.rule else ruleColor
 
         Canvas(Modifier.fillMaxSize()) {
             if (notebook) {
@@ -501,7 +499,7 @@ fun InkSurface(
                             if (isVisible(inkStroke.stroke, pageBounds)) {
                                 renderer.draw(
                                     native,
-                                    if (darkReader) inkStroke.stroke.forDarkReader() else inkStroke.stroke,
+                                    if (darkReader) inkStroke.forDarkReader() else inkStroke.stroke,
                                     matrix,
                                 )
                             }
@@ -516,7 +514,7 @@ fun InkSurface(
                     if (isVisible(inkStroke.stroke, viewport)) {
                         renderer.draw(
                             native,
-                            if (darkReader) inkStroke.stroke.forDarkReader() else inkStroke.stroke,
+                            if (darkReader) inkStroke.forDarkReader() else inkStroke.stroke,
                             matrix,
                         )
                     }
