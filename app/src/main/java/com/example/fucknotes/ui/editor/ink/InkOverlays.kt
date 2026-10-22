@@ -1,6 +1,9 @@
 package com.example.fucknotes.ui.editor.ink
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -14,11 +17,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.example.fucknotes.ui.common.FloatingPanel
-import com.example.fucknotes.ui.common.StatusChip
 import com.example.fucknotes.ui.common.ToolButton
 
 /**
@@ -26,6 +29,9 @@ import com.example.fucknotes.ui.common.ToolButton
  *
  * It doubles as the zoom lock, because "150%" and "keep it at 150%" are the same thought — and a
  * writing app is the one place where a scale that drifts under a resting palm is a real loss.
+ *
+ * Cut from the same floating material as the toolbars and the page counter, so it reads as part
+ * of the chrome rather than a stray grey pill; the lock tints to the accent while it is on.
  */
 @Composable
 fun ZoomChip(
@@ -34,19 +40,29 @@ fun ZoomChip(
     onToggleLock: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    StatusChip(
-        text = "${(zoom * 100).toInt()}%",
-        modifier = modifier,
-        onClick = onToggleLock,
-        trailing = {
+    val scheme = MaterialTheme.colorScheme
+    FloatingPanel(modifier, elevation = 6.dp) {
+        Row(
+            Modifier
+                .clickable(role = Role.Button, onClick = onToggleLock)
+                .semantics { contentDescription = if (locked) "Zoom ${(zoom * 100).toInt()}%, locked" else "Zoom ${(zoom * 100).toInt()}%, tap to lock" }
+                .padding(start = 14.dp, end = 10.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "${(zoom * 100).toInt()}%",
+                style = MaterialTheme.typography.labelLarge,
+                color = scheme.onSurface,
+            )
+            Spacer(Modifier.width(8.dp))
             Icon(
                 if (locked) Icons.Outlined.Lock else Icons.Outlined.LockOpen,
-                contentDescription = if (locked) "Zoom is locked" else "Lock the zoom",
-                modifier = Modifier.size(14.dp),
-                tint = MaterialTheme.colorScheme.surface,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = if (locked) scheme.primary else scheme.onSurfaceVariant,
             )
-        },
-    )
+        }
+    }
 }
 
 /**

@@ -5,6 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
@@ -52,7 +53,7 @@ class EditorChromeTest {
         // FULL: note bar, pen bar, zoom readout and page counter.
         compose.onNodeWithContentDescription("Back to notes").assertIsDisplayed()
         compose.onNodeWithContentDescription("Eraser").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Lock the zoom").assertIsDisplayed()
+        compose.onNode(hasContentDescription("Zoom", substring = true)).assertIsDisplayed()
         compose.onNodeWithContentDescription("Page 1 of 3").assertIsDisplayed()
 
         // One tap: only the pen bar remains, plus the counter and the zoom readout.
@@ -67,7 +68,7 @@ class EditorChromeTest {
         compose.runOnIdle { assertEquals(EditorChrome.READING, chrome) }
         compose.onNodeWithContentDescription("Eraser").assertDoesNotExist()
         compose.onNodeWithContentDescription("Back to notes").assertDoesNotExist()
-        compose.onNodeWithContentDescription("Lock the zoom").assertDoesNotExist()
+        compose.onNode(hasContentDescription("Zoom", substring = true)).assertDoesNotExist()
         compose.onNodeWithContentDescription("Page 1 of 3").assertIsDisplayed()
         compose.onNodeWithContentDescription("Next page").assertIsDisplayed()
 
