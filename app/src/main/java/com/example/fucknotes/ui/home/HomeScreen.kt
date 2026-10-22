@@ -3,7 +3,6 @@ package com.example.fucknotes.ui.home
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
@@ -32,6 +31,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.fucknotes.data.backup.BackupManager
@@ -301,9 +301,11 @@ private fun HomeSheet(
 ) {
     var cornerCreateMenu by remember { mutableStateOf(false) }
 
+    // The activity's Surface already paints the sheet colour; painting it twice more here was
+    // two extra full-screen fills per frame on a 3200 px panel.
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
-        containerColor = MaterialTheme.brand.sheet,
+        containerColor = Color.Transparent,
         topBar = {
             if (state.inSelectionMode) {
                 SelectionBar(
@@ -340,8 +342,7 @@ private fun HomeSheet(
         Box(
             Modifier
                 .padding(padding)
-                .fillMaxSize()
-                .background(MaterialTheme.brand.sheet),
+                .fillMaxSize(),
         ) {
             HomeShelf(
                 state = state,

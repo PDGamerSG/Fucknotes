@@ -38,6 +38,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Brush as PaintBrush
 import androidx.compose.ui.unit.dp
@@ -79,6 +81,9 @@ fun HomeRail(
         modifier
             .width(RailWidth)
             .fillMaxHeight()
+            // Composited once: the gradient and the artwork's paths were re-triangulated and
+            // re-drawn on every shelf frame otherwise. A ripple or a count change re-renders it.
+            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
             .background(PaintBrush.verticalGradient(listOf(brand.railTop, brand.railBottom)))
     ) {
         // The horizon sits behind the rows and gives the list a bottom, so a short folder list does

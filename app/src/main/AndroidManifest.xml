@@ -25,6 +25,10 @@
         android:theme="@style/Theme.Fucknotes"
         tools:targetApi="31">
 
+        <!-- Lets shell tools (Perfetto, simpleperf) profile the release build without making it
+             debuggable; this is how the frame-time work on the tablet was measured. -->
+        <profileable android:shell="true" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"

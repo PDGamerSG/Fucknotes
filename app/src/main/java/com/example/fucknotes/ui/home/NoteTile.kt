@@ -30,7 +30,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
@@ -48,6 +47,9 @@ import com.example.fucknotes.ui.components.relativeStamp
 import com.example.fucknotes.ui.theme.Radii
 import com.example.fucknotes.ui.theme.brand
 import coil.compose.rememberAsyncImagePainter
+import coil.request.ImageRequest
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 
 /**
  * A note as it appears on the shelf: the page itself, then its name underneath.
@@ -77,11 +79,12 @@ fun NoteTile(
             .then(interaction)
             .padding(8.dp),
     ) {
+        // No elevation shadow: HWUI re-tessellates a spot shadow on every frame a node moves, and
+        // a scrolling shelf moves every tile. The paper's own hairline carries the edge.
         Box(
             Modifier
                 .fillMaxWidth()
                 .aspectRatio(0.74f)
-                .shadow(6.dp, RoundedCornerShape(12.dp), ambientColor = Color(0x10000000), spotColor = Color(0x22000000))
         ) {
             NotePagePreview(
                 note = note,
@@ -152,6 +155,8 @@ fun NotePagePreview(
     firstPageImagePath: String? = null,
     darkReader: Boolean = false,
     modifier: Modifier = Modifier,
+    /** Longest edge the cover image is decoded at, in pixels. */
+    thumbnailPx: Int = 512,
 ) {
     val brand = MaterialTheme.brand
     Box(modifier) {
@@ -168,8 +173,15 @@ fun NotePagePreview(
         )
 
         if (!firstPageImagePath.isNullOrBlank()) {
+            // Decoded at thumbnail size: a PDF page is stored at up to 3072 px, and drawing that
+            // scaled into a 160 dp tile cost a full-resolution texture per note.
+            val context = LocalContext.current
             Image(
-                painter = rememberAsyncImagePainter(firstPageImagePath),
+                painter = rememberAsyncImagePainter(
+                    remember(firstPageImagePath, thumbnailPx) {
+                        ImageRequest.Builder(context).data(firstPageImagePath).size(thumbnailPx).build()
+                    },
+                ),
                 contentDescription = "First page preview",
                 contentScale = ContentScale.Crop,
                 colorFilter = if (darkReader) ColorFilter.colorMatrix(ColorMatrix(NightPalette.imageMatrix)) else null,

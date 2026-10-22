@@ -12,6 +12,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -152,14 +153,17 @@ class NoteReorderState(
 }
 
 /**
- * Draws a shelf item in its own layer and, while it is being dragged, under the finger.
+ * Draws a shelf item into its own offscreen layer and, while it is being dragged, under the finger.
  *
- * The layer is deliberate even when nothing is dragged: a scrolling shelf then moves rendered
- * tiles instead of repainting every page thumbnail each frame.
+ * The layer is the point, not a side effect. A tile's content never changes while the shelf
+ * scrolls, only its position, yet without a layer the renderer re-recorded and re-drew every
+ * tile — paper, cover image, clips, text — on every frame, which on a 3200 px panel cost more
+ * than the whole frame budget. Composited once, a tile is then one textured quad per frame.
  */
 fun Modifier.reorderItem(state: NoteReorderState, id: Long): Modifier = this
     .zIndex(if (state.draggingId == id) 1f else 0f)
     .graphicsLayer {
+        compositingStrategy = CompositingStrategy.Offscreen
         val shift = state.translationFor(id)
         translationX = shift.x
         translationY = shift.y

@@ -313,11 +313,14 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun toggleTheme() = viewModelScope.launch {
-        val theme = state.value.settings.themeMode
+        val settings = state.value.settings
+        val theme = settings.themeMode
         val systemDark = (getApplication<Application>().resources.configuration.uiMode and
             android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
         val dark = theme == com.example.fucknotes.data.model.ThemeMode.DARK ||
-            (theme == com.example.fucknotes.data.model.ThemeMode.SYSTEM && systemDark)
+            (theme == com.example.fucknotes.data.model.ThemeMode.SYSTEM && systemDark) || settings.darkReader
+        // Night colours for pages keep the whole app dark; "Light mode" means out of both.
+        if (dark && settings.darkReader) settingsRepo.setDarkReader(false)
         settingsRepo.setThemeMode(if (dark) com.example.fucknotes.data.model.ThemeMode.LIGHT else com.example.fucknotes.data.model.ThemeMode.DARK)
     }
 

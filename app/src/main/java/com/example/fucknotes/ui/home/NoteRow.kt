@@ -69,6 +69,7 @@ fun NoteRow(
             preview = "",
             firstPageImagePath = firstPageImagePath,
             darkReader = darkReader,
+            thumbnailPx = 160,
             modifier = Modifier
                 .width(44.dp)
                 .height(58.dp),

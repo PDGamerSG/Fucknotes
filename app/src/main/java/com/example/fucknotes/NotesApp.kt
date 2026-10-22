@@ -7,6 +7,9 @@ import com.example.fucknotes.data.db.AppDatabase
 import com.example.fucknotes.data.repo.NotesRepository
 import com.example.fucknotes.data.repo.SettingsRepository
 import com.example.fucknotes.ui.editor.tabs.OpenTabs
+import coil.ImageLoader
+import coil.ImageLoaderFactory
+import coil.memory.MemoryCache
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -39,9 +42,20 @@ object ServiceLocator {
     fun persistenceScope(): CoroutineScope = persistence
 }
 
-class NotesApp : Application() {
+class NotesApp : Application(), ImageLoaderFactory {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /**
+     * One loader for every cover and attachment thumbnail: a quarter of the heap as memory cache
+     * so a scrolled shelf never re-decodes, no crossfade so a tile lands painted, and no disk
+     * cache because every image is already a local file.
+     */
+    override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
+        .memoryCache { MemoryCache.Builder(this).maxSizePercent(0.25).build() }
+        .diskCache(null)
+        .crossfade(false)
+        .build()
 
     override fun onCreate() {
         super.onCreate()

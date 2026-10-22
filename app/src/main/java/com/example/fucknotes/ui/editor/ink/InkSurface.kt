@@ -17,6 +17,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PointMode
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 // Aliased: androidx.ink.strokes.Stroke is the ink stroke, this one is a paint style.
@@ -702,30 +704,27 @@ private fun DrawScope.drawPaperPattern(
     val firstX = startX + ceil(((left - startX) / step).coerceAtLeast(0f)) * step
     val firstY = startY + ceil(((top - startY) / step).coerceAtLeast(0f)) * step
 
+    // One draw call per pattern. A page at 195 % zoom holds ~400 dots; issuing each as its own
+    // circle was the single largest GPU cost of a pan.
     if (style == PaperStyle.LINED || style == PaperStyle.GRID) {
+        val points = ArrayList<Offset>()
         var y = firstY
-        while (y < bottom) {
-            drawLine(color, Offset(left, y), Offset(right, y), strokeWidth = 1.5f)
-            y += step
+        while (y < bottom) { points += Offset(left, y); points += Offset(right, y); y += step }
+        if (style == PaperStyle.GRID) {
+            var x = firstX
+            while (x < right) { points += Offset(x, top); points += Offset(x, bottom); x += step }
         }
-    }
-    if (style == PaperStyle.GRID) {
-        var x = firstX
-        while (x < right) {
-            drawLine(color, Offset(x, top), Offset(x, bottom), strokeWidth = 1.5f)
-            x += step
-        }
+        drawPoints(points, PointMode.Lines, color, strokeWidth = 1.5f)
     }
     if (style == PaperStyle.DOTTED) {
+        val points = ArrayList<Offset>()
         var y = firstY
         while (y < bottom) {
             var x = firstX
-            while (x < right) {
-                drawCircle(color, radius = 2.8f, center = Offset(x, y))
-                x += step
-            }
+            while (x < right) { points += Offset(x, y); x += step }
             y += step
         }
+        drawPoints(points, PointMode.Points, color, strokeWidth = 5.6f, cap = StrokeCap.Round)
     }
 }
 

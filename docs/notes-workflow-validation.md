@@ -17,6 +17,21 @@ Changes:
   bar over the toolbar).
 - Settings is grouped into cards at a 760 dp maximum width. The home grid leaves room under the
   last row for the corner button; the rail's bottom rows sit on a wash so "Light mode" is legible.
+- Performance, measured on the tablet with `dumpsys gfxinfo framestats` and a Perfetto trace of a
+  shelf scroll (release build, now `profileable` so shell tools can trace it). Before: shelf frames
+  20 ms median / 38 ms p99 — 0.2 ms on the UI thread, 11.6 ms on the RenderThread issuing GPU
+  work, 5.7 ms waiting on the GPU; every frame re-recorded and re-drew the whole 3200×2136 screen
+  although only positions change while scrolling. Fix: each tile and the rail are composited into
+  an offscreen layer (`CompositingStrategy.Offscreen`), so a scroll moves textured quads. After:
+  8 ms median / 23 ms p99, RenderThread 1.3 ms, GPU wait 2.6 ms. Also: paper patterns are one
+  `drawPoints` call instead of a circle per dot (tiles and the editor), cover thumbnails are
+  decoded at 512 px instead of full PDF resolution, one app-wide Coil loader with a quarter-heap
+  memory cache and no crossfade, tile elevation shadows removed (HWUI re-tessellates spot shadows
+  every frame a node moves), and two redundant full-screen sheet fills dropped. Editor scroll
+  stays at 11–13 ms median; its 95th-percentile spikes are page-image texture uploads. Language
+  is not the limit: the UI thread is idle; the cost was draw commands.
+- "Light mode" in the rail also switches night colours off, since night mode kept the whole app
+  dark and the toggle looked broken while it was on.
 - Dark mode for pages: "Dark mode" with a switch at the top of a note's ⋯ menu (same setting as
   Settings → "Dark mode for pages", app-wide, persistent). Night colours are hue-preserving:
   lightness is inverted and capped at 88 %, saturation eased, so black ink reads off-white, blue
@@ -85,7 +100,8 @@ Executed:
 adb -s b86e61d8 shell am instrument -w -r com.example.fucknotes.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
-- 28 JVM tests passed (14 existing, `EditorChromeTest`, `OpenTabsTest`, `NotePositionsTest`, `PptxDeckTest`).
+- 36 JVM tests passed (14 existing, `EditorChromeTest`, `OpenTabsTest`, `NotePositionsTest`, `PptxDeckTest`,
+  `DarkReaderTest`, `PaperPatternTest`).
 - 25 instrumented tests passed on the physical tablet, including `HoldToDragTest` (jittery,
   still and slowly drifting two-second holds lift and drop; a move after the tick lifts at once; a
   swipe before the tick scrolls; long press selects on release; a tap opens), `PptxImportTest` (a hand-built

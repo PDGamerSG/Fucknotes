@@ -70,6 +70,13 @@ and export, first-page previews, dark reader, folder hierarchy, home export.
   `lockLabel` used as the lock button's content description (tests key off these strings).
 - `ui/editor/EditorScreen.kt`: owns `chrome` (`rememberSaveable` per note). Tab strip and the typed
   note's top bar show only in `FULL`. A typed note's lock is a plain `FULL ↔ COMPACT` toggle.
+- Performance method: `adb shell dumpsys gfxinfo com.example.fucknotes framestats` after a
+  scripted scroll gives per-stage frame times (parse the CSV after `---PROFILEDATA---`;
+  `IssueDrawCommandsStart→SwapBuffers` is RenderThread, `SwapBuffers→FrameCompleted` is GPU
+  wait). `perfetto --txt -c` with `gfx view hwui` categories plus
+  `setprop debug.hwui.skia_atrace_enabled true` shows Skia op counts; `simpleperf` is blocked on
+  this ROM. The shelf fix was `CompositingStrategy.Offscreen` on `Modifier.reorderItem` and the
+  rail (`HomeRail`). Do not put Offscreen on the ink surface: its content changes every pan frame.
 - Dark mode for pages: `ui/editor/ink/DarkReader.kt` holds `NightPalette` (paper, rule,
   `imageMatrix` for bitmaps, `applyImageMatrix` for JVM tests), `darkReaderArgb(argb, tool)`
   (HSL lightness inversion, hue kept, highlighter exception) and `InkStroke.forDarkReader()`
