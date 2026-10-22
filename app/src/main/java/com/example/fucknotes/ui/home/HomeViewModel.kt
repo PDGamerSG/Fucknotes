@@ -20,6 +20,7 @@ import com.example.fucknotes.export.ExportFormat
 import com.example.fucknotes.export.NoteExporter
 import com.example.fucknotes.media.MediaStore
 import com.example.fucknotes.reminder.ReminderScheduler
+import com.example.fucknotes.ui.editor.tabs.OpenTabs
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -280,6 +281,8 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     fun trashSelected() = withSelection { ids ->
         ids.forEach { ReminderScheduler.cancel(getApplication<Application>(), it) }
         repo.trash(ids)
+        // A trashed note cannot stay open in the editor's tab bar.
+        ids.forEach(OpenTabs::forget)
     }
 
     fun archiveSelected(archived: Boolean) = withSelection { repo.setArchived(it, archived) }
@@ -295,6 +298,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         if (ids.size < 2) return
         viewModelScope.launch {
             repo.merge(ids)?.let(onMerged)
+            ids.forEach(OpenTabs::forget)
             selection.value = emptySet()
         }
     }

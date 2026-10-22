@@ -660,14 +660,20 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
         onDone()
     }
 
-    /** Drops an untouched note so backing out of "new note" does not litter the list. */
-    suspend fun discardIfEmpty() {
+    /**
+     * Drops an untouched note so backing out of "new note" does not litter the list.
+     *
+     * Reports whether the note was removed, so the caller can take its tab down with it.
+     */
+    suspend fun discardIfEmpty(): Boolean {
         saveNow()
         val s = _state.value
         val empty = s.title.isBlank() && s.body.isBlank() &&
             s.checklist.none { it.text.isNotBlank() } &&
             strokes.isEmpty() && s.attachments.isEmpty()
-        if (s.loaded && empty && !pagesExplicitlyCreated) repo.deleteForever(listOf(noteId))
+        val discard = s.loaded && empty && !pagesExplicitlyCreated
+        if (discard) repo.deleteForever(listOf(noteId))
+        return discard
     }
 
     fun consumeMessage() {

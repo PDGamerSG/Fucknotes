@@ -61,6 +61,7 @@ class SettingsRepository(private val context: Context) {
         val penPrimaryAction = stringPreferencesKey("pen_primary_action")
         val penSecondaryAction = stringPreferencesKey("pen_secondary_action")
         val penTertiaryAction = stringPreferencesKey("pen_tertiary_action")
+        val openTabs = stringPreferencesKey("open_tabs")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -106,6 +107,16 @@ class SettingsRepository(private val context: Context) {
     )
 
     val settings: Flow<Settings> = context.dataStore.data.map { it.toSettings() }
+
+    /**
+     * The editor's open tabs, oldest first, kept apart from [Settings] so a tab change does not
+     * re-emit every screen that only watches the theme.
+     */
+    val openTabIds: Flow<List<Long>> = context.dataStore.data.map { prefs ->
+        prefs[Keys.openTabs].orEmpty().split(',').mapNotNull { it.trim().toLongOrNull() }
+    }
+
+    suspend fun setOpenTabIds(ids: List<Long>) = edit { it[Keys.openTabs] = ids.joinToString(",") }
 
     private fun Preferences.toSettings() = Settings(
         themeMode = enumOr(this[Keys.themeMode], ThemeMode.SYSTEM),

@@ -156,10 +156,11 @@ fun EditorScreen(
         OpenTabs.open(state.noteId, state.title.ifBlank { "Untitled" })
     }
 
+    // Going back to the shelf keeps the tab: a note stays open until its cross is tapped. Only a
+    // note that was never written in — and is therefore deleted on the way out — loses its tab.
     val leaveNote: () -> Unit = {
         scope.launch {
-            viewModel.discardIfEmpty()
-            OpenTabs.forget(state.noteId)
+            if (viewModel.discardIfEmpty()) OpenTabs.forget(state.noteId)
             onBack()
         }
     }
@@ -173,7 +174,7 @@ fun EditorScreen(
         val next = OpenTabs.close(id)
         when {
             id != state.noteId -> Unit
-            next == null -> leaveNote()
+            next == null -> scope.launch { viewModel.discardIfEmpty(); onBack() }
             else -> { scope.launch { viewModel.saveNow(); onOpenNote(next) } }
         }
     }
@@ -189,6 +190,7 @@ fun EditorScreen(
                     activeNoteId = state.noteId,
                     onSelect = { id -> if (id != state.noteId) scope.launch { viewModel.saveNow(); onOpenNote(id) } },
                     onClose = closeTab,
+                    onOpenAnother = leaveNote,
                 )
                 // A typed note keeps an ordinary bar; an ink note's controls float over its page.
                 if (!isInkNote && !compact) {

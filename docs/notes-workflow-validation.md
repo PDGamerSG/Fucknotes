@@ -17,6 +17,12 @@ Changes:
   bar over the toolbar).
 - Settings is grouped into cards at a 760 dp maximum width. The home grid leaves room under the
   last row for the corner button; the rail's bottom rows sit on a wash so "Light mode" is legible.
+- A tab bar along the top of the editor (full-controls state) lists every open note, like a
+  browser: the active tab is highlighted, each tab has a close cross, a plus returns to the shelf
+  to open another note, and a chevron lists all tabs when more than one is open. Going back to the
+  shelf no longer closes the tab; only its cross (or trashing / deleting the note, or backing out
+  of a never-written note) does. Open tabs are saved in settings and restored after a restart,
+  skipping notes that were trashed meanwhile. Up to 12 tabs are kept.
 - Reading mode scrolls with a finger whatever the finger-mode preference or zoom lock says: one
   finger pans, a pinch moves but cannot change the scale while locked, a double tap never swaps
   tools, and a finger never draws. The stylus still writes.
@@ -32,8 +38,9 @@ Executed:
 adb -s b86e61d8 shell am instrument -w -r com.example.fucknotes.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
-- 17 JVM tests passed (14 existing plus `EditorChromeTest`: cycle order, reachability, labels).
-- 12 instrumented tests passed on the physical tablet, including the new
+- 23 JVM tests passed (14 existing, `EditorChromeTest`, and `OpenTabsTest`: order, rename, close
+  successor, forget, limit).
+- 13 instrumented tests passed on the physical tablet, including the new `EditorTabBarTest`,
   `FingerInputTest.readingModeLetsFingersScrollWithPenOnlyAndZoomLockOn`,
   `EditorChromeTest.lockCyclesControlsPenBarAndReadingWithPageCounterAlwaysPresent` (each state
   shows exactly its controls; the arrow past the last page adds a sheet) and the locked-surface

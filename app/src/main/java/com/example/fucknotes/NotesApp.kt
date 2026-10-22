@@ -6,6 +6,7 @@ import com.example.fucknotes.data.backup.BackupManager
 import com.example.fucknotes.data.db.AppDatabase
 import com.example.fucknotes.data.repo.NotesRepository
 import com.example.fucknotes.data.repo.SettingsRepository
+import com.example.fucknotes.ui.editor.tabs.OpenTabs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -48,5 +49,7 @@ class NotesApp : Application() {
             // Trash keeps notes for 30 days, then drops them for good.
             ServiceLocator.notes(this@NotesApp).purgeOldTrash()
         }
+        // The tab bar outlives any screen: restore it, then keep it saved.
+        OpenTabs.bind(ServiceLocator.notes(this), ServiceLocator.settings(this), scope)
     }
 }

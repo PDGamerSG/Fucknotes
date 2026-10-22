@@ -36,6 +36,7 @@ import com.example.fucknotes.data.db.NoteEntity
 import com.example.fucknotes.ui.components.ConfirmDialog
 import com.example.fucknotes.ui.components.EmptyState
 import com.example.fucknotes.ui.components.NoteCard
+import com.example.fucknotes.ui.editor.tabs.OpenTabs
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -50,9 +51,16 @@ class TrashViewModel(app: Application) : AndroidViewModel(app) {
 
     fun restore(id: Long) = viewModelScope.launch { repo.restore(listOf(id)) }
 
-    fun deleteForever(id: Long) = viewModelScope.launch { repo.deleteForever(listOf(id)) }
+    fun deleteForever(id: Long) = viewModelScope.launch {
+        repo.deleteForever(listOf(id))
+        OpenTabs.forget(id)
+    }
 
-    fun emptyTrash() = viewModelScope.launch { repo.emptyTrash() }
+    fun emptyTrash() = viewModelScope.launch {
+        val ids = notes.value.map { it.id }
+        repo.emptyTrash()
+        ids.forEach(OpenTabs::forget)
+    }
 
     fun previewOf(note: NoteEntity): String = repo.plainTextOf(note).take(240)
 }
