@@ -3,7 +3,19 @@
 Validated on the connected Xiaomi 2410CRP4CI (Android 16) on 2026-10-22. The checks below
 distinguish automated coverage, interactive checks and remaining scenarios.
 
-## Latest pass (Google Drive sync, editable PDFs) — 2026-10-22, macOS — code only
+## Latest pass (wet ink after switching from the eraser) — 2026-10-22, macOS
+
+Reported: after switching from the eraser to a pen, the first strokes sometimes showed nothing
+while writing and appeared only later. Cause: the wet-ink component was composed only while a
+brush tool was selected, so picking the eraser (or the hand) tore down its low-latency front-
+buffer surface, and the next pen stroke had to wait for a new one; until the stroke was committed
+to the dry layer, it drew nowhere. Fix: the component stays composed for as long as the page
+takes ink; the eraser and pan branches already consume their touches in the Initial pass, so
+the wet layer never sees them. Regression test `WetLayerSurvivesToolSwitchTest` checks the same
+`InProgressStrokesView` instance serves pen → eraser → hand → pen. Built (unit tests pass);
+the device test has not run yet because the tablet was detached at the time.
+
+## Previous pass (Google Drive sync, editable PDFs) — 2026-10-22, macOS — code only
 
 Written without the tablet, at the owner's request. See `docs/drive-sync.md`.
 

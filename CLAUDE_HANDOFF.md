@@ -111,6 +111,9 @@ and export, first-page previews, dark reader, folder hierarchy, home export.
   into that app's info page. Android drops a stale default by itself when the candidate set
   changes, which is what happened on the tablet (Xodo held PDF and .ppt). `DocumentIntentTest`
   queries the resolver on device for every shape.
+- Wet ink: `InProgressStrokes` in `InkSurface` must stay composed whenever `enabled`, whatever
+  the tool. Removing it for the eraser/hand and recomposing it for a pen rebuilds the
+  front-buffer surface and the first strokes after the switch are invisible until committed.
 - Google Drive sync and editable PDFs: see `docs/drive-sync.md` for the design, the file map, the
   one-time Google Cloud setup (Android OAuth client with the debug key's SHA-1), and the first-run
   checklist. Written 2026-10-22, compiled and unit-tested, **not yet run against a Google

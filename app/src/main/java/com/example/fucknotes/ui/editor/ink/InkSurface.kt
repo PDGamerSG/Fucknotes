@@ -12,6 +12,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.ink.brush.Brush
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -535,12 +537,21 @@ fun InkSurface(
 
         // Wet ink.
         //
-        // Composed only while a brush is actually selected: handed a null brush the component still
-        // takes the touch and draws it in its own default black, which is how ink appeared on pages
-        // whose pen tray was not even on screen.
-        if (enabled && brush != null) {
+        // Composed for as long as the page takes ink, whichever tool is in hand. It used to leave
+        // the composition while the eraser or the hand was selected, and come back when a pen was
+        // picked again — and coming back means building the low-latency front-buffer surface anew,
+        // which on this tablet takes long enough that the first strokes after the switch drew
+        // nowhere until they were committed to the dry layer. The eraser and pan branches above
+        // consume their touches in the Initial pass, so the wet layer never sees them; the brush
+        // handed over while no pen is selected is only a placeholder, since every stroke asks
+        // [nextBrush] for the pen in hand the moment it starts.
+        if (enabled) {
+            val placeholder = remember { mutableStateOf<Brush?>(null) }
+            if (brush != null) SideEffect { placeholder.value = brush }
+            val wetBrush = brush ?: placeholder.value
+                ?: remember { InkCodec.brushFor(InkTool.PEN, colorArgb, widthDp, camera.scale) }
             InProgressStrokes(
-                defaultBrush = brush,
+                defaultBrush = wetBrush,
                 nextBrush = nextBrush,
                 pointerEventToWorldTransform = screenToWorld,
                 onStrokesFinished = finishInDaylight,
