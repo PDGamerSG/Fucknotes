@@ -3,7 +3,27 @@
 Validated on the connected Xiaomi 2410CRP4CI (Android 16) on 2026-10-22. The checks below
 distinguish automated coverage, interactive checks and remaining scenarios.
 
-## Latest pass (export: subtler dots, real dark export, light/dark choice) — 2026-10-23, macOS — code only
+## Latest pass (pen button toggles, tool change mid-stroke) — 2026-10-23, macOS — code only
+
+Reported: switching eraser ↔ pen with the Xiaomi Pen's button sometimes leaves the pen "not
+working"; toolbar taps are fine. Two causes addressed, neither reproducible without the pen:
+
+- One physical press can arrive as several packets — a key down from the HID endpoint and the
+  key up from the paired keyboard endpoint, a key and a stylus-button motion packet, a repeat
+  while held. The old bookkeeping emitted again when the up did not match the down's identity,
+  so the eraser was toggled on and straight off. `input/PenPresses.kt` now reduces every pattern
+  to one press (held per button across endpoints and streams, a 300 ms grace for a second up,
+  a 1.5 s stale window so a lost up never kills the button). JVM-tested (8 cases).
+- A button pressed while the pen is on the glass used to switch the tool for the stroke in
+  progress: the eraser branch started consuming the stream and the wet stroke was cancelled, or
+  the pen branch stopped consuming and the ink layer got moves without a down. Now a gesture
+  keeps the tool it started with; the new tool takes the next stroke
+  (`ToolSwitchMidStrokeTest`, device, not run).
+
+The "colour changes after 5–10 minutes" report matches the weak-map bug fixed in `c4dc023`
+(collection timing); that build is not on the tablet yet.
+
+## Previous pass (export: subtler dots, real dark export, light/dark choice) — 2026-10-23, macOS — code only
 
 - Notebook sheets in a PDF drew dots 4 pt across and rules 1.5 pt wide, opaque — twice what the
   screen shows. Now 2.6 pt dots at 78 % alpha and 0.9 pt rules, scaled with the sheet.

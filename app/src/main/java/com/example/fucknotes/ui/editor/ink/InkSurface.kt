@@ -252,6 +252,11 @@ fun InkSurface(
                     var lassoPointer: androidx.compose.ui.input.pointer.PointerId? = null
                     var lassoMoving = false
                     var lassoLast = Offset.Zero
+                    // The tool a gesture began with. A pen button pressed mid-stroke changes the
+                    // tool for the *next* stroke: switching the current one would cancel the wet
+                    // stroke under the pen (eraser now consumes the stream) or hand a half-erase
+                    // to the ink layer as moves without a down. Either way the pen seems dead.
+                    var gestureTool: InkTool? = null
 
                     // Double-tap tool swap, measured over a whole gesture: from the first pointer
                     // down to the last one up.
@@ -288,8 +293,10 @@ fun InkSurface(
 
                         val down = event.changes.filter { it.pressed }
                         event.changes.filter { !it.pressed }.forEach { palmIds -= it.id }
-                        if (down.isEmpty()) outsidePageGesture = false
-                        if (currentNotebook && currentTool.isBrush) {
+                        if (down.isEmpty()) { outsidePageGesture = false; gestureTool = null }
+                        else if (gestureTool == null) gestureTool = currentTool
+                        val activeTool = gestureTool ?: currentTool
+                        if (currentNotebook && activeTool.isBrush) {
                             val writer = down.firstOrNull { it.type == PointerType.Stylus }
                                 ?: down.singleOrNull()?.takeIf { currentFingerInputMode == FingerInputMode.DRAW }
                             if (writer != null && !writer.previousPressed) {
@@ -446,7 +453,7 @@ fun InkSurface(
                         }
 
                         when {
-                            currentTool == InkTool.LASSO && active != null && lassoState != null -> {
+                            activeTool == InkTool.LASSO && active != null && lassoState != null -> {
                                 val world = camera.screenToWorld(active.position)
                                 if (lassoPointer != active.id) {
                                     // A new touch: inside the selection it drags, anywhere else it
@@ -471,12 +478,12 @@ fun InkSurface(
                                 event.changes.forEach { it.consume() }
                             }
 
-                            currentTool == InkTool.PAN && active != null -> {
+                            activeTool == InkTool.PAN && active != null -> {
                                 panContent(active.positionChangeIgnoreConsumed())
                                 event.changes.forEach { it.consume() }
                             }
 
-                            currentTool == InkTool.ERASER && active != null -> {
+                            activeTool == InkTool.ERASER && active != null -> {
                                 val world = camera.screenToWorld(active.position)
                                 val hits = eraseHits(
                                     strokes = currentStrokes(),

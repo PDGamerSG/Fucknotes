@@ -112,6 +112,10 @@ and export, first-page previews, dark reader, folder hierarchy, home export.
   into that app's info page. Android drops a stale default by itself when the candidate set
   changes, which is what happened on the tablet (Xodo held PDF and .ppt). `DocumentIntentTest`
   queries the resolver on device for every shape.
+- Pen buttons: `MainActivity` feeds every key and motion packet into `input/PenPresses.kt`, which
+  decides what is a new press; only then `PenInputBus.emit`. Do not emit from the activity
+  directly. `InkSurface`'s gesture loop latches `gestureTool` at pointer down and uses it until
+  every pointer lifts, so a tool change mid-gesture applies to the next stroke.
 - Opening a note: `EditorViewModel` publishes the row first (`loaded = true`), then `loadInk`
   streams strokes in growing batches via `InkCodec.parse` + `decodeStroke` in parallel, appending
   to `strokes`. `inkLoaded` gates ink encoding in `saveNow` and the empty-note discard; never

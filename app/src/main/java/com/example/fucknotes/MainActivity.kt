@@ -46,8 +46,8 @@ class MainActivity : FragmentActivity() {
 
     private val penMotionButtons = PenMotionButtons()
 
-    /** Key down state lets us support firmware that sends only ACTION_UP without double-firing. */
-    private val pressedPenKeys = mutableSetOf<Long>()
+    /** Turns the pen's key and motion packets, from every endpoint, into one press each. */
+    private val penPresses = com.example.fucknotes.input.PenPresses()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -153,34 +153,16 @@ class MainActivity : FragmentActivity() {
         )
         if (button != null && (isXiaomiPen(device) || isStandardStylusButton || isStylusSource)) {
             val identity = penKeyIdentity(event, button)
-            when (event.action) {
-                KeyEvent.ACTION_DOWN -> {
-                    // A paired keyboard endpoint can repeat while the pen button is held. Only
-                    // the first packet represents a press.
-                    if (event.repeatCount == 0 && pressedPenKeys.add(identity)) {
-                        PenInputBus.emit(button)
-                    }
-                }
-
-                KeyEvent.ACTION_MULTIPLE -> {
-                    // ACTION_MULTIPLE is a complete event and need not have a later key-up.
-                    // Do not latch it permanently, or every subsequent press is ignored.
-                    if (identity !in pressedPenKeys) PenInputBus.emit(button)
-                }
-
-                KeyEvent.ACTION_UP -> {
-                    // Some Xiaomi builds expose an up-only HID packet. Treat it as a press in
-                    // that case, while a normal down/up sequence remains one press. If the
-                    // firmware changes the key representation on release, clear the active key
-                    // for this device without firing the newly reported button a second time.
-                    if (!pressedPenKeys.remove(identity)) {
-                        val devicePrefix = event.deviceId.toLong() shl 32
-                        val mismatched = pressedPenKeys.firstOrNull { (it and DEVICE_ID_MASK) == devicePrefix }
-                        if (mismatched != null) pressedPenKeys.remove(mismatched)
-                        else PenInputBus.emit(button)
-                    }
-                }
+            val now = event.eventTime
+            // Down and up can come from different endpoints, a repeat can follow a hold, and
+            // some firmware sends only an up: PenPresses sorts those into single presses.
+            val press = when (event.action) {
+                KeyEvent.ACTION_DOWN -> penPresses.keyDown(button, identity, now, repeat = event.repeatCount > 0)
+                KeyEvent.ACTION_MULTIPLE -> penPresses.keyMultiple(button, now)
+                KeyEvent.ACTION_UP -> penPresses.keyUp(button, identity, now)
+                else -> false
             }
+            if (press) PenInputBus.emit(button)
             return true
         }
         return super.dispatchKeyEvent(event)
@@ -217,7 +199,13 @@ class MainActivity : FragmentActivity() {
             cancelled = event.actionMasked == MotionEvent.ACTION_CANCEL,
         )
         // ACTION_UP means the tip left the glass; a side switch can still be held during hover.
-        if (newlyPressed != 0) motionButtonFromState(newlyPressed)?.let(PenInputBus::emit)
+        // A motion press that follows the key packet of the same press is the same press.
+        if (newlyPressed != 0) motionButtonFromState(newlyPressed)?.let { button ->
+            if (penPresses.motionPress(button, deviceId.toLong() shl 32, event.eventTime)) PenInputBus.emit(button)
+        }
+        if (event.actionMasked == MotionEvent.ACTION_BUTTON_RELEASE) {
+            motionButtonFromState(event.actionButton)?.let(penPresses::motionRelease)
+        }
 
         // Button press/release packets have no useful pointer data and must not reach the ink
         // surface. ACTION_MOVE/ACTION_DOWN still pass through so the pen can continue writing.
@@ -318,7 +306,7 @@ class MainActivity : FragmentActivity() {
     override fun onPause() {
         // A key-up packet can be lost when a permission dialog or another app takes focus. Reset
         // these edge detectors so the next press after returning to Fucknotes is never ignored.
-        pressedPenKeys.clear()
+        penPresses.clear()
         penMotionButtons.clear()
         super.onPause()
     }
@@ -389,6 +377,5 @@ class MainActivity : FragmentActivity() {
         private const val KEYCODE_BUTTON_R3 = 105
         private const val XIAOMI_VENDOR_ID = 0x0022
         private const val XIAOMI_PRODUCT_ID = 0x4d80
-        private const val DEVICE_ID_MASK = -0x100000000L
     }
 }
