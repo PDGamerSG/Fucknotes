@@ -3,7 +3,39 @@
 Validated on the connected Xiaomi 2410CRP4CI (Android 16) on 2026-10-22. The checks below
 distinguish automated coverage, interactive checks and remaining scenarios.
 
-## Latest pass (light or dark per notebook) — 2026-10-22, macOS
+## Latest pass (open PDF and PowerPoint files from other apps) — 2026-10-22, macOS
+
+Problem on the tablet: Fucknotes never appeared when a PDF or deck was opened. The manifest
+already offered PDF and PPTX, but Xodo held an "always" default for `application/pdf` and
+`application/vnd.ms-powerpoint`, and file managers hand .pptx over with that legacy type, which
+the app did not list.
+
+Changes:
+
+- The app offers itself for every PowerPoint type (modern and legacy aliases), for a share of
+  those, and for `application/octet-stream` or untyped files whose name ends in `.pdf`, `.pptx`
+  or `.ppt`. The type-or-name rule lives in one place and is unit-tested.
+- A real `.ppt` (binary) deck is accepted into the chooser and answers with the existing message
+  to save it as `.pptx`; nothing else is pretended.
+- Settings → "Opening documents" shows, per type, whether Fucknotes is the default, Android asks,
+  or another app holds the default, with a Change button into that app's info page where
+  "Open by default → Clear defaults" lives. It re-checks on every resume.
+
+Verified on the tablet:
+
+- Before: the resolver returned Xodo for PDF and .ppt. After installing, Android discarded the
+  stale defaults on its own (candidate set changed) and `cmd package resolve-activity` returns the
+  system resolver for both.
+- A deck from Download launched with the legacy type shows the system "Open with" sheet with
+  Fucknotes first (screenshot checked). Settings reports "Android asks which app to use" for PDF
+  and PowerPoint.
+- `DocumentIntentTest` (device): the activity is offered for PDF, PPTX, legacy PPT, an alias,
+  octet-stream by name (content and file URIs), and both shares; not for a JPEG, a ZIP, or an
+  image share. `DocumentTypeTest` (JVM) covers the type-or-name rule.
+- Not exercised on device: the "another app holds the default" row state (would need picking
+  Always for another reader; the code path is the same resolver call).
+
+## Previous pass (light or dark per notebook) — 2026-10-22, macOS
 
 Changes:
 

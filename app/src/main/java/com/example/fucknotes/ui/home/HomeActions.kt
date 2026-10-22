@@ -46,9 +46,9 @@ enum class CreateAction(val label: String) {
     ;
 
     companion object {
-        const val MIME_PDF = "application/pdf"
-        const val MIME_PPTX = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-        const val MIME_PPT = "application/vnd.ms-powerpoint"
+        const val MIME_PDF = com.example.fucknotes.media.DocumentType.MIME_PDF
+        const val MIME_PPTX = com.example.fucknotes.media.DocumentType.MIME_PPTX
+        const val MIME_PPT = com.example.fucknotes.media.DocumentType.MIME_PPT
     }
 }
 

@@ -8,7 +8,6 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.fucknotes.media.PdfImporter
 import com.example.fucknotes.media.PptxImporter
-import com.example.fucknotes.ui.home.CreateAction
 import com.example.fucknotes.ui.home.DocumentKind
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -40,10 +39,11 @@ class DocumentOpenViewModel(app: Application) : AndroidViewModel(app) {
             else -> null
         } ?: return
         val app = getApplication<Application>()
-        val slides = intent.type == CreateAction.MIME_PPTX || intent.type == CreateAction.MIME_PPT ||
-            DocumentKind.of(app, uri) == DocumentKind.SLIDES
-        val pdf = intent.type == CreateAction.MIME_PDF || uri.path.orEmpty().endsWith(".pdf", true)
-        if (!slides && !pdf) return
+        val slides = when (DocumentKind.detect(app, uri, intent.type)) {
+            DocumentKind.SLIDES -> true
+            DocumentKind.PDF -> false
+            null -> return
+        }
         if (mutable.value.progress != null) return
         mutable.value = DocumentOpenState(progress = if (slides) "Opening presentation…" else "Opening PDF…")
         viewModelScope.launch {

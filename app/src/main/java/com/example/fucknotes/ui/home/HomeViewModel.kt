@@ -454,12 +454,20 @@ enum class DocumentKind {
     PDF, SLIDES;
 
     companion object {
-        fun of(context: android.content.Context, uri: Uri): DocumentKind {
-            val mime = runCatching { context.contentResolver.getType(uri) }.getOrNull().orEmpty()
-            val name = MediaStore.displayName(context, uri).lowercase()
-            return if (mime == CreateAction.MIME_PPTX || mime == CreateAction.MIME_PPT ||
-                name.endsWith(".pptx") || name.endsWith(".ppt")
-            ) SLIDES else PDF
+        /** From the picker: anything that is not a deck is tried as a PDF. */
+        fun of(context: android.content.Context, uri: Uri): DocumentKind = detect(context, uri, null) ?: PDF
+
+        /**
+         * From another app: the type it declared, the provider's type, and the file name, in
+         * that order; null when none of them names a document this app can open.
+         */
+        fun detect(context: android.content.Context, uri: Uri, declaredType: String?): DocumentKind? {
+            val name = MediaStore.displayName(context, uri)
+            val providerType = runCatching { context.contentResolver.getType(uri) }.getOrNull()
+            val kind = com.example.fucknotes.media.DocumentType.kindOf(declaredType, name)
+                ?: com.example.fucknotes.media.DocumentType.kindOf(providerType, uri.path)
+                ?: return null
+            return if (kind == com.example.fucknotes.media.DocumentType.Kind.SLIDES) SLIDES else PDF
         }
     }
 }

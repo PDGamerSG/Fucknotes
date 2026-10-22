@@ -98,6 +98,19 @@ and export, first-page previews, dark reader, folder hierarchy, home export.
   `note.appearance.isDark(settings.darkReader)`. `PageTheme(dark)` (Theme.kt) wraps the editor so
   its chrome matches the open note; it always nests the same tree, because switching between a
   bare `content()` and a wrapped one recreated the editor and closed its sheets.
+- Opening documents from other apps: `AndroidManifest.xml` offers `MainActivity` for VIEW/SEND
+  of PDF, PPTX, every legacy PowerPoint type (`application/vnd.ms-powerpoint`, `mspowerpoint`,
+  `x-mspowerpoint`, `powerpoint` — file managers label .pptx with these), and `*/*` with
+  `pathPattern`s for `.pdf/.pptx/.ppt` so an `application/octet-stream` download still finds us.
+  `media/DocumentType.kindOf(type, name)` is the one rule for "PDF, slides or neither"; the
+  intent path (`DocumentOpenViewModel` → `DocumentKind.detect`) returns early on neither, the
+  picker path (`DocumentKind.of`) falls back to PDF. If the app still does not appear in a
+  chooser, another reader holds an "always" default: Settings → "Opening documents"
+  (`ui/settings/DocumentHandlers.kt`) resolves the current handler per type with
+  `resolveActivity(MATCH_DEFAULT_ONLY)` (needs the `<queries>` block) and offers a Change button
+  into that app's info page. Android drops a stale default by itself when the candidate set
+  changes, which is what happened on the tablet (Xodo held PDF and .ppt). `DocumentIntentTest`
+  queries the resolver on device for every shape.
 - Migrations can be tested on device: `room-testing` is on the androidTest classpath and the
   exported schemas are androidTest assets; `AppDatabase.migrationForTests(from, to)` exposes one.
 - Back: `EditorScreen`'s `BackHandler` calls `leaveNote()` only in `EditorChrome.FULL` and

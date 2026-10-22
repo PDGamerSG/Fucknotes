@@ -61,6 +61,7 @@ import com.example.fucknotes.data.model.ThemeMode
 import com.example.fucknotes.data.repo.SettingsRepository
 import com.example.fucknotes.input.PenInputBus
 import com.example.fucknotes.ui.common.ImmersiveDialogWindow
+import com.example.fucknotes.ui.home.CreateAction
 import com.example.fucknotes.ui.components.OptionListDialog
 import com.example.fucknotes.ui.theme.Radii
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -294,6 +295,14 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                         checked = settings.autoBackup,
                         onChange = viewModel::setAutoBackup,
                     )
+                }
+
+                SettingsGroup("Opening documents") {
+                    DocumentHandlerRow("PDF files", CreateAction.MIME_PDF)
+                    RowDivider()
+                    DocumentHandlerRow("PowerPoint files", CreateAction.MIME_PPTX)
+                    RowDivider()
+                    DocumentHandlerRow("Older PowerPoint files (.ppt)", CreateAction.MIME_PPT)
                 }
 
                 SettingsGroup("About") {

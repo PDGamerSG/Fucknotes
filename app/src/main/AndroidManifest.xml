@@ -13,6 +13,22 @@
         android:name="android.hardware.microphone"
         android:required="false" />
 
+    <!-- Settings shows which app currently opens documents; resolving that needs visibility. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="application/pdf" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="application/vnd.openxmlformats-officedocument.presentationml.presentation" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="application/vnd.ms-powerpoint" />
+        </intent>
+    </queries>
+
     <application
         android:name=".NotesApp"
         android:allowBackup="true"
@@ -59,12 +75,18 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="application/pdf" />
             </intent-filter>
-            <!-- PowerPoint decks are converted to PDF on the way in. -->
+            <!-- PowerPoint decks are converted to PDF on the way in. The legacy type is listed
+                 too: file managers label .pptx with it as often as .ppt, and a real .ppt gets a
+                 clear "save it as .pptx" message instead of no Fucknotes in the chooser. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:mimeType="application/vnd.openxmlformats-officedocument.presentationml.presentation" />
+                <data android:mimeType="application/vnd.ms-powerpoint" />
+                <data android:mimeType="application/mspowerpoint" />
+                <data android:mimeType="application/x-mspowerpoint" />
+                <data android:mimeType="application/powerpoint" />
                 <data android:scheme="content" />
                 <data android:scheme="file" />
             </intent-filter>
@@ -72,6 +94,33 @@
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="application/vnd.openxmlformats-officedocument.presentationml.presentation" />
+                <data android:mimeType="application/vnd.ms-powerpoint" />
+                <data android:mimeType="application/mspowerpoint" />
+                <data android:mimeType="application/x-mspowerpoint" />
+                <data android:mimeType="application/powerpoint" />
+            </intent-filter>
+            <!-- Senders that do not know the type (downloads, mail attachments, some file
+                 managers) hand over application/octet-stream or no type at all; the extension
+                 still says what the file is. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:host="*" />
+                <data android:mimeType="*/*" />
+                <data android:pathPattern=".*\\.pdf" />
+                <data android:pathPattern=".*\\..*\\.pdf" />
+                <data android:pathPattern=".*\\..*\\..*\\.pdf" />
+                <data android:pathPattern=".*\\.PDF" />
+                <data android:pathPattern=".*\\.pptx" />
+                <data android:pathPattern=".*\\..*\\.pptx" />
+                <data android:pathPattern=".*\\..*\\..*\\.pptx" />
+                <data android:pathPattern=".*\\.PPTX" />
+                <data android:pathPattern=".*\\.ppt" />
+                <data android:pathPattern=".*\\..*\\.ppt" />
+                <data android:pathPattern=".*\\.PPT" />
             </intent-filter>
         </activity>
 
