@@ -35,8 +35,11 @@ Xiaomi tablet attached over USB; earlier passes were done on Windows.
 - Manual shelf order: `NoteEntity.position` (migration 5→6 seeds it from `createdAt`),
   `SortOrder.MANUAL` is the default, `NotesRepository.moveNote/adoptOrder` with
   `NotePositions.between`, and `ui/home/Reorder.kt` (`NoteReorderState`, `Modifier.holdToDrag`,
-  `Modifier.reorderItem`). Hold still 2 s to lift; a long press still selects and the drag takes
-  that selection back. `HomeViewModel.moveNote` adopts the displayed order first when a live sort
+  `Modifier.reorderItem`). The gesture is two nested `withTimeoutOrNull` phases around
+  `followPress`, which only ends on release, ancestor consumption (checked on the Final pass) or
+  leaving the tile — never on movement, so a fidgety finger still lifts the note. A light tick at
+  the long-press timeout, selection on release, strong haptic at 2 s. Compose UI tests run these
+  timeouts on the test clock: drive them with `mainClock.advanceTimeBy`, as `HoldToDragTest` does. `HomeViewModel.moveNote` adopts the displayed order first when a live sort
   is active.
 - Release build: `isMinifyEnabled`/`isShrinkResources` with `proguard-rules.pro`, signed with the
   debug key. Install `app/build/outputs/apk/release/app-release.apk` for daily use; install the

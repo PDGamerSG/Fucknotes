@@ -1,7 +1,8 @@
 package com.example.fucknotes.ui.home
 
-import android.os.SystemClock
 import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.ui.input.pointer.AwaitPointerEventScope
+import androidx.compose.ui.input.pointer.PointerId
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
@@ -13,6 +14,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.isOutOfBounds
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -93,10 +96,14 @@ class NoteReorderState(
         // screen. Scrolling moves the boxes, not the pointer, so the hit test below stays right.
         val viewport = viewportHeight()
         when {
-            pointer.y < AUTOSCROLL_EDGE -> scope.launch { scrollBy(-AUTOSCROLL_STEP) }
-            pointer.y > viewport - AUTOSCROLL_EDGE -> scope.launch { scrollBy(AUTOSCROLL_STEP) }
+            pointer.y < AUTOSCROLL_EDGE -> scope.launch { scrollBy(-AUTOSCROLL_STEP); settleOver(id) }
+            pointer.y > viewport - AUTOSCROLL_EDGE -> scope.launch { scrollBy(AUTOSCROLL_STEP); settleOver(id) }
         }
+        settleOver(id, boxes)
+    }
 
+    /** Moves [id] to the slot under the finger, if the finger is over another note. */
+    private fun settleOver(id: Long, boxes: List<ShelfItemBox> = visibleItems()) {
         val target = boxes.firstOrNull { it.key != id && it.contains(pointer.x, pointer.y) } ?: return
         val list = (order ?: return).toMutableList()
         val from = list.indexOf(id)
@@ -137,6 +144,7 @@ class NoteReorderState(
     companion object {
         /** How long a still press lasts before the note lifts. */
         const val HOLD_MILLIS = 2_000L
+        /** How long a press must last to select on release, past which a still hold lifts. */
         private const val AUTOSCROLL_EDGE = 120f
         private const val AUTOSCROLL_STEP = 28f
         private const val SETTLE_TIMEOUT_MS = 2_500L
@@ -164,10 +172,16 @@ fun Modifier.reorderItem(state: NoteReorderState, id: Long): Modifier = this
 /**
  * Tap, long press and hold-to-drag on one shelf item.
  *
- * A standard long press fires at the system timeout and selects, as before. Holding on past
- * [NoteReorderState.HOLD_MILLIS] without moving lifts the note instead; [onDragStart] lets the
- * caller take back the selection that the long press just made. Any movement before the hold
- * completes hands the gesture to the shelf's scroll.
+ * The rules follow the platform's own long-press drag: a press is only cancelled when something
+ * above takes the event — the shelf's scroll, once the finger has clearly moved — or when the
+ * finger leaves the tile. Jitter never cancels it: a finger held still for two seconds drifts
+ * more than a touch slop, and a hold that failed for that reason would feel broken.
+ *
+ * Timing: a release before the long-press timeout is a tap; a release after it is a long press
+ * (selection) — applied on release, so nothing under the finger changes while it is still held;
+ * a still hold past [NoteReorderState.HOLD_MILLIS] lifts the note, which then follows the finger
+ * until it is dropped. Each phase is one timeout around [followPress], so the gesture keeps the
+ * same clock as the rest of the pointer system rather than reading the wall clock itself.
  */
 @Composable
 fun Modifier.holdToDrag(
@@ -177,12 +191,10 @@ fun Modifier.holdToDrag(
     boxOf: () -> ShelfItemBox?,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
-    onDragStart: () -> Unit,
 ): Modifier {
     val haptics = LocalHapticFeedback.current
     val click by rememberUpdatedState(onClick)
     val longClick by rememberUpdatedState(onLongClick)
-    val dragStart by rememberUpdatedState(onDragStart)
     val ids by rememberUpdatedState(currentIds)
     val box by rememberUpdatedState(boxOf)
     return this
@@ -194,48 +206,36 @@ fun Modifier.holdToDrag(
         .pointerInput(state, id) {
             awaitEachGesture {
                 val down = awaitFirstDown()
-                val slop = viewConfiguration.touchSlop
-                val longPressMs = viewConfiguration.longPressTimeoutMillis
-                var longPressed = false
-                var travel = Offset.Zero
                 var last = down.position
-                var lifted = false
+                val longPressMs = viewConfiguration.longPressTimeoutMillis
 
-                while (true) {
-                    val elapsed = SystemClock.uptimeMillis() - down.uptimeMillis
-                    val deadline = (if (longPressed) NoteReorderState.HOLD_MILLIS else longPressMs) - elapsed
-                    val event = if (deadline <= 0) null else withTimeoutOrNull(deadline) { awaitPointerEvent() }
-                    if (event == null) {
-                        if (!longPressed) {
-                            longPressed = true
-                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                            longClick()
-                            continue
-                        }
-                        val origin = box() ?: return@awaitEachGesture
-                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                        dragStart()
-                        state.start(
-                            id = id,
-                            currentIds = ids(),
-                            pointerInViewport = Offset(origin.left + last.x, origin.top + last.y),
-                            grabOffset = last,
-                        )
-                        lifted = true
-                        break
-                    }
-                    val change = event.changes.firstOrNull { it.id == down.id } ?: return@awaitEachGesture
-                    if (change.isConsumed) return@awaitEachGesture
-                    if (!change.pressed) {
-                        if (!longPressed) click()
-                        return@awaitEachGesture
-                    }
-                    travel += change.positionChange()
-                    last = change.position
-                    if (travel.getDistance() > slop) return@awaitEachGesture
+                // Phase one: up to the long-press timeout. A release here is a tap.
+                when (withTimeoutOrNull(longPressMs) { followPress(down.id) { last = it } }) {
+                    PressEnd.RELEASED -> { click(); return@awaitEachGesture }
+                    PressEnd.CANCELLED -> return@awaitEachGesture
+                    null -> Unit
+                }
+                // A light tick says the press registered; the note is selected only if the
+                // finger comes up now, so the tile stays put under a hold.
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+
+                // Phase two: up to the hold. A release here is a long press.
+                val remaining = (NoteReorderState.HOLD_MILLIS - longPressMs).coerceAtLeast(1L)
+                when (withTimeoutOrNull(remaining) { followPress(down.id) { last = it } }) {
+                    PressEnd.RELEASED -> { longClick(); return@awaitEachGesture }
+                    PressEnd.CANCELLED -> return@awaitEachGesture
+                    null -> Unit
                 }
 
-                if (!lifted) return@awaitEachGesture
+                // Held still for the whole hold: lift the note and follow the finger.
+                val origin = box() ?: return@awaitEachGesture
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                state.start(
+                    id = id,
+                    currentIds = ids(),
+                    pointerInViewport = Offset(origin.left + last.x, origin.top + last.y),
+                    grabOffset = last,
+                )
                 try {
                     while (true) {
                         val event = awaitPointerEvent()
@@ -251,4 +251,28 @@ fun Modifier.holdToDrag(
                 }
             }
         }
+}
+
+private enum class PressEnd { RELEASED, CANCELLED }
+
+/**
+ * Follows one pressed pointer until it is released or taken away, reporting each position.
+ *
+ * Returns how the press ended; the caller wraps it in a timeout, which is how "still held" is
+ * detected. A press is taken away when an ancestor consumes it — the shelf's scroll sees the
+ * event after this tile does, so that is checked on the final pass — or when it leaves the tile.
+ */
+private suspend fun AwaitPointerEventScope.followPress(
+    pointerId: PointerId,
+    onPosition: (Offset) -> Unit,
+): PressEnd {
+    while (true) {
+        val event = awaitPointerEvent()
+        val change = event.changes.firstOrNull { it.id == pointerId } ?: return PressEnd.CANCELLED
+        if (!change.pressed) return PressEnd.RELEASED
+        if (change.isConsumed || change.isOutOfBounds(size, extendedTouchPadding)) return PressEnd.CANCELLED
+        onPosition(change.position)
+        val afterParents = awaitPointerEvent(PointerEventPass.Final)
+        if (afterParents.changes.any { it.isConsumed }) return PressEnd.CANCELLED
+    }
 }

@@ -65,7 +65,7 @@ fun HomeShelf(
             if (!state.loading && state.notes.isNotEmpty()) {
                 Text(
                     "${state.notes.size} ${if (state.notes.size == 1) "note" else "notes"}" +
-                        if (state.sort == com.example.fucknotes.data.model.SortOrder.MANUAL) "  ·  hold a note to move it" else "",
+                        if (state.sort == com.example.fucknotes.data.model.SortOrder.MANUAL) "  ·  hold a note for two seconds to move it" else "",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 2.dp),
@@ -136,11 +136,12 @@ fun HomeShelf(
                                     if (state.inSelectionMode) onToggleSelect(note.id) else onOpenNote(note.id)
                                 },
                                 onLongClick = { onToggleSelect(note.id) },
-                                // The long press on the way to the hold selected the note; a drag
-                                // is a move, not a selection, so take that back.
-                                onDragStart = { if (note.id in state.selection) onToggleSelect(note.id) },
                             ),
-                            modifier = Modifier.animateItem().reorderItem(reorder, note.id),
+                            // The lifted note is placed by the finger; the slot animation would
+                            // pull it away from the finger each time it swaps places.
+                            modifier = Modifier
+                                .then(if (reorder.draggingId == note.id) Modifier else Modifier.animateItem())
+                                .reorderItem(reorder, note.id),
                         )
                     }
                 }
@@ -192,9 +193,10 @@ fun HomeShelf(
                                     if (state.inSelectionMode) onToggleSelect(note.id) else onOpenNote(note.id)
                                 },
                                 onLongClick = { onToggleSelect(note.id) },
-                                onDragStart = { if (note.id in state.selection) onToggleSelect(note.id) },
                             ),
-                            modifier = Modifier.animateItem().reorderItem(reorder, note.id),
+                            modifier = Modifier
+                                .then(if (reorder.draggingId == note.id) Modifier else Modifier.animateItem())
+                                .reorderItem(reorder, note.id),
                         )
                     }
                 }

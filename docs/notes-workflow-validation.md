@@ -36,7 +36,9 @@ Changes:
 - Manual shelf order (new default sort "Manual order"): a note keeps the place it was created in;
   editing never moves it. Press and hold a note still for 2 s to lift it, then drag it over
   another note to take that place, in the grid or the list; the shelf auto-scrolls near the
-  edges. A long press still selects. Positions live in a new `position` column (database
+  edges. A long press still selects (applied on release). The hold is cancelled only when the
+  shelf's scroll takes the finger or the finger leaves the tile — never by jitter, which is what
+  made the first version fail under a real finger. Positions live in a new `position` column (database
   version 6, seeded from `createdAt`); moves land between neighbours and renumber only when two
   neighbours are adjacent. Dragging while a live sort is shown first adopts the visible order as
   the manual order so nothing jumps. Backups carry the position.
@@ -68,7 +70,9 @@ adb -s b86e61d8 shell am instrument -w -r com.example.fucknotes.test/androidx.te
 ```
 
 - 28 JVM tests passed (14 existing, `EditorChromeTest`, `OpenTabsTest`, `NotePositionsTest`, `PptxDeckTest`).
-- 18 instrumented tests passed on the physical tablet, including `PptxImportTest` (a hand-built
+- 23 instrumented tests passed on the physical tablet, including `HoldToDragTest` (jittery and
+  still two-second holds lift and drop; a swipe during the hold scrolls; long press selects on
+  release; a tap opens), `PptxImportTest` (a hand-built
   deck renders its inherited title, a filled shape and a picture; a `.ppt` is refused), `NoteOrderTest` (manual order,
   moves, renumbering, adoption), the rewritten finger tests, `EditorTabBarTest`,
   `FingerInputTest.readingModeLetsFingersScrollWithPenOnlyAndZoomLockOn`,
