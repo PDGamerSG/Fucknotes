@@ -16,7 +16,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         NoteTagCrossRef::class,
         AttachmentEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -74,6 +74,17 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Manual shelf order. Every existing note takes its creation time as its position, so
+         * the shelf opens in creation order and nothing moves until the user drags it.
+         */
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE notes ADD COLUMN position INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("UPDATE notes SET position = createdAt")
+            }
+        }
+
         fun get(context: Context): AppDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
@@ -84,6 +95,7 @@ abstract class AppDatabase : RoomDatabase() {
                 .addMigrations(MIGRATION_2_3)
                 .addMigrations(MIGRATION_3_4)
                 .addMigrations(MIGRATION_4_5)
+                .addMigrations(MIGRATION_5_6)
                 // Foreign keys drive the note -> tag/attachment cascades.
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
                 .build()

@@ -10,7 +10,9 @@ import android.util.LruCache
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
@@ -23,7 +25,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 
-private val imageCache = object : LruCache<String, Bitmap>(32 * 1024 * 1024) {
+/**
+ * Decoded page backgrounds, by path and size.
+ *
+ * A quarter of the heap rather than a fixed 32 MB: an imported PDF page at 2048 px is ~12 MB, so
+ * the old cap held two pages and every scroll past a third re-decoded the first. The budget scales
+ * with the device, and the cache is shared by the editor, the pages sheet and the shelf.
+ */
+private val imageCache = object : LruCache<String, Bitmap>(
+    (Runtime.getRuntime().maxMemory() / 4).coerceIn(48L * 1024 * 1024, 512L * 1024 * 1024).toInt(),
+) {
     override fun sizeOf(key: String, value: Bitmap) = value.allocationByteCount
 }
 
@@ -52,19 +63,36 @@ internal fun PageImages(
     notebook: Boolean,
     darkReader: Boolean = false,
 ) {
-    val bounds = camera.visibleWorldBounds(camera.viewportWidthPx, camera.viewportHeightPx)
-    val visible = attachments.filter { image ->
-        image.pageIndex != null && image.pageWidth > 0 && image.pageHeight > 0 &&
-            bounds.overlaps(image.pageX, image.pageY + NotebookLayout.topOf(image.pageIndex, page),
-                image.pageX + image.pageWidth, image.pageY + NotebookLayout.topOf(image.pageIndex, page) + image.pageHeight)
+    // Which page images are near the viewport is derived state: the camera moves every frame
+    // while the page scrolls, but this only changes — and only recomposes — when an image enters
+    // or leaves the band. The band is a viewport tall on each side, so the next page is already
+    // decoded before it comes into view.
+    val visibleIds by remember(attachments, page) {
+        derivedStateOf {
+            val viewportHeightWorld = camera.viewportHeightPx / camera.scale.coerceAtLeast(0.01f)
+            val bounds = camera.visibleWorldBounds(camera.viewportWidthPx, camera.viewportHeightPx)
+            val near = WorldRect(bounds.left, bounds.top - viewportHeightWorld, bounds.right, bounds.bottom + viewportHeightWorld)
+            attachments.filter { image ->
+                image.pageIndex != null && image.pageWidth > 0 && image.pageHeight > 0 &&
+                    near.overlaps(
+                        image.pageX, image.pageY + NotebookLayout.topOf(image.pageIndex, page),
+                        image.pageX + image.pageWidth,
+                        image.pageY + NotebookLayout.topOf(image.pageIndex, page) + image.pageHeight,
+                    )
+            }.map { it.id }
+        }
     }
-    val bitmaps = rememberPageImages(visible)
+    val near = remember(attachments, visibleIds) { attachments.filter { it.id in visibleIds } }
+    val bitmaps = rememberPageImages(near)
     Canvas(Modifier.fillMaxSize()) {
+        val bounds = camera.visibleWorldBounds(size.width, size.height)
         drawIntoCanvas { canvas ->
             val native = canvas.nativeCanvas
             native.save()
             native.concat(camera.worldToScreen())
-            visible.forEach { image ->
+            near.forEach { image ->
+                val top = NotebookLayout.topOf(image.pageIndex ?: 0, page) + image.pageY
+                if (!bounds.overlaps(image.pageX, top, image.pageX + image.pageWidth, top + image.pageHeight)) return@forEach
                 bitmaps[image.id]?.let { bitmap -> drawPageImage(native, image, bitmap, page, notebook, darkReader) }
             }
             native.restore()

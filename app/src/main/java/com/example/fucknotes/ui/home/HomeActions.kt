@@ -135,6 +135,7 @@ private fun SortMenu(
     onPick: (SortOrder) -> Unit,
 ) {
     val labels = listOf(
+        SortOrder.MANUAL to "Manual order",
         SortOrder.UPDATED_DESC to "Last edited",
         SortOrder.UPDATED_ASC to "Least recently edited",
         SortOrder.CREATED_DESC to "Newest first",

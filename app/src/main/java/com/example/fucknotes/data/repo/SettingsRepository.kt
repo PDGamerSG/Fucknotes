@@ -78,7 +78,7 @@ class SettingsRepository(private val context: Context) {
         /** Repaints note pages in a dark, low-glare palette while leaving the stored note unchanged. */
         val darkReader: Boolean = false,
         val layout: LayoutMode = LayoutMode.GRID,
-        val sort: SortOrder = SortOrder.UPDATED_DESC,
+        val sort: SortOrder = SortOrder.MANUAL,
         val defaultPaper: PaperStyle = PaperStyle.PLAIN,
         val fontScalePercent: Int = 100,
         val keepScreenOn: Boolean = false,
@@ -124,7 +124,7 @@ class SettingsRepository(private val context: Context) {
         dynamicColor = this[Keys.dynamicColor] ?: false,
         darkReader = this[Keys.darkReader] ?: false,
         layout = enumOr(this[Keys.layout], LayoutMode.GRID),
-        sort = enumOr(this[Keys.sort], SortOrder.UPDATED_DESC),
+        sort = enumOr(this[Keys.sort], SortOrder.MANUAL),
         defaultPaper = enumOr(this[Keys.defaultPaper], PaperStyle.PLAIN),
         fontScalePercent = this[Keys.fontScale] ?: 100,
         keepScreenOn = this[Keys.keepScreenOn] ?: false,

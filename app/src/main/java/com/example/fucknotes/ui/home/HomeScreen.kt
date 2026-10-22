@@ -351,6 +351,7 @@ private fun HomeSheet(
                 onOpenNote = onOpenNote,
                 onToggleSelect = viewModel::toggleSelected,
                 onNewNotebook = onNewNotebook,
+                onMoveNote = viewModel::moveNote,
                 modifier = Modifier.fillMaxSize(),
             )
 

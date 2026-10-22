@@ -1,9 +1,7 @@
 package com.example.fucknotes.ui.home
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -57,7 +55,6 @@ import coil.compose.rememberAsyncImagePainter
  * spacing — so a shelf of notebooks is told apart by what they look like rather than by a row of
  * identical cards with different words on them.
  */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun NoteTile(
     note: NoteEntity,
@@ -68,15 +65,15 @@ fun NoteTile(
     hasAudio: Boolean,
     firstPageImagePath: String? = null,
     darkReader: Boolean = false,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit,
+    /** Tap, long press and hold-to-drag, supplied by the shelf so the tile stays a picture. */
+    interaction: Modifier = Modifier,
     modifier: Modifier = Modifier,
 ) {
     val brand = MaterialTheme.brand
     Column(
         modifier
             .clip(RoundedCornerShape(Radii.card))
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .then(interaction)
             .padding(8.dp),
     ) {
         Box(

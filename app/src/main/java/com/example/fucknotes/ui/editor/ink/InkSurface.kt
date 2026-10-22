@@ -87,7 +87,8 @@ fun InkSurface(
      * Freezes the zoom level.
      *
      * A locked page still scrolls — otherwise a notebook would be unusable — but a pinch cannot
-     * change its scale, so resting fingers and a passing palm stop resizing the writing.
+     * change its scale, so resting fingers and a passing palm stop resizing the writing. It also
+     * disables the double-tap tool swap, the other thing a resting hand can trigger by accident.
      */
     zoomLocked: Boolean,
     /**
@@ -232,6 +233,10 @@ fun InkSurface(
                     // palm contact in a separate packet from the pen move, so the stylus is not
                     // present in every event even though it is still touching the glass.
                     var stylusContactActive = false
+                    // Touch pointers that were on the glass while the stylus wrote. They are the
+                    // palm, and they stay the palm until they lift — so a hand that keeps resting
+                    // after the pen comes up cannot drift the page or leave a mark.
+                    val palmIds = mutableSetOf<androidx.compose.ui.input.pointer.PointerId>()
                     var lastTapMs = 0L
                     var lastTapPointers = 0
 
@@ -245,10 +250,12 @@ fun InkSurface(
                             lastErasePoint = null
                             gestureActive = false
                             stylusContactActive = false
+                            palmIds.clear()
                             continue
                         }
 
                         val down = event.changes.filter { it.pressed }
+                        event.changes.filter { !it.pressed }.forEach { palmIds -= it.id }
                         if (down.isEmpty()) outsidePageGesture = false
                         if (currentNotebook && currentTool.isBrush) {
                             val writer = down.firstOrNull { it.type == PointerType.Stylus }
@@ -270,19 +277,17 @@ fun InkSurface(
                             // packets omit it, so they leave the state untouched until that up.
                             stylusContactActive = down.any { it.type == PointerType.Stylus }
                         }
+                        val stylusDown = stylusContactActive || down.any { it.type == PointerType.Stylus }
+                        if (stylusDown) down.filter { it.type != PointerType.Stylus }.forEach { palmIds += it.id }
 
+                        // "Pen only": fingers never draw and never swap tools, but they still move
+                        // the page — a notebook that cannot be scrolled by hand is not usable.
                         val touchDisabled = currentFingerInputMode == FingerInputMode.DISABLED
-                        // The corner lock is also a writing-surface lock: while it is on, every
-                        // finger/palm packet is consumed here so the page cannot pan, pinch, or
-                        // react to an accidental edge drag. The stylus remains fully usable.
-                        if (currentZoomLocked && !stylusInEvent && !currentReading) {
-                            event.changes.filter { it.type != PointerType.Stylus }.forEach { it.consume() }
-                            gestureActive = false
-                            lastTapMs = 0L
-                            lastErasePoint = null
-                            continue
-                        }
-                        if (touchDisabled || stylusContactActive) {
+
+                        // A palm resting on the glass while the stylus writes is not input. Do
+                        // this before the multi-pointer gesture check: otherwise the stylus plus
+                        // one palm contact looks like a pinch and can move or zoom the page.
+                        if (stylusDown) {
                             event.changes.filter { it.type != PointerType.Stylus }.forEach { it.consume() }
                             // Ignore finger-only packets, including releases, before tap, pan,
                             // pinch and eraser handling. A stylus in this packet still works.
@@ -292,6 +297,18 @@ fun InkSurface(
                                 lastErasePoint = null
                                 continue
                             }
+                        }
+
+                        // The fingers that may navigate: touch pointers that are not the palm.
+                        val fingers = down.filter { it.type != PointerType.Stylus && it.id !in palmIds }
+                        val palmOnly = !stylusDown && fingers.isEmpty() &&
+                            down.any { it.type != PointerType.Stylus }
+                        if (palmOnly) {
+                            event.changes.filter { it.type != PointerType.Stylus }.forEach { it.consume() }
+                            gestureActive = false
+                            lastTapMs = 0L
+                            lastErasePoint = null
+                            continue
                         }
 
                         if (down.isNotEmpty()) {
@@ -317,8 +334,10 @@ fun InkSurface(
                             // Only gestures this layer already claims for itself can be taps: two
                             // fingers, which always move the page, or one finger while the page is
                             // stylus-only. Anything a stylus touched is writing, never a swap — so
-                            // a tap can never cost the user the dot they meant to draw.
+                            // a tap can never cost the user the dot they meant to draw. A page
+                            // being read, a pen-only page and a locked page never swap tools.
                             val claimed = !touchDisabled && !gestureHadStylus && !currentReading &&
+                                !currentZoomLocked &&
                                 (gesturePointers == 2 || (gesturePointers == 1 &&
                                     currentFingerInputMode == FingerInputMode.HAND))
                             val tap = claimed &&
@@ -340,19 +359,9 @@ fun InkSurface(
                             }
                         }
 
-                        // A palm resting on the glass while the stylus writes is not input. Do
-                        // this before the multi-pointer gesture check: otherwise the stylus plus
-                        // one palm contact looks like a pinch and can move or zoom the page.
-                        val stylusDown = stylusContactActive || down.any { it.type == PointerType.Stylus }
-                        if (stylusDown) {
-                            event.changes
-                                .filter { it.type != PointerType.Stylus }
-                                .forEach { it.consume() }
-                        }
-
-                        // Two or more touch pointers mean "move the page", never "draw". A
-                        // stylus contact is excluded because a resting palm must not steer it.
-                        if (down.size >= 2 && !stylusDown && !touchDisabled) {
+                        // Two or more fingers mean "move the page", never "draw". The zoom lock
+                        // pins the scale but still lets the pinch carry the page.
+                        if (fingers.size >= 2 && !stylusDown) {
                             if (currentContentScroll != null) panContent(event.calculatePan())
                             else camera.transformBy(
                                 factor = if (currentZoomLocked) 1f
@@ -365,17 +374,17 @@ fun InkSurface(
                             continue
                         }
 
-                        // Stylus-only: a finger scrolls the page instead of marking it. The
+                        // One finger scrolls the page unless the user asked to write with it. The
                         // consume is what keeps the touch away from the ink layer, so it has to
                         // happen here, before any tool handling below.
-                        if (currentFingerInputMode == FingerInputMode.HAND && !stylusDown &&
-                            event.changes.any { it.type != PointerType.Stylus }
+                        if (currentFingerInputMode != FingerInputMode.DRAW && !stylusDown &&
+                            fingers.isNotEmpty()
                         ) {
                             // InProgressStrokes may observe the same touch stream during the
                             // initial pass on some Compose/Ink versions. Use the raw movement so
                             // a stylus-only page still responds to a finger drag instead of
                             // appearing frozen after the touch has been consumed downstream.
-                            down.firstOrNull()?.let { panContent(it.positionChangeIgnoreConsumed()) }
+                            panContent(fingers.first().positionChangeIgnoreConsumed())
                             event.changes
                                 .filter { it.type != PointerType.Stylus }
                                 .forEach { it.consume() }
@@ -386,7 +395,7 @@ fun InkSurface(
                         // Prefer the pen when both are on the glass, so a stray finger cannot
                         // steer an erase or a pan away from where the stylus is.
                         val active = down.firstOrNull { it.type == PointerType.Stylus }
-                            ?: down.firstOrNull()?.takeUnless { touchDisabled || stylusDown }
+                            ?: fingers.firstOrNull()?.takeUnless { stylusDown }
 
                         when {
                             currentTool == InkTool.PAN && active != null -> {
@@ -561,8 +570,17 @@ private fun eraseHits(
     val start = from ?: to
     val segment = MutableSegment(MutableVec(start.x, start.y), MutableVec(to.x, to.y))
     val sweep = MutableParallelogram().populateFromSegmentAndPadding(segment, radiusWorld)
+    // The sweep's own bounds, so strokes nowhere near the eraser are skipped on a cached box
+    // instead of each paying for a native coverage test.
+    val pad = radiusWorld
+    val left = minOf(start.x, to.x) - pad
+    val top = minOf(start.y, to.y) - pad
+    val right = maxOf(start.x, to.x) + pad
+    val bottom = maxOf(start.y, to.y) + pad
     val hits = mutableSetOf<Int>()
     strokes.forEachIndexed { index, inkStroke ->
+        val box = boundsCache.getOrPut(inkStroke.stroke) { inkStroke.stroke.shape.computeBoundingBox() }
+        if (box != null && (box.xMax < left || box.xMin > right || box.yMax < top || box.yMin > bottom)) return@forEachIndexed
         if (inkStroke.stroke.shape.computeCoverageIsGreaterThan(sweep, 0f)) hits += index
     }
     return hits

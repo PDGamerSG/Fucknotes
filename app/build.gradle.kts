@@ -22,11 +22,18 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 with the optimizing defaults: Compose's debug checks, unused code and resources
+            // go, and the app is AOT-compiled from its baseline profiles on install. This is the
+            // build to run day to day; the debug build exists for the instrumentation tests.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Signed with the debug key so it can update the tablet's install in place and be
+            // updated back by a debug build. Swap in a real keystore before publishing.
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {

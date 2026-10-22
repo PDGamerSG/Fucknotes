@@ -26,6 +26,7 @@ interface NoteDao {
           AND archived = :archived
           AND (:filterFolder = 0 OR folderId IS :folderId)
         ORDER BY pinned DESC,
+          CASE WHEN :sort = 'MANUAL'       THEN position END ASC,
           CASE WHEN :sort = 'UPDATED_DESC' THEN updatedAt END DESC,
           CASE WHEN :sort = 'UPDATED_ASC'  THEN updatedAt END ASC,
           CASE WHEN :sort = 'CREATED_DESC' THEN createdAt END DESC,
@@ -143,6 +144,13 @@ interface NoteDao {
 
     @Query("UPDATE notes SET folderId = NULL WHERE folderId IN (:folderIds)")
     suspend fun detachFromFolders(folderIds: List<Long>)
+
+    /** A move on the shelf is not an edit: the position changes and `updatedAt` does not. */
+    @Query("UPDATE notes SET position = :position WHERE id = :id")
+    suspend fun setPosition(id: Long, position: Long)
+
+    @Query("SELECT id FROM notes ORDER BY position ASC, createdAt ASC, id ASC")
+    suspend fun idsByPosition(): List<Long>
 }
 
 @Dao

@@ -64,17 +64,22 @@ class FingerInputTest {
             camera.reset()
             mode = FingerInputMode.DISABLED
         }
+        // Pen only: a finger still moves the page, but never draws or swaps tools.
+        page.performTouchInput { swipe(Offset(200f, 400f), Offset(200f, 650f)) }
+        compose.runOnIdle {
+            assertTrue("Pen only must still scroll by finger", camera.panY > 100f)
+            assertTrue("Pen only must not draw", strokes.isEmpty())
+            camera.reset()
+        }
         page.performTouchInput {
-            swipe(Offset(200f, 400f), Offset(200f, 650f))
             doubleClick(Offset(200f, 400f))
             pinch(Offset(100f, 300f), Offset(400f, 300f), Offset(50f, 250f), Offset(500f, 350f))
         }
         compose.runOnIdle {
-            assertEquals(0f, camera.panX, 0f)
-            assertEquals(0f, camera.panY, 0f)
-            assertEquals(1f, camera.zoom, 0f)
-            assertEquals("Disabled touch must not toggle eraser", 0, swaps)
-            assertTrue("Disabled touch must not draw", strokes.isEmpty())
+            assertEquals("Pen only must not toggle eraser", 0, swaps)
+            assertTrue("Pen only may pinch to zoom", camera.zoom > 1f)
+            assertTrue("Pen only must not draw", strokes.isEmpty())
+            camera.reset()
         }
         // Dispatch an actual stylus stream while finger input is disabled.
         val start = SystemClock.uptimeMillis()
@@ -226,7 +231,7 @@ class FingerInputTest {
         }
     }
 
-    @Test fun zoomLockBlocksFingerGesturesButKeepsStylusWriting() {
+    @Test fun zoomLockPinsScaleButStillScrollsAndWrites() {
         val camera = InkCamera(1f)
         var strokes by mutableStateOf(emptyList<InkStroke>())
         var swaps = 0
@@ -244,16 +249,20 @@ class FingerInputTest {
                 )
             }
         }
-        compose.onNodeWithTag("locked-page").performTouchInput {
-            swipe(Offset(200f, 400f), Offset(600f, 800f))
+        val locked = compose.onNodeWithTag("locked-page")
+        locked.performTouchInput { swipe(Offset(200f, 400f), Offset(600f, 800f)) }
+        compose.runOnIdle {
+            assertTrue("A locked page must still scroll by finger", camera.panY > 100f)
+            camera.reset()
+        }
+        locked.performTouchInput {
             doubleClick(Offset(300f, 500f))
             pinch(Offset(100f, 300f), Offset(400f, 300f), Offset(40f, 240f), Offset(460f, 360f))
         }
         compose.runOnIdle {
-            assertEquals("Locked touch must not pan", 0f, camera.panX, 0f)
-            assertEquals("Locked touch must not pan", 0f, camera.panY, 0f)
             assertEquals("Locked touch must not zoom", 1f, camera.zoom, 0f)
             assertEquals("Locked touch must not toggle tools", 0, swaps)
+            assertTrue("Locked touch must not draw", strokes.isEmpty())
         }
 
         val start = SystemClock.uptimeMillis()

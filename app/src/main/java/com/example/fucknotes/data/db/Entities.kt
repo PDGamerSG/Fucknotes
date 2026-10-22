@@ -46,6 +46,13 @@ data class NoteEntity(
     val reminderAt: Long? = null,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
+    /**
+     * Where the note sits on the shelf in manual order; lower comes first.
+     *
+     * Seeded from [createdAt], so a note starts where it was made, and only a drag rewrites it.
+     * Gaps are kept wide so a move usually lands between its neighbours without renumbering.
+     */
+    val position: Long = 0,
 )
 
 @Entity(

@@ -56,6 +56,8 @@ class BackupManager(private val context: Context, private val db: AppDatabase) {
         val pageFormat: String = "A4",
         val pageCount: Int = 1,
         val pagesExplicitlyCreated: Boolean = false,
+        /** Manual shelf position; a backup from before manual order restores in creation order. */
+        val position: Long = 0,
     )
 
     @Serializable
@@ -164,7 +166,7 @@ class BackupManager(private val context: Context, private val db: AppDatabase) {
     private fun NoteEntity.toDto() = NoteDto(
         id, title, body, type.name, checklistJson, drawingJson, folderId, colorArgb,
         paperStyle.name, pinned, archived, locked, deletedAt, reminderAt, createdAt, updatedAt,
-        lineColorArgb, lineSpacingDp, pageFormat, pageCount, pagesExplicitlyCreated,
+        lineColorArgb, lineSpacingDp, pageFormat, pageCount, pagesExplicitlyCreated, position,
     )
 
     private fun NoteDto.toEntity() = NoteEntity(
@@ -189,6 +191,7 @@ class BackupManager(private val context: Context, private val db: AppDatabase) {
         pageFormat = pageFormat,
         pageCount = pageCount.coerceIn(1, com.example.fucknotes.data.model.MAX_NOTEBOOK_PAGES),
         pagesExplicitlyCreated = pagesExplicitlyCreated,
+        position = if (position == 0L) createdAt else position,
     )
 
     companion object {

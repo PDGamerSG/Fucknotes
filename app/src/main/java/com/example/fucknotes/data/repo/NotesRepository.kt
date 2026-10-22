@@ -99,6 +99,7 @@ class NotesRepository(private val db: AppDatabase) {
                 folderId = folderId,
                 createdAt = now,
                 updatedAt = now,
+                position = now,
                 checklistJson = if (type == NoteType.CHECKLIST) json.encodeToString(emptyList<ChecklistItem>()) else "",
                 paperStyle = paperStyle ?: when (type) {
                     NoteType.DRAWING -> PaperStyle.DOTTED
@@ -163,7 +164,7 @@ class NotesRepository(private val db: AppDatabase) {
     suspend fun duplicate(id: Long): Long? {
         val src = notes.getNote(id) ?: return null
         val now = System.currentTimeMillis()
-        val newId = notes.insert(src.copy(id = 0, title = src.title + " (copy)", createdAt = now, updatedAt = now))
+        val newId = notes.insert(src.copy(id = 0, title = src.title + " (copy)", createdAt = now, updatedAt = now, position = now))
         tags.allCrossRefs().filter { it.noteId == id }.forEach { tags.link(NoteTagCrossRef(newId, it.tagId)) }
         attachments.forNote(id).forEach { attachments.insert(it.copy(id = 0, noteId = newId)) }
         return newId
@@ -188,10 +189,48 @@ class NotesRepository(private val db: AppDatabase) {
                 folderId = source.first().folderId,
                 createdAt = now,
                 updatedAt = now,
+                position = now,
             )
         )
         trash(ids)
         return mergedId
+    }
+
+    // ---- shelf order -------------------------------------------------------
+
+    /**
+     * Drops a note between two neighbours on the shelf.
+     *
+     * Positions are sparse, so the note usually takes the midpoint. When two neighbours have
+     * been squeezed together by earlier moves, every note is renumbered with a wide step first.
+     * Only `position` changes: moving a note is not editing it.
+     */
+    suspend fun moveNote(id: Long, beforeId: Long?, afterId: Long?) = db.withTransaction {
+        var target = NotePositions.between(positionOf(beforeId), positionOf(afterId))
+        if (target == null) {
+            renumberAll()
+            target = NotePositions.between(positionOf(beforeId), positionOf(afterId))
+                ?: positionOf(beforeId)?.plus(1) ?: positionOf(afterId)?.minus(1) ?: 0L
+        }
+        notes.setPosition(id, target)
+    }
+
+    /**
+     * Makes the order the user is looking at the manual order.
+     *
+     * Switching from a live sort to manual must not shuffle the shelf under the finger, so the
+     * displayed sequence is written as positions first; a drag can then move within it.
+     */
+    suspend fun adoptOrder(ids: List<Long>) = db.withTransaction {
+        ids.forEachIndexed { index, id -> notes.setPosition(id, index.toLong() * NotePositions.STEP) }
+    }
+
+    private suspend fun positionOf(id: Long?): Long? = id?.let { notes.getNote(it) }?.position
+
+    private suspend fun renumberAll() {
+        notes.idsByPosition().forEachIndexed { index, id ->
+            notes.setPosition(id, index.toLong() * NotePositions.STEP)
+        }
     }
 
     // ---- folders -----------------------------------------------------------

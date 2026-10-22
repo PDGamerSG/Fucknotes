@@ -1,9 +1,7 @@
 package com.example.fucknotes.ui.home
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,7 +36,6 @@ import com.example.fucknotes.ui.theme.brand
  * Same page thumbnail as the tile, turned on its side: the list is for scanning many notes by name
  * and date, so the paper shrinks to a marker and the text takes the width.
  */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun NoteRow(
     note: NoteEntity,
@@ -46,8 +43,8 @@ fun NoteRow(
     firstPageImagePath: String? = null,
     darkReader: Boolean = false,
     selected: Boolean,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit,
+    /** Tap, long press and hold-to-drag, supplied by the shelf. */
+    interaction: Modifier = Modifier,
     modifier: Modifier = Modifier,
 ) {
     val brand = MaterialTheme.brand
@@ -62,7 +59,7 @@ fun NoteRow(
                 color = if (selected) MaterialTheme.colorScheme.primary else brand.tileBorder,
                 shape = shape,
             )
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .then(interaction)
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),

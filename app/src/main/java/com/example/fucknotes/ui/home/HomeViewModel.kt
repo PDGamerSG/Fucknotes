@@ -368,6 +368,21 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     fun setSort(order: SortOrder) = viewModelScope.launch { settingsRepo.setSort(order) }
 
     /**
+     * Drops a dragged note between its new neighbours.
+     *
+     * If the shelf was showing a live sort, the order on screen becomes the manual order first, so
+     * the note lands exactly where it was dropped and nothing else moves.
+     */
+    fun moveNote(id: Long, beforeId: Long?, afterId: Long?) = viewModelScope.launch {
+        val current = state.value
+        if (current.sort != SortOrder.MANUAL) {
+            repo.adoptOrder(current.notes.map { it.id })
+            settingsRepo.setSort(SortOrder.MANUAL)
+        }
+        repo.moveNote(id, beforeId, afterId)
+    }
+
+    /**
      * Edits one slot of the app-wide pen tray from the stationery sheet.
      *
      * The tray is a property of the user's pen case rather than of any note, which is why it lives

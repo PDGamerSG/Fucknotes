@@ -17,6 +17,23 @@ Changes:
   bar over the toolbar).
 - Settings is grouped into cards at a 760 dp maximum width. The home grid leaves room under the
   last row for the corner button; the rail's bottom rows sit on a wash so "Light mode" is legible.
+- Finger navigation in every chrome state: one finger scrolls the page in "Pen only" and under
+  the zoom lock (the lock now pins only the scale and the double-tap swap). Fingers that were on
+  the glass while the stylus wrote are tracked as the palm until they lift, so a resting hand
+  cannot drift the page or mark it after the pen comes up, in any finger mode.
+- Manual shelf order (new default sort "Manual order"): a note keeps the place it was created in;
+  editing never moves it. Press and hold a note still for 2 s to lift it, then drag it over
+  another note to take that place, in the grid or the list; the shelf auto-scrolls near the
+  edges. A long press still selects. Positions live in a new `position` column (database
+  version 6, seeded from `createdAt`); moves land between neighbours and renumber only when two
+  neighbours are adjacent. Dragging while a live sort is shown first adopts the visible order as
+  the manual order so nothing jumps. Backups carry the position.
+- Performance: the release build is now R8-minified and resource-shrunk (8.5 MB APK against
+  30 MB debug) and signed with the debug key so it installs over the tablet's build; page image
+  visibility is derived state with a one-viewport prefetch band and a heap-scaled bitmap cache,
+  so scrolling an imported PDF no longer recomposes per frame or re-decodes pages; the eraser
+  rejects strokes by cached bounds before the native coverage test; shelf tiles draw in their own
+  layers so scrolling moves rendered tiles instead of repainting every thumbnail.
 - A tab bar along the top of the editor (full-controls state) lists every open note, like a
   browser: the active tab is highlighted, each tab has a close cross, a plus returns to the shelf
   to open another note, and a chevron lists all tabs when more than one is open. Going back to the
@@ -38,9 +55,9 @@ Executed:
 adb -s b86e61d8 shell am instrument -w -r com.example.fucknotes.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
-- 23 JVM tests passed (14 existing, `EditorChromeTest`, and `OpenTabsTest`: order, rename, close
-  successor, forget, limit).
-- 13 instrumented tests passed on the physical tablet, including the new `EditorTabBarTest`,
+- 27 JVM tests passed (14 existing, `EditorChromeTest`, `OpenTabsTest`, and `NotePositionsTest`).
+- 16 instrumented tests passed on the physical tablet, including `NoteOrderTest` (manual order,
+  moves, renumbering, adoption), the rewritten finger tests, `EditorTabBarTest`,
   `FingerInputTest.readingModeLetsFingersScrollWithPenOnlyAndZoomLockOn`,
   `EditorChromeTest.lockCyclesControlsPenBarAndReadingWithPageCounterAlwaysPresent` (each state
   shows exactly its controls; the arrow past the last page adds a sheet) and the locked-surface

@@ -22,6 +22,20 @@ Xiaomi tablet attached over USB; earlier passes were done on Windows.
 - Settings is grouped into titled cards with a 760 dp max width.
 - Home: the grid/list leaves room under the last row for the corner FAB; the rail's bottom rows sit
   on a wash so "Light mode" is legible over the artwork; "Images on this page" has an icon.
+- Finger navigation: `InkSurface` tracks `palmIds` (touch pointers seen while the stylus was in
+  contact) and lets every other finger pan in all modes; `FingerInputMode.DISABLED` ("Pen only")
+  means fingers never draw or swap tools, not that they are ignored. The zoom lock pins the scale
+  and the double-tap swap only.
+- Manual shelf order: `NoteEntity.position` (migration 5→6 seeds it from `createdAt`),
+  `SortOrder.MANUAL` is the default, `NotesRepository.moveNote/adoptOrder` with
+  `NotePositions.between`, and `ui/home/Reorder.kt` (`NoteReorderState`, `Modifier.holdToDrag`,
+  `Modifier.reorderItem`). Hold still 2 s to lift; a long press still selects and the drag takes
+  that selection back. `HomeViewModel.moveNote` adopts the displayed order first when a live sort
+  is active.
+- Release build: `isMinifyEnabled`/`isShrinkResources` with `proguard-rules.pro`, signed with the
+  debug key. Install `app/build/outputs/apk/release/app-release.apk` for daily use; install the
+  debug APK before running instrumentation (the test APK targets debug classes). `run-as` only
+  works while the debug build is installed.
 - Editor tab bar: `ui/editor/tabs/EditorTabBar.kt` always renders in `FULL` chrome (one tab or
   many). `OpenTabs` keeps the list as app-scoped snapshot state; `OpenTabs.bind` (called from
   `NotesApp.onCreate`) restores ids from `SettingsRepository.openTabIds` and writes every change

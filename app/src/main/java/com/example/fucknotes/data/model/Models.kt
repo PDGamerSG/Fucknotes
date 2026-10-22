@@ -127,7 +127,13 @@ val InkColors: List<Int> = listOf(
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
-enum class SortOrder { UPDATED_DESC, UPDATED_ASC, CREATED_DESC, CREATED_ASC, TITLE_ASC, TITLE_DESC }
+/**
+ * How the shelf is ordered.
+ *
+ * [MANUAL] is the default: a note keeps the place it was created in, and only a deliberate drag
+ * moves it. The others re-sort live, which is useful for finding a note and wrong for keeping one.
+ */
+enum class SortOrder { MANUAL, UPDATED_DESC, UPDATED_ASC, CREATED_DESC, CREATED_ASC, TITLE_ASC, TITLE_DESC }
 
 enum class LayoutMode { GRID, LIST }
 
