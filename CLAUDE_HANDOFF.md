@@ -104,6 +104,14 @@ The Windows workstation sync service sometimes creates `*.sync-conflict-*` copie
 Move any that appear into `build/sync-conflict-backups/<date>/` before building. None appeared on
 the Mac.
 
+## Commit identity and releases
+
+Commit as `PDGamerSG <177869559+PDGamerSG@users.noreply.github.com>` (this Mac's git config);
+GitHub links that address to the account. Commits made with any other address show without the
+owner's profile. The 2026-10-22 commits were rewritten to this identity and force-pushed.
+Releases: bump `versionCode`/`versionName` in `app/build.gradle.kts`, tag `vX.Y.Z`, build
+`:app:assembleRelease`, then `gh release create vX.Y.Z app-release.apk`. v1.1.0 is the first.
+
 ## Build on macOS
 
 ```bash
