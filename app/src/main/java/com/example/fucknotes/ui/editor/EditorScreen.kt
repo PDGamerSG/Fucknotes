@@ -23,6 +23,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.background
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -116,6 +117,7 @@ private fun EditorContent(
     var showPageImages by remember { mutableStateOf(false) }
     var showExport by remember { mutableStateOf(false) }
     var showTagDialog by remember { mutableStateOf(false) }
+    var showRename by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var pendingCameraPath by rememberSaveable(state.noteId) { mutableStateOf<String?>(null) }
 
@@ -200,6 +202,13 @@ private fun EditorContent(
         }
     }
 
+    // Until the row is read the note's kind is unknown, and the typed-note frame — title field,
+    // "Start writing…" — used to show for a beat before a notebook replaced it. Show the desk.
+    if (!state.loaded) {
+        Box(Modifier.fillMaxSize().background(MaterialTheme.brand.desk))
+        return
+    }
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
@@ -244,6 +253,7 @@ private fun EditorContent(
                                     onColor = { showColor = true },
                                     onPaper = { showPaper = true },
                                     onTags = { showTagDialog = true },
+                                    onRename = { showRename = true },
                                     onAddImage = { pickImage.launch(arrayOf("image/*")) },
                                     onPageImages = if (isInkNote) ({ showPageImages = true }) else null,
                                     onExport = { showExport = true },
@@ -353,6 +363,7 @@ private fun EditorContent(
                         onColor = { showColor = true },
                         onPaper = { showPaper = true },
                         onTags = { showTagDialog = true },
+                        onRename = { showRename = true },
                         onAddImage = { pickImage.launch(arrayOf("image/*")) },
                         onPageImages = { showPageImages = true },
                         onExport = { showExport = true },
@@ -474,6 +485,14 @@ private fun EditorContent(
         )
     }
 
+    if (showRename) {
+        RenameDialog(
+            current = state.title,
+            onDismiss = { showRename = false },
+            onConfirm = { viewModel.setTitle(it); showRename = false },
+        )
+    }
+
     if (showTagDialog) {
         TextPromptDialog(
             title = "Add tag",
@@ -523,9 +542,11 @@ private fun EditorMenu(
     onExport: () -> Unit,
     onDelete: () -> Unit,
     onOpenNote: (Long) -> Unit,
+    onRename: () -> Unit = {},
 ) {
     EditorOverflowMenu(
         expanded = expanded,
+        onRename = { onDismiss(); onRename() },
         onDismiss = onDismiss,
         onColor = { onDismiss(); onColor() },
         onPaper = { onDismiss(); onPaper() },

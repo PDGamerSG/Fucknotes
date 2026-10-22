@@ -112,6 +112,11 @@ and export, first-page previews, dark reader, folder hierarchy, home export.
   into that app's info page. Android drops a stale default by itself when the candidate set
   changes, which is what happened on the tablet (Xodo held PDF and .ppt). `DocumentIntentTest`
   queries the resolver on device for every shape.
+- Opening a note: `EditorViewModel` publishes the row first (`loaded = true`), then `loadInk`
+  streams strokes in growing batches via `InkCodec.parse` + `decodeStroke` in parallel, appending
+  to `strokes`. `inkLoaded` gates ink encoding in `saveNow` and the empty-note discard; never
+  encode or discard before it is true. `InkCache` (4 notes) keyed by note id + exact JSON makes a
+  reopen instant; `saveNow` refreshes it. `EditorScreen` paints the desk until `state.loaded`.
 - Select tool (`InkTool.LASSO`): `ui/editor/ink/Lasso.kt` holds the pure geometry and
   `LassoState` (selection indices, loop, drag — all world units). `InkSurface` takes `lasso` and
   `onMoveStrokes`; its gesture loop has a LASSO branch that consumes every touch (so wet ink never

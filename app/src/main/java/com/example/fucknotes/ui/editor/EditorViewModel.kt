@@ -13,6 +13,9 @@ import com.example.fucknotes.data.db.TagEntity
 import androidx.ink.strokes.Stroke
 import com.example.fucknotes.data.ink.DEFAULT_RULE_SPACING_DP
 import com.example.fucknotes.data.ink.InkCodec
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.async
+import com.example.fucknotes.data.ink.InkCache
 import com.example.fucknotes.data.ink.InkStroke
 import com.example.fucknotes.data.ink.PageSpec
 import com.example.fucknotes.data.model.AttachmentType
@@ -172,6 +175,50 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
     private var inkDirty = false
     private var encodedInk = ""
 
+    /**
+     * False until every stored stroke is on the page. Ink is streamed in after the page shows,
+     * and a save in that window must keep the stored JSON as it is: encoding the half-built list
+     * would write a note with its tail cut off.
+     */
+    private var inkLoaded = false
+
+    /**
+     * Builds the stored strokes off the main thread, a batch at a time, and appends each batch
+     * as it lands — so the first lines are on the page within a few frames and the user can
+     * start writing while the rest arrive. Batches start small and grow; building runs across
+     * the Default dispatcher's threads.
+     */
+    private fun loadInk(json: String) = viewModelScope.launch {
+        val dtos = withContext(Dispatchers.Default) { InkCodec.parse(json) }
+        if (dtos.isEmpty()) {
+            inkLoaded = true
+            InkCache.put(noteId, json, strokes)
+            return@launch
+        }
+        val batches = buildList {
+            var start = 0
+            var size = 24
+            while (start < dtos.size) {
+                add(dtos.subList(start, minOf(dtos.size, start + size)))
+                start += size
+                size = minOf(size * 2, 256)
+            }
+        }
+        val loaded = ArrayList<InkStroke>(dtos.size)
+        coroutineScope {
+            val built = batches.map { batch -> async(Dispatchers.Default) { batch.mapNotNull { InkCodec.decodeStroke(it) } } }
+            built.forEach { deferred ->
+                val part = deferred.await()
+                loaded += part
+                // Appended, not assigned: a stroke written while the rest is still arriving stays.
+                strokes = strokes + part
+            }
+        }
+        inkLoaded = true
+        if (!inkDirty) InkCache.put(noteId, json, strokes)
+        else scheduleSave()
+    }
+
     init {
         // Stylus-only is a property of the user's hardware, and the pen tray of the pens the user
         // set up — neither belongs to one note, so both are kept app-wide and observed rather than
@@ -202,7 +249,13 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
         viewModelScope.launch {
             val note = repo.getNote(noteId) ?: return@launch
             encodedInk = note.drawingJson
-            strokes = withContext(Dispatchers.Default) { InkCodec.decode(note.drawingJson) }
+            // The page shows the moment the row is read; the ink follows, in order, as it is built.
+            // A note opened a moment ago comes back whole from the cache.
+            val cached = InkCache.get(noteId, note.drawingJson)
+            if (cached != null) {
+                strokes = cached
+                inkLoaded = true
+            }
             _state.value = _state.value.copy(
                 loaded = true,
                 title = note.title,
@@ -225,6 +278,7 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
             reachedPages = note.pageCount.coerceIn(1, MAX_NOTEBOOK_PAGES)
             pagesExplicitlyCreated = note.pagesExplicitlyCreated
             recountPages()
+            if (cached == null) loadInk(note.drawingJson)
         }
         repo.observeAttachments(noteId)
             .onEach { list -> _state.value = _state.value.copy(attachments = list) }
@@ -710,7 +764,9 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
         val empty = s.title.isBlank() && s.body.isBlank() &&
             s.checklist.none { it.text.isNotBlank() } &&
             strokes.isEmpty() && s.attachments.isEmpty()
-        val discard = s.loaded && empty && !pagesExplicitlyCreated
+        // Ink streams in after the page shows: a note left before it has all arrived is not
+        // empty, and the stored ink itself is the proof.
+        val discard = s.loaded && inkLoaded && encodedInk.isBlank() && empty && !pagesExplicitlyCreated
         if (discard) repo.deleteForever(listOf(noteId))
         return discard
     }
@@ -751,9 +807,10 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
 
             // Encoding compresses every input batch, so only pay for it when the ink actually moved,
             // and never on the main thread.
-            if (inkDirty) {
+            if (inkDirty && inkLoaded) {
                 encodedInk = withContext(Dispatchers.Default) { InkCodec.encode(snapshot) }
                 inkDirty = strokes !== snapshot
+                InkCache.put(noteId, encodedInk, snapshot)
             }
 
             val next = existing.copy(

@@ -3,7 +3,23 @@
 Validated on the connected Xiaomi 2410CRP4CI (Android 16) on 2026-10-22. The checks below
 distinguish automated coverage, interactive checks and remaining scenarios.
 
-## Latest pass (pen colour still changing on lift, now and then) — 2026-10-23, macOS — code only
+## Latest pass (rename, no typed-note flash, faster open) — 2026-10-23, macOS — code only
+
+- ⋯ → **Rename**: dialog with the current name selected; Done or the Rename button saves it, and
+  the tab strip follows.
+- The typed-note frame (title field, "Start writing…") no longer shows while a notebook loads:
+  the editor paints the desk until the row is read, then the right editor.
+- Opening: the page shows as soon as the row is read; the ink is built off the main thread in
+  batches (24 strokes first, doubling to 256) across the Default dispatcher's threads and appended
+  as each batch lands, so the first lines are on the page within a few frames. A save while the
+  ink is still arriving keeps the stored JSON (never writes a half-built list), and a note left
+  mid-load is never discarded as empty. The last four notes' decoded strokes are kept
+  (`InkCache`), so coming back through the tab strip is instant.
+- Tests: `InkDecodeTest` (device): batched parallel decode equals the whole decode and re-encodes
+  to the same JSON; the cache answers only for the JSON it was built from. Not run: tablet
+  detached. Unit tests 67 pass.
+
+## Previous pass (pen colour still changing on lift, now and then) — 2026-10-23, macOS — code only
 
 Cause: the night-brush → daylight-brush map was a `WeakHashMap`, and brushes compare by value.
 The second stroke with the same pen made an equal brush; the map kept the *first* brush object

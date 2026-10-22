@@ -72,7 +72,7 @@ object InkCodec {
     )
 
     @Serializable
-    private data class StrokeDto(
+    data class StrokeDto(
         /** Base64 of the library-encoded [StrokeInputBatch]. */
         val inputs: String,
         val tool: String,
@@ -102,24 +102,27 @@ object InkCodec {
         return json.encodeToString(Page(strokes = dtos))
     }
 
-    fun decode(raw: String): List<InkStroke> {
+    fun decode(raw: String): List<InkStroke> = parse(raw).mapNotNull { decodeStroke(it) }
+
+    /** The stored strokes, parsed but not yet built; building is the expensive half. */
+    fun parse(raw: String): List<StrokeDto> {
         if (raw.isBlank()) return emptyList()
-        val page = runCatching { json.decodeFromString<Page>(raw) }.getOrNull() ?: return emptyList()
-        return page.strokes.mapNotNull { dto ->
-            runCatching {
-                val tool = runCatching { InkTool.valueOf(dto.tool) }.getOrDefault(InkTool.PEN)
-                val inputs = ByteArrayInputStream(Base64.decode(dto.inputs, Base64.NO_WRAP))
-                    .use { StrokeInputBatch.decode(it) }
-                val brush = Brush.createWithColorIntArgb(
-                    family = familyForTool(tool),
-                    colorIntArgb = colorForTool(tool, dto.colorArgb),
-                    size = dto.size,
-                    epsilon = dto.epsilon,
-                )
-                InkStroke(Stroke(brush = brush, inputs = inputs), tool)
-            }.getOrNull()
-        }
+        return runCatching { json.decodeFromString<Page>(raw) }.getOrNull()?.strokes.orEmpty()
     }
+
+    /** One stroke from its stored form: the input batch decoded and the mesh built. */
+    fun decodeStroke(dto: StrokeDto): InkStroke? = runCatching {
+        val tool = runCatching { InkTool.valueOf(dto.tool) }.getOrDefault(InkTool.PEN)
+        val inputs = ByteArrayInputStream(Base64.decode(dto.inputs, Base64.NO_WRAP))
+            .use { StrokeInputBatch.decode(it) }
+        val brush = Brush.createWithColorIntArgb(
+            family = familyForTool(tool),
+            colorIntArgb = colorForTool(tool, dto.colorArgb),
+            size = dto.size,
+            epsilon = dto.epsilon,
+        )
+        InkStroke(Stroke(brush = brush, inputs = inputs), tool)
+    }.getOrNull()
 
     /**
      * Builds the brush for a tool.

@@ -12,6 +12,7 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.DriveFileRenameOutline
 import androidx.compose.material.icons.outlined.FormatPaint
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.PhotoLibrary
@@ -28,6 +29,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -55,6 +57,7 @@ fun EditorOverflowMenu(
     onDelete: () -> Unit,
     darkReader: Boolean = false,
     onToggleDarkReader: () -> Unit = {},
+    onRename: () -> Unit = {},
 ) {
     DropdownMenu(expanded, onDismissRequest = onDismiss) {
         // Night colours for every page, image and stroke; the same switch as in Settings, here
@@ -66,6 +69,11 @@ fun EditorOverflowMenu(
             onClick = onToggleDarkReader,
         )
         HorizontalDivider()
+        DropdownMenuItem(
+            text = { Text("Rename") },
+            leadingIcon = { Icon(Icons.Outlined.DriveFileRenameOutline, null) },
+            onClick = onRename,
+        )
         DropdownMenuItem(
             text = { Text("Paper") },
             leadingIcon = { Icon(Icons.Outlined.FormatPaint, null) },
@@ -160,5 +168,38 @@ fun ExportDialog(onDismiss: () -> Unit, onExport: (ExportFormat, Boolean) -> Uni
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+
+/** A new name for the note. The current name starts selected, so typing replaces it. */
+@Composable
+fun RenameDialog(current: String, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+    var value by remember {
+        mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(current, androidx.compose.ui.text.TextRange(0, current.length)))
+    }
+    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+    val confirm = { val name = value.text.trim(); if (name.isNotEmpty()) onConfirm(name) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Rename") },
+        text = {
+            ImmersiveDialogWindow()
+            androidx.compose.material3.OutlinedTextField(
+                value = value,
+                onValueChange = { value = it },
+                singleLine = true,
+                label = { Text("Name") },
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    imeAction = androidx.compose.ui.text.input.ImeAction.Done,
+                    capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Sentences,
+                ),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { confirm() }),
+                modifier = Modifier.fillMaxWidth().focusRequester(focus),
+            )
+            androidx.compose.runtime.LaunchedEffect(Unit) { focus.requestFocus() }
+        },
+        confirmButton = { TextButton(onClick = confirm, enabled = value.text.isNotBlank()) { Text("Rename") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )
 }
