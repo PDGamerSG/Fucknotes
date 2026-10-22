@@ -134,9 +134,46 @@ fun EditorOverflowMenu(
     }
 }
 
+/** Light or dark page, then export. The choice starts from how the note is being read. */
 @Composable
-fun ExportDialog(onDismiss: () -> Unit, onExport: (ExportFormat, Boolean) -> Unit) {
-    var dark by remember { mutableStateOf(false) }
+fun PdfExportDialog(initialDark: Boolean, onDismiss: () -> Unit, onExport: (dark: Boolean) -> Unit) {
+    var dark by remember { mutableStateOf(initialDark) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Export as PDF") },
+        text = {
+            ImmersiveDialogWindow()
+            Column {
+                listOf(false to "Light page", true to "Dark page").forEach { (isDark, label) ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { dark = isDark }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        androidx.compose.material3.RadioButton(selected = dark == isDark, onClick = { dark = isDark })
+                        Column(Modifier.padding(start = 4.dp)) {
+                            Text(label)
+                            Text(
+                                if (isDark) "Night slate, night ink, as dark mode shows the page"
+                                else "The paper and ink colours the note was written in",
+                                style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                                color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onExport(dark) }) { Text("Export") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+@Composable
+fun ExportDialog(onDismiss: () -> Unit, onExport: (ExportFormat, Boolean) -> Unit, initialDark: Boolean = false) {
+    var dark by remember { mutableStateOf(initialDark) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Export") },

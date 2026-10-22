@@ -3,7 +3,19 @@
 Validated on the connected Xiaomi 2410CRP4CI (Android 16) on 2026-10-22. The checks below
 distinguish automated coverage, interactive checks and remaining scenarios.
 
-## Latest pass (rename, no typed-note flash, faster open) — 2026-10-23, macOS — code only
+## Latest pass (export: subtler dots, real dark export, light/dark choice) — 2026-10-23, macOS — code only
+
+- Notebook sheets in a PDF drew dots 4 pt across and rules 1.5 pt wide, opaque — twice what the
+  screen shows. Now 2.6 pt dots at 78 % alpha and 0.9 pt rules, scaled with the sheet.
+- The dark export drew the stored (black) ink onto a dark sheet. It now renders the page as dark
+  mode shows it: night slate, night rules, every page image through the night matrix, every
+  stroke in its night colour — for notebook sheets and canvas pages alike.
+- ⋯ → Export as PDF asks Light page / Dark page (preselected from how the note is being read),
+  then shares. Export as… keeps its checkbox, also preselected. The shelf's export dialog gains a
+  "Dark pages" checkbox that applies to combined, ZIP and folder exports.
+- Not run on the tablet (detached). Unit tests pass.
+
+## Previous pass (rename, no typed-note flash, faster open) — 2026-10-23, macOS — code only
 
 - ⋯ → **Rename**: dialog with the current name selected; Done or the Rename button saves it, and
   the tab strip follows.

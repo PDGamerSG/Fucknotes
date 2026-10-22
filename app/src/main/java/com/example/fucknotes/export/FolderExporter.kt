@@ -19,13 +19,13 @@ import java.util.zip.ZipOutputStream
 class FolderExporter(private val context: Context, private val exporter: NoteExporter, private val editable: Boolean = true) {
     suspend fun save(
         notes: List<NoteEntity>, folders: List<FolderEntity>, rootId: Long?, title: String,
-        mode: HomeExportMode, destination: Uri, onProgress: (Int, Int) -> Unit,
+        mode: HomeExportMode, destination: Uri, dark: Boolean = false, onProgress: (Int, Int) -> Unit,
     ) = withContext(Dispatchers.IO) {
         require(notes.isNotEmpty()) { "There are no notes to export" }
         val paths = exportPathsFor(notes, folders, rootId)
         when (mode) {
             HomeExportMode.COMBINED -> {
-                val file = exporter.exportAll(notes, ExportFormat.PDF)
+                val file = exporter.exportAll(notes, ExportFormat.PDF, darkStyle = dark)
                 try { copyToDocument(file, destination) } finally { file.delete() }
             }
             HomeExportMode.ZIP -> {
@@ -35,7 +35,7 @@ class FolderExporter(private val context: Context, private val exporter: NoteExp
                     ZipOutputStream(raw.buffered()).use { zip ->
                         notes.forEachIndexed { index, note ->
                             currentCoroutineContext().ensureActive()
-                            val file = exporter.export(note, ExportFormat.PDF, editable = editable)
+                            val file = exporter.export(note, ExportFormat.PDF, darkStyle = dark, editable = editable)
                             try {
                                 zip.putNextEntry(ZipEntry(paths.getValue(note.id).joinToString("/")))
                                 file.inputStream().use { it.copyTo(zip) }
@@ -64,7 +64,7 @@ class FolderExporter(private val context: Context, private val exporter: NoteExp
                                 dir.createDirectory(part) ?: error("Cannot create $part")
                             }
                         }
-                        val file = exporter.export(note, ExportFormat.PDF, editable = editable)
+                        val file = exporter.export(note, ExportFormat.PDF, darkStyle = dark, editable = editable)
                         try {
                             val target = dir.createFile("application/pdf", parts.last())
                                 ?: error("Cannot save ${parts.last()}")

@@ -374,6 +374,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                 ?: target.noteIds.mapNotNull { repo.getNote(it) }
             com.example.fucknotes.export.FolderExporter(getApplication(), exporter, state.value.settings.editablePdfExports).save(
                 notes, state.value.folders, target.folderId, target.title, request.mode, destination,
+                dark = request.dark,
             ) { done, total -> progress.value = "Exporting note $done of $total…" }
             _message.value = "Saved ${notes.size} ${if (notes.size == 1) "note" else "notes"}"
         } catch (error: Exception) {

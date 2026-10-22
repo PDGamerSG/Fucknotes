@@ -285,9 +285,9 @@ fun HomeScreen(
     }
 
     exportTarget?.let { target ->
-        HomeExportDialog(target.title, state.busy, onDismiss = { exportTarget = null }) { mode ->
+        HomeExportDialog(target.title, state.busy, onDismiss = { exportTarget = null }, initialDark = state.settings.darkReader) { mode, dark ->
             exportTarget = null
-            val request = HomeExportRequest(target, mode)
+            val request = HomeExportRequest(target, mode, dark)
             viewModel.pendingExport = request
             val name = com.example.fucknotes.export.ExportNames.safeBase(target.title)
             when (mode) {

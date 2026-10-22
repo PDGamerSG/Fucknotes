@@ -5,6 +5,10 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import com.example.fucknotes.ui.editor.ink.forDarkReader
+import com.example.fucknotes.ui.editor.ink.NightPalette
+import androidx.compose.ui.graphics.toArgb
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
@@ -74,6 +78,11 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
         const val MARGIN = 90f
         const val TITLE_SIZE = 44f
         const val BODY_SIZE = 28f
+
+        /** Paper marks on a notebook sheet, in points: what the screen shows at 100 %. */
+        const val RULE_WIDTH_PT = 0.9f
+        const val DOT_RADIUS_PT = 1.3f
+        const val DOT_ALPHA = 200
     }
 
     suspend fun export(
@@ -392,13 +401,16 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
         sheetHeight: Int,
         attachments: List<AttachmentEntity> = emptyList(),
     ) {
+        // A dark export is the page as dark mode shows it: the night slate, night rules, every
+        // image through the night matrix and every stroke in its night colour. Drawing the stored
+        // ink as is onto a dark sheet left black handwriting invisible.
         val background = when {
-            dark -> Color.parseColor("#12131A")
+            dark -> NightPalette.paper.toArgb()
             note.colorArgb != 0 -> note.colorArgb
             else -> Color.WHITE
         }
         val faint = when {
-            dark -> Color.parseColor("#2A2C36")
+            dark -> NightPalette.rule.toArgb()
             note.lineColorArgb != 0 -> note.lineColorArgb
             else -> Color.parseColor("#E4E4EA")
         }
@@ -415,7 +427,7 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
             val bitmap = MediaStore.decodeImage(File(image.path))
             try {
                 canvas.drawBitmap(bitmap, null, android.graphics.RectF(image.pageX, image.pageY,
-                    image.pageX + image.pageWidth, image.pageY + image.pageHeight), Paint(Paint.FILTER_BITMAP_FLAG))
+                    image.pageX + image.pageWidth, image.pageY + image.pageHeight), imagePaint(dark))
             } finally { bitmap.recycle() }
         }
         canvas.restore()
@@ -430,7 +442,7 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
             canvas.clipRect(0f, 0f, sheetWidth.toFloat(), sheetHeight.toFloat())
             canvas.concat(transform)
             strokes.forEach { inkStroke ->
-                inkRenderer.draw(canvas, inkStroke.stroke, transform)
+                inkRenderer.draw(canvas, if (dark) inkStroke.forDarkReader() else inkStroke.stroke, transform)
             }
             canvas.restore()
         }
@@ -447,11 +459,15 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
     ) {
         val style = note.paperStyle
         if (style == PaperStyle.PLAIN) return
+        // Sized as the page draws them: a rule is a hairline, a dot a little under 3 points
+        // across and a touch translucent. Export dots were twice that and read as a grid of
+        // beads over the writing.
         val paint = Paint().apply {
             isAntiAlias = true
             this.color = color
-            strokeWidth = 1.5f
+            strokeWidth = RULE_WIDTH_PT * scale
         }
+        val dot = Paint(paint).apply { this.style = Paint.Style.FILL; alpha = DOT_ALPHA }
         val spacingDp = note.lineSpacingDp.takeIf { it > 0 }?.toFloat() ?: DEFAULT_RULE_SPACING_DP
         val step = spacingDp * scale
         if (step < 2f) return
@@ -463,7 +479,7 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
             if (style == PaperStyle.DOTTED) {
                 var x = step
                 while (x < sheetWidth) {
-                    canvas.drawCircle(x, y, 2f, paint)
+                    canvas.drawCircle(x, y, DOT_RADIUS_PT * scale, dot)
                     x += step
                 }
             }
@@ -530,7 +546,7 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
         }
 
         // Ink sits on top of the text, matching how the editor layers them.
-        drawInk(canvas, repo.inkOf(note), y + 24f, attachments, PageSpec.decode(note.pageFormat))
+        drawInk(canvas, repo.inkOf(note), y + 24f, attachments, PageSpec.decode(note.pageFormat), dark)
     }
 
     private fun drawWrapped(canvas: Canvas, text: String, paint: TextPaint, top: Float, maxLines: Int = Int.MAX_VALUE): Float {
@@ -601,7 +617,7 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
      * past 1:1, which keeps small sketches at their natural size instead of blowing them up.
      */
     private fun drawInk(canvas: Canvas, strokes: List<InkStroke>, bodyTop: Float,
-        attachments: List<AttachmentEntity> = emptyList(), spec: PageSpec = PageSpec.Default) {
+        attachments: List<AttachmentEntity> = emptyList(), spec: PageSpec = PageSpec.Default, dark: Boolean = false) {
         val images = attachments.filter { it.pageIndex != null }
         if (strokes.isEmpty() && images.isEmpty()) return
 
@@ -646,11 +662,11 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
             try {
                 val y = NotebookLayout.topOf(image.pageIndex ?: 0, spec) + image.pageY
                 canvas.drawBitmap(bitmap, null, android.graphics.RectF(image.pageX, y,
-                    image.pageX + image.pageWidth, y + image.pageHeight), Paint(Paint.FILTER_BITMAP_FLAG))
+                    image.pageX + image.pageWidth, y + image.pageHeight), imagePaint(dark))
             } finally { bitmap.recycle() }
         }
         strokes.forEach { inkStroke ->
-            inkRenderer.draw(canvas, inkStroke.stroke, transform)
+            inkRenderer.draw(canvas, if (dark) inkStroke.forDarkReader() else inkStroke.stroke, transform)
         }
         canvas.restore()
     }
@@ -677,6 +693,11 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
             y = target.bottom + 20f
             bitmap.recycle()
         }
+    }
+
+    /** Bitmap paint for a page image: filtered, and through the night matrix on a dark export. */
+    private fun imagePaint(dark: Boolean): Paint = Paint(Paint.FILTER_BITMAP_FLAG).apply {
+        if (dark) colorFilter = ColorMatrixColorFilter(NightPalette.imageMatrix)
     }
 
     // ---- sharing -----------------------------------------------------------

@@ -118,6 +118,7 @@ private fun EditorContent(
     var showExport by remember { mutableStateOf(false) }
     var showTagDialog by remember { mutableStateOf(false) }
     var showRename by remember { mutableStateOf(false) }
+    var showPdfExport by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var pendingCameraPath by rememberSaveable(state.noteId) { mutableStateOf<String?>(null) }
 
@@ -254,6 +255,7 @@ private fun EditorContent(
                                     onPaper = { showPaper = true },
                                     onTags = { showTagDialog = true },
                                     onRename = { showRename = true },
+                                    onPdf = { showPdfExport = true },
                                     onAddImage = { pickImage.launch(arrayOf("image/*")) },
                                     onPageImages = if (isInkNote) ({ showPageImages = true }) else null,
                                     onExport = { showExport = true },
@@ -364,6 +366,7 @@ private fun EditorContent(
                         onPaper = { showPaper = true },
                         onTags = { showTagDialog = true },
                         onRename = { showRename = true },
+                        onPdf = { showPdfExport = true },
                         onAddImage = { pickImage.launch(arrayOf("image/*")) },
                         onPageImages = { showPageImages = true },
                         onExport = { showExport = true },
@@ -471,8 +474,22 @@ private fun EditorContent(
         )
     }
 
+    if (showPdfExport) {
+        PdfExportDialog(
+            initialDark = state.darkReader,
+            onDismiss = { showPdfExport = false },
+            onExport = { dark ->
+                showPdfExport = false
+                viewModel.export(ExportFormat.PDF, darkStyle = dark) { file, mime ->
+                    context.startActivity(Intent.createChooser(viewModel.shareIntentFor(file, mime), "Export PDF"))
+                }
+            },
+        )
+    }
+
     if (showExport) {
         ExportDialog(
+            initialDark = state.darkReader,
             onDismiss = { showExport = false },
             onExport = { format, dark ->
                 showExport = false
@@ -543,6 +560,7 @@ private fun EditorMenu(
     onDelete: () -> Unit,
     onOpenNote: (Long) -> Unit,
     onRename: () -> Unit = {},
+    onPdf: () -> Unit = {},
 ) {
     EditorOverflowMenu(
         expanded = expanded,
@@ -554,14 +572,7 @@ private fun EditorMenu(
         onAddImage = { onDismiss(); onAddImage() },
         onPageImages = onPageImages?.let { action -> { onDismiss(); action() } },
         onExport = { onDismiss(); onExport() },
-        onExportPdf = {
-            onDismiss()
-            viewModel.export(ExportFormat.PDF, darkStyle = false) { file, mime ->
-                context.startActivity(
-                    Intent.createChooser(viewModel.shareIntentFor(file, mime), "Export PDF")
-                )
-            }
-        },
+        onExportPdf = { onDismiss(); onPdf() },
         onShareText = {
             onDismiss()
             viewModel.shareAsText { text ->
