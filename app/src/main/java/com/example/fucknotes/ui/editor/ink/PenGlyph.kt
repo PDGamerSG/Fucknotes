@@ -36,8 +36,10 @@ fun PenGlyph(
     modifier: Modifier = Modifier,
     height: Int = 42,
     highlighter: Boolean = false,
+    /** Show the pen as it will write on a night page, so a black pen reads as the off-white it draws. */
+    darkReader: Boolean = false,
 ) {
-    val color = Color(pen.colorArgb)
+    val color = Color(if (darkReader) darkReaderArgb(pen.colorArgb, pen.tool) else pen.colorArgb)
     val scheme = MaterialTheme.colorScheme
     Box(modifier.size(48.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onClick).semantics {
         contentDescription = penLabel(pen)

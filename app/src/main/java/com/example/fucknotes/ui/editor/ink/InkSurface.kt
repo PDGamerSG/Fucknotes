@@ -178,13 +178,11 @@ fun InkSurface(
         }
     }
 
+    // The brush is always built in the pen's real colour and only then turned to night, so the
+    // night brush knows which daylight brush to hand a finished stroke back in.
     val brush = remember(tool, colorArgb, widthDp, camera.scale, darkReader) {
-        if (tool.isBrush) InkCodec.brushFor(
-            tool,
-            if (darkReader) darkReaderArgb(colorArgb, tool) else colorArgb,
-            widthDp,
-            camera.scale,
-        ) else null
+        if (tool.isBrush) InkCodec.brushFor(tool, colorArgb, widthDp, camera.scale)
+            .let { if (darkReader) it.forNight(tool) else it } else null
     }
 
     /**
@@ -200,13 +198,22 @@ fun InkSurface(
      */
     val nextBrush = remember {
         {
-            InkCodec.brushFor(
-                tool = currentTool.takeIf { it.isBrush } ?: InkTool.PEN,
-                colorArgb = if (currentDarkReader) darkReaderArgb(currentColor, currentTool) else currentColor,
+            val brushTool = currentTool.takeIf { it.isBrush } ?: InkTool.PEN
+            val day = InkCodec.brushFor(
+                tool = brushTool,
+                colorArgb = currentColor,
                 widthDp = currentWidth,
                 worldToScreenScale = camera.scale,
             )
+            if (currentDarkReader) day.forNight(brushTool) else day
         }
+    }
+
+    // Finished strokes leave in daylight colour whatever they were drawn in. One stable lambda,
+    // for the same reason as nextBrush: a fresh one would rebuild the wet-ink surface.
+    val currentOnStrokesFinished by rememberUpdatedState(onStrokesFinished)
+    val finishInDaylight = remember {
+        { finished: List<Stroke> -> currentOnStrokesFinished(finished.map { it.daylight() }) }
     }
 
     // Compose's Matrix is a value class over a FloatArray, so it compares by reference: building a
@@ -214,10 +221,14 @@ fun InkSurface(
     // make it rebuild its low-latency surface. Keep one instance per actual camera position.
     val screenToWorld = remember(camera.scale, camera.panX, camera.panY) { camera.screenToWorld() }
 
+    // The paper tone the surface actually paints: night slate while dark mode is on. Notebook
+    // sheets go through the same rule in drawNotebookPages; the canvas has no sheets, so its
+    // background is the page and must follow the rule here or stay white at night.
+    val renderedPageColor = if (darkReader && pageColor != Color.Transparent) NightPalette.paper else pageColor
     BoxWithConstraints(
         modifier = modifier
             // Notebook pages float on a desk; the endless canvas *is* the page.
-            .background(if (notebook) deskColor else pageColor)
+            .background(if (notebook) deskColor else renderedPageColor)
             .then(if (enabled) Modifier.pointerInput(Unit) {
                 awaitPointerEventScope {
                     var lastErasePoint: Offset? = null
@@ -443,9 +454,6 @@ fun InkSurface(
         }
 
         // Paper.
-        val renderedPageColor = if (darkReader && pageColor != Color.Transparent) {
-            NightPalette.paper
-        } else pageColor
         val renderedRuleColor = if (darkReader) NightPalette.rule else ruleColor
 
         Canvas(Modifier.fillMaxSize()) {
@@ -535,7 +543,7 @@ fun InkSurface(
                 defaultBrush = brush,
                 nextBrush = nextBrush,
                 pointerEventToWorldTransform = screenToWorld,
-                onStrokesFinished = onStrokesFinished,
+                onStrokesFinished = finishInDaylight,
             )
         }
 

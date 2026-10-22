@@ -1,6 +1,7 @@
 package com.example.fucknotes.ui.editor.ink
 
 import androidx.compose.ui.graphics.Color
+import androidx.ink.brush.Brush
 import androidx.ink.strokes.Stroke
 import com.example.fucknotes.data.ink.InkStroke
 import com.example.fucknotes.data.model.InkTool
@@ -84,6 +85,28 @@ internal fun darkReaderArgb(argb: Int, tool: InkTool = InkTool.PEN): Int {
     else min(NightPalette.MAX_LIGHTNESS, 1f - l)
     val rgb = hslToRgb(h, s * NightPalette.SATURATION, lightness)
     return (alpha shl 24) or rgb
+}
+
+/**
+ * Wet ink is drawn in night colour so it matches the page while the pen is down, but what is
+ * stored must be the colour the user chose. Each night brush remembers the daylight brush it was
+ * made from, and a finished stroke is handed back in that brush before it reaches the note —
+ * otherwise the saved colour was already inverted, the dry layer inverted it again, and the
+ * stroke changed shade the moment the pen lifted.
+ */
+private val daylightBrushes: MutableMap<Brush, Brush> = Collections.synchronizedMap(WeakHashMap())
+
+/** This brush in night colour, remembering [this] as the colour to store. */
+internal fun Brush.forNight(tool: InkTool): Brush {
+    val night = copyWithColorIntArgb(darkReaderArgb(colorIntArgb, tool))
+    daylightBrushes[night] = this
+    return night
+}
+
+/** A stroke drawn with a night brush, back in the brush it stands for; any other stroke as is. */
+internal fun Stroke.daylight(): Stroke {
+    val real = daylightBrushes[brush] ?: return this
+    return Stroke(brush = real, inputs = inputs)
 }
 
 /**

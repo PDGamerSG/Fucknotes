@@ -56,6 +56,8 @@ fun InkToolbar(
     onFingerInputMode: (FingerInputMode) -> Unit,
     onCycleChrome: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Swatches show the colour each pen will actually leave on a night page. */
+    darkReader: Boolean = false,
 ) {
     var editingPen by remember { mutableIntStateOf(-1) }
 
@@ -106,12 +108,14 @@ fun InkToolbar(
                                 if (tool == InkTool.PEN && selectedPen == slotIndex) editingPen = slotIndex
                                 else onSelectPen(slotIndex)
                             },
+                            darkReader = darkReader,
                         )
                         if (editingPen == slotIndex && slotIndex >= 0) {
                             PenEditorPopup(
                                 pen = pens.getOrNull(slotIndex) ?: slotPen,
                                 onDismiss = { editingPen = -1 },
                                 onChange = { nextColor, width -> onEditPen(slotIndex, nextColor, width) },
+                                darkReader = darkReader,
                             )
                         }
                     }
@@ -132,12 +136,14 @@ fun InkToolbar(
                                 if (tool == InkTool.HIGHLIGHTER && selectedPen == slotIndex) editingPen = slotIndex
                                 else onSelectPen(slotIndex)
                             },
+                            darkReader = darkReader,
                         )
                         if (editingPen == slotIndex) {
                             PenEditorPopup(
                                 pen = pens.getOrNull(slotIndex) ?: slotPen,
                                 onDismiss = { editingPen = -1 },
                                 onChange = { nextColor, width -> onEditPen(slotIndex, nextColor, width) },
+                                darkReader = darkReader,
                             )
                         }
                     }

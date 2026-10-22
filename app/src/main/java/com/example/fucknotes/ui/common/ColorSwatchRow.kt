@@ -33,10 +33,12 @@ fun ColorSwatchRow(
     onPick: (Int) -> Unit,
     modifier: Modifier = Modifier,
     swatchSize: Dp = 26.dp,
+    /** How a stored colour is shown — the night version while dark mode is on. Selection compares stored values. */
+    displayColor: (Int) -> Int = { it },
 ) {
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
         colors.forEach { argb ->
-            val color = Color(argb)
+            val color = Color(displayColor(argb))
             val selected = argb == selectedArgb
             Box(
                 Modifier

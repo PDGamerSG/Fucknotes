@@ -36,6 +36,8 @@ fun PenEditorPopup(
     pen: PenPreset,
     onDismiss: () -> Unit,
     onChange: (colorArgb: Int, widthDp: Float) -> Unit,
+    /** Swatches and the nib preview in night colours, as the page will show them. */
+    darkReader: Boolean = false,
 ) {
     DropdownMenu(expanded = true, onDismissRequest = onDismiss) {
         Column(Modifier.padding(14.dp).width(250.dp)) {
@@ -48,6 +50,7 @@ fun PenEditorPopup(
                     onPick = { onChange(it, pen.widthDp) },
                     modifier = Modifier.padding(vertical = 4.dp),
                     swatchSize = 28.dp,
+                    displayColor = { if (darkReader) darkReaderArgb(it, pen.tool) else it },
                 )
             }
 
@@ -60,19 +63,19 @@ fun PenEditorPopup(
                 onValueChange = { onChange(pen.colorArgb, it) },
                 valueRange = if (pen.tool == InkTool.HIGHLIGHTER) 8f..36f else 1f..16f,
             )
-            NibPreview(pen)
+            NibPreview(pen, darkReader)
         }
     }
 }
 
 /** The nib at its real width, on the paper tone it will be drawn on. */
 @Composable
-private fun NibPreview(pen: PenPreset) {
+private fun NibPreview(pen: PenPreset, darkReader: Boolean) {
     Box(
         Modifier
             .fillMaxWidth()
             .height(46.dp)
-            .background(PaperWhite, RoundedCornerShape(8.dp)),
+            .background(if (darkReader) NightPalette.paper else PaperWhite, RoundedCornerShape(8.dp)),
         contentAlignment = Alignment.Center,
     ) {
         Box(
@@ -80,7 +83,8 @@ private fun NibPreview(pen: PenPreset) {
                 .fillMaxWidth(0.85f)
                 .height(pen.widthDp.dp)
                 .background(
-                    Color(pen.colorArgb).copy(alpha = if (pen.tool == InkTool.HIGHLIGHTER) 0.4f else 1f),
+                    Color(if (darkReader) darkReaderArgb(pen.colorArgb, pen.tool) else pen.colorArgb)
+                        .copy(alpha = if (pen.tool == InkTool.HIGHLIGHTER) 0.4f else 1f),
                     CircleShape,
                 )
         )

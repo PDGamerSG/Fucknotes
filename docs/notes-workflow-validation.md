@@ -17,6 +17,18 @@ Changes:
   bar over the toolbar).
 - Settings is grouped into cards at a 760 dp maximum width. The home grid leaves room under the
   last row for the corner button; the rail's bottom rows sit on a wash so "Light mode" is legible.
+- Night ink is stored in daylight: with dark mode on, the wet stroke is drawn in night colour so
+  it matches the page, but the brush remembers the daylight brush it was made from and a finished
+  stroke is handed back in that brush before it reaches the note. Before, the night colour was
+  what got saved, the dry layer inverted it again, and the stroke changed shade on pen lift; it
+  would also have shown inverted once dark mode was turned off. Pen swatches, the colour popup and
+  the nib preview show each colour as it will appear on a night page (black reads as off-white).
+  A canvas (endless sheet) also paints its background from the night palette now; before, only
+  notebook sheets did, and a canvas stayed white at night. Strokes written in dark mode before
+  this fix were saved with night colours and will look light with dark mode off; undo or erase
+  and redraw them. Verified on the tablet by pixel: wet and dry stroke cores identical
+  (220,222,229) on the slate (25,28,35); with night off the same stroke reads (24,27,34), the
+  pen's stored black.
 - Chrome alignment: every tool button draws its selected disc inside its touch target (disc =
   target − 8 dp), so the eraser, the lock and the reading-mode unlock all sit the same 8 dp in
   from a bar's rounded ends instead of a 48 dp disc filling the bar edge-to-edge at one end. A
@@ -108,7 +120,9 @@ adb -s b86e61d8 shell am instrument -w -r com.example.fucknotes.test/androidx.te
 
 - 36 JVM tests passed (14 existing, `EditorChromeTest`, `OpenTabsTest`, `NotePositionsTest`, `PptxDeckTest`,
   `DarkReaderTest`, `PaperPatternTest`).
-- 25 instrumented tests passed on the physical tablet, including `HoldToDragTest` (jittery,
+- 27 instrumented tests passed on the physical tablet, including `NightInkTest` (night brush
+  round-trips to its daylight brush; a stylus stroke under dark mode is committed in the chosen
+  colour), `HoldToDragTest` (jittery,
   still and slowly drifting two-second holds lift and drop; a move after the tick lifts at once; a
   swipe before the tick scrolls; long press selects on release; a tap opens), `PptxImportTest` (a hand-built
   deck renders its inherited title, a filled shape and a picture; a `.ppt` is refused), `NoteOrderTest` (manual order,

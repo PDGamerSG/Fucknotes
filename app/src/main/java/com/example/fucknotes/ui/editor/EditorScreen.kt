@@ -251,6 +251,7 @@ fun EditorScreen(
                         onSelectPen = viewModel::selectPen,
                         onEditPen = viewModel::editPen, onSelectTool = viewModel::setTool,
                         onCycleChrome = { chrome = if (compact) EditorChrome.FULL else EditorChrome.COMPACT },
+                        darkReader = state.darkReader,
                     )
                 }
             } else if (!isInkNote) {

@@ -148,6 +148,7 @@ fun InkEditor(
                 fingerInputMode = state.fingerInputMode, onFingerInputMode = onFingerInputMode,
                 chrome = chrome, onSelectPen = onSelectPen, onEditPen = onEditPen,
                 onSelectTool = onSelectTool, onCycleChrome = onCycleChrome, modifier = barModifier,
+                darkReader = state.darkReader,
             )
         }
 
