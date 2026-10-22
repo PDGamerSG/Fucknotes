@@ -1,5 +1,13 @@
 package com.example.fucknotes.ui.editor
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -138,10 +146,15 @@ fun InkEditor(
             )
         }
 
-        when (chrome) {
-            EditorChrome.FULL -> BoxWithConstraints(
-                Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(8.dp),
-            ) {
+        // Each chrome state animates in and out, so the lock reads as a change of mode rather
+        // than a flicker of controls.
+        AnimatedVisibility(
+            visible = chrome == EditorChrome.FULL,
+            enter = fadeIn(tween(160)) + slideInVertically(tween(200)) { -it / 3 },
+            exit = fadeOut(tween(120)) + slideOutVertically(tween(160)) { -it / 3 },
+            modifier = Modifier.align(Alignment.TopCenter),
+        ) {
+            BoxWithConstraints(Modifier.fillMaxWidth().padding(8.dp)) {
                 if (maxWidth < 900.dp) {
                     // Too narrow for both bars side by side: stack them, note bar first.
                     Column(
@@ -163,23 +176,39 @@ fun InkEditor(
                     }
                 }
             }
-
-            EditorChrome.COMPACT -> penBar(Modifier.align(Alignment.TopEnd).padding(8.dp))
-
-            EditorChrome.READING -> ReadingUnlock(
-                onClick = onCycleChrome,
-                modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
-            )
         }
 
-        if (chrome != EditorChrome.READING) ZoomReadout(
-            camera = camera,
-            locked = state.zoomLocked,
-            onToggleLock = onToggleZoomLock,
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(16.dp),
-        )
+        AnimatedVisibility(
+            visible = chrome == EditorChrome.COMPACT,
+            enter = fadeIn(tween(160)) + slideInVertically(tween(200)) { -it / 3 },
+            exit = fadeOut(tween(120)) + slideOutVertically(tween(160)) { -it / 3 },
+            modifier = Modifier.align(Alignment.TopEnd),
+        ) {
+            penBar(Modifier.padding(8.dp))
+        }
+
+        AnimatedVisibility(
+            visible = chrome == EditorChrome.READING,
+            enter = fadeIn(tween(200)) + scaleIn(tween(200), initialScale = 0.8f),
+            exit = fadeOut(tween(120)) + scaleOut(tween(120), targetScale = 0.8f),
+            modifier = Modifier.align(Alignment.TopEnd),
+        ) {
+            ReadingUnlock(onClick = onCycleChrome, modifier = Modifier.padding(12.dp))
+        }
+
+        AnimatedVisibility(
+            visible = chrome != EditorChrome.READING,
+            enter = fadeIn(tween(160)),
+            exit = fadeOut(tween(120)),
+            modifier = Modifier.align(Alignment.BottomStart),
+        ) {
+            ZoomReadout(
+                camera = camera,
+                locked = state.zoomLocked,
+                onToggleLock = onToggleZoomLock,
+                modifier = Modifier.padding(16.dp),
+            )
+        }
 
         if (notebook) {
             PageCounter(
@@ -194,15 +223,20 @@ fun InkEditor(
         // Ink notes used to accept a picked image but offered no attachment surface, which made
         // the successful import look like a no-op. Keep the strip on the page so pictures and
         // recordings are visible immediately and can be removed without leaving the notebook.
-        if (chrome == EditorChrome.FULL) AttachmentStrip(
-            attachments = attachments.filter { it.pageIndex == null },
-            playingPath = playingPath,
-            onPlay = onPlayAttachment,
-            onRemove = onRemoveAttachment,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(start = 96.dp, end = 96.dp, bottom = 64.dp),
-        )
+        AnimatedVisibility(
+            visible = chrome == EditorChrome.FULL,
+            enter = fadeIn(tween(160)),
+            exit = fadeOut(tween(120)),
+            modifier = Modifier.align(Alignment.BottomCenter),
+        ) {
+            AttachmentStrip(
+                attachments = attachments.filter { it.pageIndex == null },
+                playingPath = playingPath,
+                onPlay = onPlayAttachment,
+                onRemove = onRemoveAttachment,
+                modifier = Modifier.padding(start = 96.dp, end = 96.dp, bottom = 64.dp),
+            )
+        }
     }
 }
 

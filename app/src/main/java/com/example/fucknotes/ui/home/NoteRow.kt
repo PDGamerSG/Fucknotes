@@ -3,7 +3,6 @@ package com.example.fucknotes.ui.home
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -21,7 +20,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -46,6 +44,8 @@ fun NoteRow(
     /** Tap, long press and hold-to-drag, supplied by the shelf. */
     interaction: Modifier = Modifier,
     modifier: Modifier = Modifier,
+    /** Row-end actions, such as restore and delete in the trash. */
+    trailing: (@Composable () -> Unit)? = null,
 ) {
     val brand = MaterialTheme.brand
     val shape = RoundedCornerShape(Radii.card)
@@ -100,16 +100,12 @@ fun NoteRow(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
-        when {
-            selected -> Icon(
-                Icons.Filled.CheckCircle,
-                contentDescription = "Selected",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(18.dp),
-            )
-
-
-            else -> Box(Modifier.size(0.dp).background(Color.Transparent))
-        }
+        if (selected) Icon(
+            Icons.Filled.CheckCircle,
+            contentDescription = "Selected",
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(18.dp),
+        )
+        trailing?.invoke()
     }
 }

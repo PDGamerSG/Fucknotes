@@ -321,18 +321,31 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         settingsRepo.setThemeMode(if (dark) com.example.fucknotes.data.model.ThemeMode.LIGHT else com.example.fucknotes.data.model.ThemeMode.DARK)
     }
 
-    fun importPdf(uri: Uri, onCreated: (Long) -> Unit) = viewModelScope.launch {
+    /**
+     * Imports a PDF or a PowerPoint deck as a notebook.
+     *
+     * A deck is converted to a PDF first and then takes the same path, so both arrive as pages
+     * with editable ink above them. The kind is decided from the document's type and name.
+     */
+    fun importDocument(uri: Uri, onCreated: (Long) -> Unit) = viewModelScope.launch {
         if (progress.value != null) return@launch
+        val app = getApplication<Application>()
         val folder = currentFolderId()
-        progress.value = "Opening PDF…"
+        val slides = DocumentKind.of(app, uri) == DocumentKind.SLIDES
+        progress.value = if (slides) "Opening presentation…" else "Opening PDF…"
         try {
-            val id = com.example.fucknotes.media.PdfImporter(getApplication(), repo).import(uri, folder) { page, total ->
-                progress.value = "Importing page $page of $total…"
+            val id = if (slides) {
+                com.example.fucknotes.media.PptxImporter(app, repo).import(uri, folder) { progress.value = it }
+            } else {
+                com.example.fucknotes.media.PdfImporter(app, repo).import(uri, folder) { page, total ->
+                    progress.value = "Importing page $page of $total…"
+                }
             }
             onCreated(id)
         } catch (error: Exception) {
             if (error is kotlinx.coroutines.CancellationException) throw error
-            _message.value = "PDF import failed: ${error.message ?: "The file may be damaged or password protected"}"
+            _message.value = if (slides) "Presentation import failed: ${error.message ?: "The file may be damaged"}"
+            else "PDF import failed: ${error.message ?: "The file may be damaged or password protected"}"
         } finally { progress.value = null }
     }
 
@@ -429,5 +442,20 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
     companion object {
         const val MAX_FOLDER_DEPTH = 3
+    }
+}
+
+/** What an incoming document is, from its declared type first and its name second. */
+enum class DocumentKind {
+    PDF, SLIDES;
+
+    companion object {
+        fun of(context: android.content.Context, uri: Uri): DocumentKind {
+            val mime = runCatching { context.contentResolver.getType(uri) }.getOrNull().orEmpty()
+            val name = MediaStore.displayName(context, uri).lowercase()
+            return if (mime == CreateAction.MIME_PPTX || mime == CreateAction.MIME_PPT ||
+                name.endsWith(".pptx") || name.endsWith(".ppt")
+            ) SLIDES else PDF
+        }
     }
 }

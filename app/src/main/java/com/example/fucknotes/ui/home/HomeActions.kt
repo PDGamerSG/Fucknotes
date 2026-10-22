@@ -17,6 +17,7 @@ import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Slideshow
 import androidx.compose.material.icons.outlined.ViewAgenda
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -41,6 +42,14 @@ enum class CreateAction(val label: String) {
     NEW_NOTEBOOK("New notebook"),
     NEW_CANVAS("New canvas"),
     IMPORT_PDF("Import PDF"),
+    IMPORT_SLIDES("Import PowerPoint"),
+    ;
+
+    companion object {
+        const val MIME_PDF = "application/pdf"
+        const val MIME_PPTX = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+        const val MIME_PPT = "application/vnd.ms-powerpoint"
+    }
 }
 
 /**
@@ -116,6 +125,7 @@ fun CreateMenu(expanded: Boolean, onDismiss: () -> Unit, onPick: (CreateAction) 
                             CreateAction.NEW_NOTEBOOK -> Icons.Outlined.MenuBook
                             CreateAction.NEW_CANVAS -> Icons.Outlined.Brush
                             CreateAction.IMPORT_PDF -> Icons.Outlined.PictureAsPdf
+                            CreateAction.IMPORT_SLIDES -> Icons.Outlined.Slideshow
                         },
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
@@ -157,5 +167,5 @@ private fun SortMenu(
 /** The note type a create action starts, or null for a picker. */
 fun CreateAction.noteType(): NoteType? = when (this) {
     CreateAction.NEW_CANVAS -> NoteType.DRAWING
-    CreateAction.NEW_NOTEBOOK, CreateAction.IMPORT_PDF -> null
+    CreateAction.NEW_NOTEBOOK, CreateAction.IMPORT_PDF, CreateAction.IMPORT_SLIDES -> null
 }

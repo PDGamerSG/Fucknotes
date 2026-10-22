@@ -17,6 +17,18 @@ Changes:
   bar over the toolbar).
 - Settings is grouped into cards at a 760 dp maximum width. The home grid leaves room under the
   last row for the corner button; the rail's bottom rows sit on a wash so "Light mode" is legible.
+- PowerPoint import: "Import PowerPoint" in the create menu (and Open with / Share for `.pptx`)
+  converts the deck to a PDF on the device — backgrounds, master and layout decoration, inherited
+  placeholder geometry and text styles, runs with bullets, alignment and auto-fit, pictures with
+  cropping, preset shapes with theme fills and outlines, groups, connectors, tables; charts,
+  SmartArt and embedded objects become labelled frames — then imports that PDF as a notebook, so
+  slides are pages with ink above them and "Export as PDF" returns the deck. Legacy binary `.ppt`
+  is refused with advice to save as `.pptx`. Code: `media/pptx/` (`OoxmlXml`, `PptxColors`,
+  `PptxDeck`, `PptxRenderer`) and `media/PptxImporter.kt`.
+- Polish: import and export show a progress dialog with a ring and the current step; the shelf
+  grid has room between tiles and a count under the title (with the hold-to-move hint in manual
+  order); search and trash use the same row as the shelf list; the editor's bars fade and slide as
+  the lock cycles.
 - Finger navigation in every chrome state: one finger scrolls the page in "Pen only" and under
   the zoom lock (the lock now pins only the scale and the double-tap swap). Fingers that were on
   the glass while the stylus wrote are tracked as the palm until they lift, so a resting hand
@@ -55,8 +67,9 @@ Executed:
 adb -s b86e61d8 shell am instrument -w -r com.example.fucknotes.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
-- 27 JVM tests passed (14 existing, `EditorChromeTest`, `OpenTabsTest`, and `NotePositionsTest`).
-- 16 instrumented tests passed on the physical tablet, including `NoteOrderTest` (manual order,
+- 28 JVM tests passed (14 existing, `EditorChromeTest`, `OpenTabsTest`, `NotePositionsTest`, `PptxDeckTest`).
+- 18 instrumented tests passed on the physical tablet, including `PptxImportTest` (a hand-built
+  deck renders its inherited title, a filled shape and a picture; a `.ppt` is refused), `NoteOrderTest` (manual order,
   moves, renumbering, adoption), the rewritten finger tests, `EditorTabBarTest`,
   `FingerInputTest.readingModeLetsFingersScrollWithPenOnlyAndZoomLockOn`,
   `EditorChromeTest.lockCyclesControlsPenBarAndReadingWithPageCounterAlwaysPresent` (each state

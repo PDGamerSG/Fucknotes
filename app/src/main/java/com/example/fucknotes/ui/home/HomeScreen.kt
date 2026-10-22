@@ -73,8 +73,8 @@ fun HomeScreen(
     var showColorDialog by remember { mutableStateOf(false) }
     var showNewNotebook by remember { mutableStateOf(false) }
 
-    val pickPdf = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        uri?.let { viewModel.importPdf(it, onOpenNote) }
+    val pickDocument = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let { viewModel.importDocument(it, onOpenNote) }
     }
     var exportTarget by remember { mutableStateOf<HomeExportTarget?>(null) }
     val savePdf = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
@@ -112,7 +112,8 @@ fun HomeScreen(
     val onCreate: (CreateAction) -> Unit = { action ->
         when (action) {
             CreateAction.NEW_NOTEBOOK -> showNewNotebook = true
-            CreateAction.IMPORT_PDF -> pickPdf.launch(arrayOf("application/pdf"))
+            CreateAction.IMPORT_PDF -> pickDocument.launch(arrayOf(CreateAction.MIME_PDF))
+            CreateAction.IMPORT_SLIDES -> pickDocument.launch(arrayOf(CreateAction.MIME_PPTX, CreateAction.MIME_PPT))
 
             else -> action.noteType()?.let { viewModel.createNote(it, onOpenNote) }
         }
@@ -271,14 +272,11 @@ fun HomeScreen(
         }
     }
     if (state.busy) {
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = {},
-            title = { androidx.compose.material3.Text("Please wait") },
-            text = {
-                com.example.fucknotes.ui.common.ImmersiveDialogWindow()
-                androidx.compose.material3.Text(state.progress ?: "Preparing documents…")
-            },
-            confirmButton = {},
+        com.example.fucknotes.ui.components.ProgressDialog(
+            title = if (state.progress?.contains("slide", ignoreCase = true) == true || state.progress?.contains("presentation", ignoreCase = true) == true) "Importing presentation"
+            else if (state.progress?.contains("Export", ignoreCase = true) == true || state.progress?.contains("PDFs", ignoreCase = true) == true) "Exporting"
+            else "Importing",
+            message = state.progress,
         )
     }
 

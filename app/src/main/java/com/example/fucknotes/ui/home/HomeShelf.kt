@@ -56,12 +56,22 @@ fun HomeShelf(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxSize()) {
-        Text(
-            state.title,
-            style = MaterialTheme.typography.displaySmall,
-            color = MaterialTheme.brand.heading,
-            modifier = Modifier.padding(start = 26.dp, end = 26.dp, top = 4.dp, bottom = 14.dp),
-        )
+        Column(Modifier.padding(start = 26.dp, end = 26.dp, top = 4.dp, bottom = 14.dp)) {
+            Text(
+                state.title,
+                style = MaterialTheme.typography.displaySmall,
+                color = MaterialTheme.brand.heading,
+            )
+            if (!state.loading && state.notes.isNotEmpty()) {
+                Text(
+                    "${state.notes.size} ${if (state.notes.size == 1) "note" else "notes"}" +
+                        if (state.sort == com.example.fucknotes.data.model.SortOrder.MANUAL) "  ·  hold a note to move it" else "",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+            }
+        }
 
         when {
             state.loading -> Spacer(Modifier.fillMaxSize())
@@ -97,10 +107,10 @@ fun HomeShelf(
                 LaunchedEffect(state.notes) { reorder.settle(state.notes.map { it.id }) }
                 LazyVerticalGrid(
                     state = gridState,
-                    columns = GridCells.Adaptive(150.dp),
-                    contentPadding = PaddingValues(start = 18.dp, end = 18.dp, bottom = 104.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    columns = GridCells.Adaptive(156.dp),
+                    contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 104.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
                     items(ordered, key = { it.id }) { note ->
                         NoteTile(

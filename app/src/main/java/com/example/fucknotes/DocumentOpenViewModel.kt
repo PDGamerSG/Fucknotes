@@ -7,6 +7,9 @@ import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.fucknotes.media.PdfImporter
+import com.example.fucknotes.media.PptxImporter
+import com.example.fucknotes.ui.home.CreateAction
+import com.example.fucknotes.ui.home.DocumentKind
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -36,19 +39,27 @@ class DocumentOpenViewModel(app: Application) : AndroidViewModel(app) {
             else @Suppress("DEPRECATION") intent.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
             else -> null
         } ?: return
-        if (intent.type != "application/pdf" && !uri.path.orEmpty().endsWith(".pdf", true)) return
+        val app = getApplication<Application>()
+        val slides = intent.type == CreateAction.MIME_PPTX || intent.type == CreateAction.MIME_PPT ||
+            DocumentKind.of(app, uri) == DocumentKind.SLIDES
+        val pdf = intent.type == CreateAction.MIME_PDF || uri.path.orEmpty().endsWith(".pdf", true)
+        if (!slides && !pdf) return
         if (mutable.value.progress != null) return
-        mutable.value = DocumentOpenState(progress = "Opening PDF…")
+        mutable.value = DocumentOpenState(progress = if (slides) "Opening presentation…" else "Opening PDF…")
         viewModelScope.launch {
             try {
-                val app = getApplication<Application>()
-                val note = PdfImporter(app, ServiceLocator.notes(app)).import(uri, null) { done, total ->
-                    mutable.value = DocumentOpenState(progress = "Importing page $done of $total…")
+                val repo = ServiceLocator.notes(app)
+                val note = if (slides) {
+                    PptxImporter(app, repo).import(uri, null) { mutable.value = DocumentOpenState(progress = it) }
+                } else {
+                    PdfImporter(app, repo).import(uri, null) { done, total ->
+                        mutable.value = DocumentOpenState(progress = "Importing page $done of $total…")
+                    }
                 }
                 mutable.value = DocumentOpenState(noteId = note)
             } catch (error: Exception) {
                 if (error is kotlinx.coroutines.CancellationException) throw error
-                mutable.value = DocumentOpenState(error = "Cannot import PDF: ${error.message}")
+                mutable.value = DocumentOpenState(error = "Cannot import: ${error.message}")
             }
         }
     }

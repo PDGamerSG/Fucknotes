@@ -36,7 +36,8 @@ import androidx.lifecycle.viewModelScope
 import com.example.fucknotes.ServiceLocator
 import com.example.fucknotes.data.db.NoteEntity
 import com.example.fucknotes.ui.components.EmptyState
-import com.example.fucknotes.ui.components.NoteCard
+import com.example.fucknotes.ui.home.NoteRow
+import androidx.compose.foundation.clickable
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -137,21 +138,15 @@ fun SearchScreen(
                 )
 
                 else -> LazyColumn(
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 22.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     items(results, key = { it.id }) { note ->
-                        NoteCard(
+                        NoteRow(
                             note = note,
                             preview = viewModel.previewOf(note),
-                            tagNames = tags[note.id].orEmpty(),
                             selected = false,
-                            selectionMode = false,
-                            hasImages = false,
-                            hasAudio = false,
-                            onClick = { onOpenNote(note.id) },
-                            onLongClick = {},
-                            modifier = Modifier.fillMaxWidth(),
+                            interaction = Modifier.clickable { onOpenNote(note.id) },
                         )
                     }
                 }

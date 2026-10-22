@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.FolderOff
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -80,6 +81,28 @@ fun TextPromptDialog(
             TextButton(onClick = { onConfirm(value) }, enabled = value.isNotBlank()) { Text(confirmText) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+/**
+ * Work in progress that cannot be cancelled: a ring, a title and the current step.
+ *
+ * Importing a deck can take a while on a long one, so the step text is the reassurance that it
+ * is still moving; the ring says the same without words.
+ */
+@Composable
+fun ProgressDialog(title: String, message: String?) {
+    AlertDialog(
+        onDismissRequest = {},
+        title = { Text(title) },
+        text = {
+            ImmersiveDialogWindow()
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 3.dp)
+                Text(message ?: "Working…", style = MaterialTheme.typography.bodyMedium)
+            }
+        },
+        confirmButton = {},
     )
 }
 

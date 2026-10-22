@@ -35,7 +35,9 @@ import com.example.fucknotes.ServiceLocator
 import com.example.fucknotes.data.db.NoteEntity
 import com.example.fucknotes.ui.components.ConfirmDialog
 import com.example.fucknotes.ui.components.EmptyState
-import com.example.fucknotes.ui.components.NoteCard
+import com.example.fucknotes.ui.home.NoteRow
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import com.example.fucknotes.ui.editor.tabs.OpenTabs
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -65,7 +67,7 @@ class TrashViewModel(app: Application) : AndroidViewModel(app) {
     fun previewOf(note: NoteEntity): String = repo.plainTextOf(note).take(240)
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun TrashScreen(viewModel: TrashViewModel, onBack: () -> Unit) {
     val notes by viewModel.notes.collectAsStateWithLifecycle()
@@ -101,8 +103,8 @@ fun TrashScreen(viewModel: TrashViewModel, onBack: () -> Unit) {
                 )
             } else {
                 LazyColumn(
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 22.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     item {
                         Text(
@@ -113,30 +115,23 @@ fun TrashScreen(viewModel: TrashViewModel, onBack: () -> Unit) {
                         )
                     }
                     items(notes, key = { it.id }) { note ->
-                        Box {
-                            NoteCard(
-                                note = note,
-                                preview = viewModel.previewOf(note),
-                                tagNames = emptyList(),
-                                selected = false,
-                                selectionMode = false,
-                                hasImages = false,
-                                hasAudio = false,
+                        NoteRow(
+                            note = note,
+                            preview = viewModel.previewOf(note),
+                            selected = false,
+                            interaction = Modifier.combinedClickable(
                                 onClick = { viewModel.restore(note.id) },
                                 onLongClick = { confirmDelete = note },
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                            androidx.compose.foundation.layout.Row(
-                                Modifier.align(Alignment.BottomEnd).padding(4.dp)
-                            ) {
+                            ),
+                            trailing = {
                                 IconButton(onClick = { viewModel.restore(note.id) }) {
                                     Icon(Icons.Outlined.RestoreFromTrash, contentDescription = "Restore")
                                 }
                                 IconButton(onClick = { confirmDelete = note }) {
                                     Icon(Icons.Outlined.DeleteForever, contentDescription = "Delete forever")
                                 }
-                            }
-                        }
+                            },
+                        )
                     }
                 }
             }

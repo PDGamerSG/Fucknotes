@@ -80,7 +80,7 @@ fun NoteTile(
             Modifier
                 .fillMaxWidth()
                 .aspectRatio(0.74f)
-                .shadow(3.dp, RoundedCornerShape(10.dp), ambientColor = Color(0x14000000))
+                .shadow(6.dp, RoundedCornerShape(12.dp), ambientColor = Color(0x10000000), spotColor = Color(0x22000000))
         ) {
             NotePagePreview(
                 note = note,
@@ -94,7 +94,7 @@ fun NoteTile(
                 Box(
                     Modifier
                         .fillMaxSize()
-                        .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(10.dp))
+                        .border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(12.dp))
                 )
             }
 
@@ -162,7 +162,7 @@ fun NotePagePreview(
             lineColor = if (note.lineColorArgb != 0) Color(note.lineColorArgb) else brand.tileBorder,
             spacingDp = note.lineSpacingDp.takeIf { it > 0 }?.toFloat() ?: 24f,
             zoom = 0.22f,
-            corner = 10.dp,
+            corner = 12.dp,
         )
 
         if (!firstPageImagePath.isNullOrBlank()) {
@@ -178,7 +178,7 @@ fun NotePagePreview(
                         0f, 0f, 0f, 1f, 0f,
                     ))
                 ) else null,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp)),
             )
         } else if (preview.isNotBlank()) {
             Text(

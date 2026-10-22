@@ -22,6 +22,12 @@ Xiaomi tablet attached over USB; earlier passes were done on Windows.
 - Settings is grouped into titled cards with a 760 dp max width.
 - Home: the grid/list leaves room under the last row for the corner FAB; the rail's bottom rows sit
   on a wash so "Light mode" is legible over the artwork; "Images on this page" has an icon.
+- PowerPoint import: `media/pptx/PptxDeck` reads the package (slides → layout → master → theme,
+  relationships resolved), `PptxRenderer` paints a slide in PDF points, `PptxImporter` writes a
+  `PdfDocument` and hands it to `PdfImporter`. `HomeViewModel.importDocument` and
+  `DocumentOpenViewModel` pick PDF or slides by MIME/extension (`DocumentKind`). Unsupported:
+  binary `.ppt`, EMF/WMF/SVG media, charts/SmartArt (drawn as labelled frames), custom geometry
+  fills, vertical text.
 - Finger navigation: `InkSurface` tracks `palmIds` (touch pointers seen while the stylus was in
   contact) and lets every other finger pan in all modes; `FingerInputMode.DISABLED` ("Pen only")
   means fingers never draw or swap tools, not that they are ignored. The zoom lock pins the scale

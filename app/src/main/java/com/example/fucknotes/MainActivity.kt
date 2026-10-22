@@ -97,19 +97,26 @@ class MainActivity : FragmentActivity() {
                                 setIntent(Intent(this@MainActivity, MainActivity::class.java))
                             },
                         )
-                        if (document.progress != null || document.error != null) {
+                        val importError = document.error
+                        val importProgress = document.progress
+                        if (importError != null) {
                             androidx.compose.material3.AlertDialog(
-                                onDismissRequest = { if (document.progress == null) documentOpen.consumed() },
-                                title = { androidx.compose.material3.Text(if (document.error != null) "PDF import" else "Opening PDF") },
+                                onDismissRequest = documentOpen::consumed,
+                                title = { androidx.compose.material3.Text("Import failed") },
                                 text = {
                                     com.example.fucknotes.ui.common.ImmersiveDialogWindow()
-                                    androidx.compose.material3.Text(document.error ?: document.progress.orEmpty())
+                                    androidx.compose.material3.Text(importError)
                                 },
                                 confirmButton = {
-                                    if (document.error != null) androidx.compose.material3.TextButton(onClick = documentOpen::consumed) {
+                                    androidx.compose.material3.TextButton(onClick = documentOpen::consumed) {
                                         androidx.compose.material3.Text("Close")
                                     }
                                 },
+                            )
+                        } else if (importProgress != null) {
+                            com.example.fucknotes.ui.components.ProgressDialog(
+                                title = if (importProgress.contains("PDF")) "Importing PDF" else "Importing presentation",
+                                message = importProgress,
                             )
                         }
                     }
