@@ -36,9 +36,12 @@ Changes:
 - Manual shelf order (new default sort "Manual order"): a note keeps the place it was created in;
   editing never moves it. Press and hold a note still for 2 s to lift it, then drag it over
   another note to take that place, in the grid or the list; the shelf auto-scrolls near the
-  edges. A long press still selects (applied on release). The hold is cancelled only when the
-  shelf's scroll takes the finger or the finger leaves the tile — never by jitter, which is what
-  made the first version fail under a real finger. Positions live in a new `position` column (database
+  edges. A long press still selects (applied on release). Before the long-press tick the shelf's
+  scroll can take the finger as usual; from the tick on, the tile owns it — moves are consumed
+  so a finger that rolls a millimetre cannot hand the gesture to the scroll — and a deliberate
+  move after the tick lifts the note at once instead of waiting out the hold. Jitter never
+  cancels. (The first version cancelled on drift and let the scroll steal the hold, which is why
+  a real finger could not move a note.) Positions live in a new `position` column (database
   version 6, seeded from `createdAt`); moves land between neighbours and renumber only when two
   neighbours are adjacent. Dragging while a live sort is shown first adopts the visible order as
   the manual order so nothing jumps. Backups carry the position.
@@ -70,9 +73,9 @@ adb -s b86e61d8 shell am instrument -w -r com.example.fucknotes.test/androidx.te
 ```
 
 - 28 JVM tests passed (14 existing, `EditorChromeTest`, `OpenTabsTest`, `NotePositionsTest`, `PptxDeckTest`).
-- 23 instrumented tests passed on the physical tablet, including `HoldToDragTest` (jittery and
-  still two-second holds lift and drop; a swipe during the hold scrolls; long press selects on
-  release; a tap opens), `PptxImportTest` (a hand-built
+- 25 instrumented tests passed on the physical tablet, including `HoldToDragTest` (jittery,
+  still and slowly drifting two-second holds lift and drop; a move after the tick lifts at once; a
+  swipe before the tick scrolls; long press selects on release; a tap opens), `PptxImportTest` (a hand-built
   deck renders its inherited title, a filled shape and a picture; a `.ppt` is refused), `NoteOrderTest` (manual order,
   moves, renumbering, adoption), the rewritten finger tests, `EditorTabBarTest`,
   `FingerInputTest.readingModeLetsFingersScrollWithPenOnlyAndZoomLockOn`,

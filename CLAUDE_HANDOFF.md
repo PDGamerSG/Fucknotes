@@ -35,10 +35,12 @@ Xiaomi tablet attached over USB; earlier passes were done on Windows.
 - Manual shelf order: `NoteEntity.position` (migration 5→6 seeds it from `createdAt`),
   `SortOrder.MANUAL` is the default, `NotesRepository.moveNote/adoptOrder` with
   `NotePositions.between`, and `ui/home/Reorder.kt` (`NoteReorderState`, `Modifier.holdToDrag`,
-  `Modifier.reorderItem`). The gesture is two nested `withTimeoutOrNull` phases around
-  `followPress`, which only ends on release, ancestor consumption (checked on the Final pass) or
-  leaving the tile — never on movement, so a fidgety finger still lifts the note. A light tick at
-  the long-press timeout, selection on release, strong haptic at 2 s. Compose UI tests run these
+  `Modifier.reorderItem`). The gesture is two nested `withTimeoutOrNull` phases: `followPress`
+  up to the long-press tick (ends on release, ancestor consumption checked on the Final pass, or
+  leaving the tile — never on movement), then `followHeldPress` up to the hold, which consumes
+  every move so the grid's scroll cannot take the finger and returns `MOVED` past the touch slop
+  so a deliberate drag lifts at once. A light tick at the long press, selection on release, strong
+  haptic at the lift. Compose UI tests run these
   timeouts on the test clock: drive them with `mainClock.advanceTimeBy`, as `HoldToDragTest` does. `HomeViewModel.moveNote` adopts the displayed order first when a live sort
   is active.
 - Release build: `isMinifyEnabled`/`isShrinkResources` with `proguard-rules.pro`, signed with the

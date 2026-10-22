@@ -161,20 +161,57 @@ class HoldToDragTest {
         assertTrue(longClicks.isEmpty() && clicks.isEmpty())
     }
 
-    @Test fun swipeDuringTheHoldScrollsInstead() {
+    @Test fun swipeBeforeTheTickScrollsInstead() {
         content()
         val (x1, y1) = centre("tile-1")
         val downTime = SystemClock.uptimeMillis()
         send(MotionEvent.ACTION_DOWN, x1, y1, downTime)
-        pass(700)
+        pass(150)
         repeat(12) { i -> pass(16); send(MotionEvent.ACTION_MOVE, x1, y1 - 40f * (i + 1), downTime) }
-        pass(1_600)
+        pass(2_200)
         send(MotionEvent.ACTION_UP, x1, y1 - 480f, downTime)
         pass(300)
         compose.runOnIdle {
             assertTrue("a swipe must not move the note", moves.isEmpty())
             assertTrue("a swipe must not select", longClicks.isEmpty())
         }
+    }
+
+    @Test fun slowVerticalDriftDuringTheHoldStillLifts() {
+        content()
+        val (x1, y1) = centre("tile-1")
+        val (x3, y3) = centre("tile-3")
+        val downTime = SystemClock.uptimeMillis()
+        send(MotionEvent.ACTION_DOWN, x1, y1, downTime)
+        // A finger rolling downwards a few pixels at a time: past the slop long before the hold
+        // ends, which used to hand the gesture to the shelf's scroll.
+        var y = y1
+        repeat(23) { pass(100); y += 3f; send(MotionEvent.ACTION_MOVE, x1, y, downTime) }
+        repeat(10) { i ->
+            pass(16)
+            send(MotionEvent.ACTION_MOVE, x1 + (x3 - x1) * (i + 1) / 10f, y + (y3 - y) * (i + 1) / 10f, downTime)
+        }
+        send(MotionEvent.ACTION_UP, x3, y3, downTime)
+        compose.waitUntil(3_000) { moves.isNotEmpty() }
+        assertEquals(Triple(1L, 3L, 4L), moves.single())
+        assertTrue(longClicks.isEmpty())
+    }
+
+    @Test fun moveAfterTheTickLiftsWithoutWaitingOutTheHold() {
+        content()
+        val (x1, y1) = centre("tile-1")
+        val (x3, y3) = centre("tile-3")
+        val downTime = SystemClock.uptimeMillis()
+        send(MotionEvent.ACTION_DOWN, x1, y1, downTime)
+        pass(700)
+        repeat(10) { i ->
+            pass(16)
+            send(MotionEvent.ACTION_MOVE, x1 + (x3 - x1) * (i + 1) / 10f, y1 + (y3 - y1) * (i + 1) / 10f, downTime)
+        }
+        send(MotionEvent.ACTION_UP, x3, y3, downTime)
+        compose.waitUntil(3_000) { moves.isNotEmpty() }
+        assertEquals(Triple(1L, 3L, 4L), moves.single())
+        assertTrue(longClicks.isEmpty() && clicks.isEmpty())
     }
 
     @Test fun tapOpens() {
