@@ -62,11 +62,11 @@ fun InkToolbar(
 ) {
     var editingPen by remember { mutableIntStateOf(-1) }
 
-    // Three pens, two highlighters and three fixed controls; only the swatches scroll on phones.
+    // Four pens, two highlighters and four fixed controls; only the swatches scroll on phones.
     // 4 dp of bar beyond the 48 dp targets, each of which keeps 4 dp of its own air around its
     // disc — so the eraser's halo, the lock's halo and a selected pen's ring all sit the same
     // 8 dp in from the bar's rounded ends.
-    FloatingPanel(modifier.widthIn(max = 448.dp)) {
+    FloatingPanel(modifier.widthIn(max = 544.dp)) {
         Row(
             Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -94,12 +94,12 @@ fun InkToolbar(
             )
             ToolDivider()
 
-            val penSlots = pens.withIndex().filter { it.value.tool == InkTool.PEN }.take(3)
+            val penSlots = pens.withIndex().filter { it.value.tool == InkTool.PEN }.take(4)
             val highlighterSlots = pens.withIndex().filter { it.value.tool == InkTool.HIGHLIGHTER }.take(2)
-            // Preserve a selected legacy slot without adding a fourth pen to the bar.
+            // Preserve a selected legacy slot without adding a fifth pen to the bar.
             val selected = pens.getOrNull(selectedPen)
             val visiblePens = if (selected?.tool == InkTool.PEN && penSlots.none { it.index == selectedPen }) {
-                penSlots.take(2) + IndexedValue(selectedPen, selected)
+                penSlots.take(3) + IndexedValue(selectedPen, selected)
             } else penSlots
             Row(
                 Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()).height(48.dp),
