@@ -12,6 +12,7 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.FormatPaint
 import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.UploadFile
@@ -32,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.fucknotes.export.ExportFormat
+import com.example.fucknotes.ui.common.ImmersiveDialogWindow
 
 /** Everything the editor's "more" button opens, and the dialogs those items lead to. */
 @Composable
@@ -71,7 +73,11 @@ fun EditorOverflowMenu(
             onClick = onAddImage,
         )
         onPageImages?.let {
-            DropdownMenuItem(text = { Text("Images on this page") }, onClick = it)
+            DropdownMenuItem(
+                text = { Text("Images on this page") },
+                leadingIcon = { Icon(Icons.Outlined.PhotoLibrary, null) },
+                onClick = it,
+            )
         }
         HorizontalDivider()
 
@@ -113,6 +119,7 @@ fun ExportDialog(onDismiss: () -> Unit, onExport: (ExportFormat, Boolean) -> Uni
         onDismissRequest = onDismiss,
         title = { Text("Export") },
         text = {
+            ImmersiveDialogWindow()
             Column {
                 ExportFormat.entries.forEach { format ->
                     Row(

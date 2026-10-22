@@ -37,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.Brush as PaintBrush
 import androidx.compose.ui.unit.dp
@@ -87,6 +88,23 @@ fun HomeRail(
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
                 .height(220.dp)
+        )
+        // The theme, trash and settings rows sit on the scene. A wash under them keeps the labels
+        // legible against a snow cap without hiding the horizon entirely.
+        Box(
+            Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .height(168.dp)
+                .background(
+                    PaintBrush.verticalGradient(
+                        listOf(
+                            Color.Transparent,
+                            brand.railBottom.copy(alpha = 0.70f),
+                            brand.railBottom.copy(alpha = 0.88f),
+                        ),
+                    ),
+                )
         )
 
         Column(Modifier.fillMaxHeight()) {

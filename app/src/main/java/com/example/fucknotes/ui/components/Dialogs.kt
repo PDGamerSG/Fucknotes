@@ -38,6 +38,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import com.example.fucknotes.data.db.FolderEntity
 import com.example.fucknotes.data.model.NoteColors
+import com.example.fucknotes.ui.common.ImmersiveDialogWindow
 
 @Composable
 fun TextPromptDialog(
@@ -54,6 +55,7 @@ fun TextPromptDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
+            ImmersiveDialogWindow()
             Column {
                 OutlinedTextField(
                     value = value,
@@ -93,7 +95,7 @@ fun ConfirmDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
-        text = { Text(message) },
+        text = { ImmersiveDialogWindow(); Text(message) },
         confirmButton = {
             TextButton(onClick = onConfirm) {
                 Text(
@@ -116,6 +118,7 @@ fun ColorPickerDialog(
         onDismissRequest = onDismiss,
         title = { Text("Note colour") },
         text = {
+            ImmersiveDialogWindow()
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 NoteColors.chunked(4).forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -161,6 +164,7 @@ fun FolderPickerDialog(
         onDismissRequest = onDismiss,
         title = { Text("Select notebook") },
         text = {
+            ImmersiveDialogWindow()
             LazyColumn(Modifier.heightIn(max = 360.dp)) {
                 item {
                     Row(
@@ -208,6 +212,7 @@ fun OptionListDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
+            ImmersiveDialogWindow()
             Column(Modifier.verticalScroll(rememberScrollState())) {
                 options.forEachIndexed { index, label ->
                     Row(

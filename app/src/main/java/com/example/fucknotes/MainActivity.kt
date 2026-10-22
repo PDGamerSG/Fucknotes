@@ -101,7 +101,10 @@ class MainActivity : FragmentActivity() {
                             androidx.compose.material3.AlertDialog(
                                 onDismissRequest = { if (document.progress == null) documentOpen.consumed() },
                                 title = { androidx.compose.material3.Text(if (document.error != null) "PDF import" else "Opening PDF") },
-                                text = { androidx.compose.material3.Text(document.error ?: document.progress.orEmpty()) },
+                                text = {
+                                    com.example.fucknotes.ui.common.ImmersiveDialogWindow()
+                                    androidx.compose.material3.Text(document.error ?: document.progress.orEmpty())
+                                },
                                 confirmButton = {
                                     if (document.error != null) androidx.compose.material3.TextButton(onClick = documentOpen::consumed) {
                                         androidx.compose.material3.Text("Close")

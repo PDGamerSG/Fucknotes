@@ -5,14 +5,20 @@ import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -28,6 +34,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -53,7 +60,9 @@ import com.example.fucknotes.data.model.PenButtonAction
 import com.example.fucknotes.data.model.ThemeMode
 import com.example.fucknotes.data.repo.SettingsRepository
 import com.example.fucknotes.input.PenInputBus
+import com.example.fucknotes.ui.common.ImmersiveDialogWindow
 import com.example.fucknotes.ui.components.OptionListDialog
+import com.example.fucknotes.ui.theme.Radii
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -168,130 +177,141 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
             Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            SectionHeader("Display and theme")
+            Column(Modifier.widthIn(max = 760.dp).fillMaxWidth().padding(vertical = 8.dp)) {
+                SettingsGroup("Display and theme") {
+                    SettingRow(
+                        title = "Theme",
+                        subtitle = settings.themeMode.name.lowercase().replaceFirstChar(Char::uppercase),
+                        onClick = { showTheme = true },
+                    )
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        RowDivider()
+                        SwitchRow(
+                            title = "Use wallpaper colours",
+                            subtitle = "Follow the system palette instead of a preset",
+                            checked = settings.dynamicColor,
+                            onChange = viewModel::setDynamicColor,
+                        )
+                    }
+                    RowDivider()
+                    SwitchRow(
+                        title = "Dark reader",
+                        subtitle = "Use dark pages and soften bright imported documents",
+                        checked = settings.darkReader,
+                        onChange = viewModel::setDarkReader,
+                    )
+                    RowDivider()
+                    SettingRow(
+                        title = "Theme colour",
+                        subtitle = settings.accent.label,
+                        enabled = !settings.dynamicColor || Build.VERSION.SDK_INT < Build.VERSION_CODES.S,
+                        onClick = { showAccent = true },
+                    )
+                    RowDivider()
+                    Column(Modifier.padding(horizontal = 20.dp, vertical = 12.dp)) {
+                        Text("Text size — ${settings.fontScalePercent}%", style = MaterialTheme.typography.bodyLarge)
+                        Slider(
+                            value = settings.fontScalePercent.toFloat(),
+                            onValueChange = { viewModel.setFontScale(it.toInt()) },
+                            valueRange = 80f..160f,
+                            steps = 7,
+                        )
+                    }
+                }
 
-            SettingRow(
-                title = "Theme",
-                subtitle = settings.themeMode.name.lowercase().replaceFirstChar(Char::uppercase),
-                onClick = { showTheme = true },
-            )
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                SwitchRow(
-                    title = "Use wallpaper colours",
-                    subtitle = "Follow the system palette instead of a preset",
-                    checked = settings.dynamicColor,
-                    onChange = viewModel::setDynamicColor,
-                )
+                SettingsGroup("Default settings for notes") {
+                    SettingRow(
+                        title = "Default paper style",
+                        subtitle = settings.defaultPaper.name.lowercase().replaceFirstChar(Char::uppercase),
+                        onClick = { showPaper = true },
+                    )
+                    RowDivider()
+                    SettingRow(
+                        title = "Finger input",
+                        subtitle = "${settings.fingerInputMode.label}: ${settings.fingerInputMode.description}",
+                        onClick = { showFingerModes = true },
+                    )
+                    RowDivider()
+                    SwitchRow(
+                        title = "Keep screen on while editing",
+                        subtitle = null,
+                        checked = settings.keepScreenOn,
+                        onChange = viewModel::setKeepScreenOn,
+                    )
+                    RowDivider()
+                    SwitchRow(
+                        title = "Confirm before deleting",
+                        subtitle = null,
+                        checked = settings.confirmDelete,
+                        onChange = viewModel::setConfirmDelete,
+                    )
+                }
+
+                SettingsGroup("Xiaomi Pen buttons") {
+                    Text(
+                        "Assign shortcuts to the pen buttons. The primary button is the one most Xiaomi Pens expose.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(20.dp, 14.dp, 20.dp, 4.dp),
+                    )
+                    SettingRow(
+                        title = "Customize pen buttons",
+                        subtitle = "Primary: ${settings.penPrimaryAction.label}  ·  Secondary: ${settings.penSecondaryAction.label}  ·  Tertiary: ${settings.penTertiaryAction.label}",
+                        onClick = { showPenControls = true },
+                    )
+                    RowDivider()
+                    Text(
+                        text = lastPenInput?.let { "Last raw input: $it" }
+                            ?: "Press a Xiaomi pen button while this screen is open to identify its input.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(20.dp, 12.dp, 20.dp, 14.dp),
+                    )
+                }
+
+                SettingsGroup("Backup") {
+                    SettingRow(
+                        title = "Backup now",
+                        subtitle = settings.lastBackupAt.ifBlank { "No backup yet" }
+                            .let { if (settings.lastBackupAt.isBlank()) it else "Last backup: $it" },
+                        enabled = !busy,
+                        onClick = { createBackup.launch(BackupManager.suggestedFileName()) },
+                    )
+                    RowDivider()
+                    SettingRow(
+                        title = "Restore from backup",
+                        subtitle = "Merges the backup into the notes already on this device",
+                        enabled = !busy,
+                        onClick = { openBackup.launch(arrayOf(BackupManager.MIME, "application/octet-stream")) },
+                    )
+                    RowDivider()
+                    SwitchRow(
+                        title = "Auto backup reminder",
+                        subtitle = "Prompt to back up when the app starts",
+                        checked = settings.autoBackup,
+                        onChange = viewModel::setAutoBackup,
+                    )
+                }
+
+                SettingsGroup("About") {
+                    SettingRow(
+                        title = "Fucknotes",
+                        subtitle = "Version ${versionName(context)} · local-only notes, no account required",
+                        onClick = {},
+                    )
+                    Text(
+                        "Notes, folders, tags, ink and backups all live on this device. " +
+                            "Nothing is uploaded anywhere.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(20.dp, 0.dp, 20.dp, 16.dp),
+                    )
+                }
+                Spacer(Modifier.height(24.dp))
             }
-            SwitchRow(
-                title = "Dark reader",
-                subtitle = "Use dark pages and soften bright imported documents",
-                checked = settings.darkReader,
-                onChange = viewModel::setDarkReader,
-            )
-            SettingRow(
-                title = "Theme colour",
-                subtitle = settings.accent.label,
-                enabled = !settings.dynamicColor || Build.VERSION.SDK_INT < Build.VERSION_CODES.S,
-                onClick = { showAccent = true },
-            )
-            Column(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
-                Text("Text size — ${settings.fontScalePercent}%", style = MaterialTheme.typography.bodyLarge)
-                Slider(
-                    value = settings.fontScalePercent.toFloat(),
-                    onValueChange = { viewModel.setFontScale(it.toInt()) },
-                    valueRange = 80f..160f,
-                    steps = 7,
-                )
-            }
-
-            HorizontalDivider()
-            SectionHeader("Default settings for notes")
-
-            SettingRow(
-                title = "Default paper style",
-                subtitle = settings.defaultPaper.name.lowercase().replaceFirstChar(Char::uppercase),
-                onClick = { showPaper = true },
-            )
-            SettingRow(
-                title = "Finger input",
-                subtitle = "${settings.fingerInputMode.label}: ${settings.fingerInputMode.description}",
-                onClick = { showFingerModes = true },
-            )
-            SwitchRow(
-                title = "Keep screen on while editing",
-                subtitle = null,
-                checked = settings.keepScreenOn,
-                onChange = viewModel::setKeepScreenOn,
-            )
-            SwitchRow(
-                title = "Confirm before deleting",
-                subtitle = null,
-                checked = settings.confirmDelete,
-                onChange = viewModel::setConfirmDelete,
-            )
-
-            HorizontalDivider()
-            SectionHeader("Xiaomi Pen buttons")
-            Text(
-                "Assign shortcuts to the pen buttons. The primary button is the one most Xiaomi Pens expose.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(20.dp, 0.dp, 20.dp, 8.dp),
-            )
-            SettingRow(
-                title = "Customize pen buttons",
-                subtitle = "Primary: ${settings.penPrimaryAction.label}  ·  Secondary: ${settings.penSecondaryAction.label}  ·  Tertiary: ${settings.penTertiaryAction.label}",
-                onClick = { showPenControls = true },
-            )
-            Text(
-                text = lastPenInput?.let { "Last raw input: $it" }
-                    ?: "Press a Xiaomi pen button while this screen is open to identify its input.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(20.dp, 0.dp, 20.dp, 12.dp),
-            )
-
-            HorizontalDivider()
-            SectionHeader("Backup")
-
-            SettingRow(
-                title = "Backup now",
-                subtitle = settings.lastBackupAt.ifBlank { "No backup yet" }
-                    .let { if (settings.lastBackupAt.isBlank()) it else "Last backup: $it" },
-                enabled = !busy,
-                onClick = { createBackup.launch(BackupManager.suggestedFileName()) },
-            )
-            SettingRow(
-                title = "Restore from backup",
-                subtitle = "Merges the backup into the notes already on this device",
-                enabled = !busy,
-                onClick = { openBackup.launch(arrayOf(BackupManager.MIME, "application/octet-stream")) },
-            )
-            SwitchRow(
-                title = "Auto backup reminder",
-                subtitle = "Prompt to back up when the app starts",
-                checked = settings.autoBackup,
-                onChange = viewModel::setAutoBackup,
-            )
-
-            HorizontalDivider()
-            SectionHeader("About")
-
-            SettingRow(
-                title = "Fucknotes",
-                subtitle = "Version ${versionName(context)} · local-only notes, no account required",
-                onClick = {},
-            )
-            Text(
-                "Notes, folders, tags, ink and backups all live on this device. " +
-                    "Nothing is uploaded anywhere.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(20.dp, 4.dp, 20.dp, 32.dp),
-            )
         }
     }
 
@@ -348,13 +368,38 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
 
 }
 
+/**
+ * One titled card of related rows.
+ *
+ * Settings used to be a single flat list across the whole width, which on a tablet put a switch
+ * a hand-span from the label it belonged to. Grouping into cards and capping the width keeps each
+ * control next to its words.
+ */
 @Composable
-private fun SectionHeader(text: String) {
-    Text(
-        text,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(20.dp, 20.dp, 20.dp, 6.dp),
+private fun SettingsGroup(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Column(Modifier.padding(horizontal = 20.dp, vertical = 10.dp)) {
+        Text(
+            title,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(start = 6.dp, bottom = 8.dp),
+        )
+        Surface(
+            shape = RoundedCornerShape(Radii.card),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(content = content)
+        }
+    }
+}
+
+@Composable
+private fun RowDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(horizontal = 16.dp),
+        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
     )
 }
 
@@ -370,6 +415,7 @@ private fun PenButtonControlsSheet(
     var editing by remember { mutableStateOf<PenButton?>(null) }
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
+        ImmersiveDialogWindow()
         Column(
             Modifier
                 .fillMaxWidth()
@@ -458,7 +504,7 @@ private fun SettingRow(
         Modifier
             .fillMaxWidth()
             .clickable(enabled = enabled, onClick = onClick)
-            .padding(20.dp, 12.dp),
+            .padding(20.dp, 14.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         Text(
@@ -479,7 +525,7 @@ private fun SwitchRow(title: String, subtitle: String?, checked: Boolean, onChan
         Modifier
             .fillMaxWidth()
             .clickable { onChange(!checked) }
-            .padding(20.dp, 12.dp),
+            .padding(20.dp, 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {

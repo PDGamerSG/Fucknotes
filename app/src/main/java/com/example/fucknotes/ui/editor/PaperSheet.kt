@@ -19,6 +19,7 @@ import com.example.fucknotes.data.model.LineColors
 import com.example.fucknotes.data.model.PaperColors
 import com.example.fucknotes.data.model.PaperStyle
 import com.example.fucknotes.ui.common.ColorSwatchRow
+import com.example.fucknotes.ui.common.ImmersiveDialogWindow
 import com.example.fucknotes.ui.common.PageSizeRow
 import com.example.fucknotes.ui.common.PaperSectionLabel
 import com.example.fucknotes.ui.common.SpacingRow
@@ -50,6 +51,7 @@ fun PaperSheet(
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
+        ImmersiveDialogWindow()
         Column(Modifier.padding(horizontal = 22.dp).padding(bottom = 32.dp)) {
             Text("Paper", style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(16.dp))

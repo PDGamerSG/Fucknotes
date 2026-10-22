@@ -29,14 +29,19 @@ import com.example.fucknotes.data.model.PenPreset
 import com.example.fucknotes.ui.common.FloatingPanel
 import com.example.fucknotes.ui.common.ToolButton
 import com.example.fucknotes.ui.common.ToolDivider
+import com.example.fucknotes.ui.editor.EditorChrome
 
 /**
  * The pen tray, floating over the page.
  *
  * It is laid out the way a pen case is: what marks the page on the left, the pens themselves in the
- * middle, and the page's own settings on the right. Each slot keeps its own colour and nib width,
- * so switching pens restores exactly the nib that slot was last set to — the behaviour of a real
- * pen case. Tapping the pen already in hand opens its colour and width.
+ * middle, and the lock on the right. Each slot keeps its own colour and nib width, so switching pens
+ * restores exactly the nib that slot was last set to — the behaviour of a real pen case. Tapping
+ * the pen already in hand opens its colour and width.
+ *
+ * The lock is the one control that changes the chrome itself: it steps [chrome] through
+ * [EditorChrome.next], so the same button clears the page down to the pen bar and then to nothing
+ * but the page.
  */
 @Composable
 fun InkToolbar(
@@ -44,18 +49,18 @@ fun InkToolbar(
     selectedPen: Int,
     tool: InkTool,
     fingerInputMode: FingerInputMode,
-    compact: Boolean,
+    chrome: EditorChrome,
     onSelectPen: (Int) -> Unit,
     onEditPen: (index: Int, colorArgb: Int, widthDp: Float) -> Unit,
     onSelectTool: (InkTool) -> Unit,
     onFingerInputMode: (FingerInputMode) -> Unit,
-    onToggleCompact: () -> Unit,
+    onCycleChrome: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var editingPen by remember { mutableIntStateOf(-1) }
 
     // Three pens, two highlighters and three fixed controls; only the swatches scroll on phones.
-    FloatingPanel(modifier.widthIn(max = 420.dp)) {
+    FloatingPanel(modifier.widthIn(max = 440.dp)) {
         Row(
             Modifier.padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -84,7 +89,7 @@ fun InkToolbar(
                 penSlots.take(2) + IndexedValue(selectedPen, selected)
             } else penSlots
             Row(
-                Modifier.weight(1f).horizontalScroll(rememberScrollState()).height(48.dp),
+                Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()).height(48.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 visiblePens.forEach { slot ->
@@ -138,12 +143,13 @@ fun InkToolbar(
 
             ToolDivider()
 
-            // Keep the compact-mode escape visible while the color tray scrolls.
+            // The lock stays at the end of the bar in every state so the page can always be
+            // cleared — or restored — from the same spot.
             ToolButton(
-                icon = if (compact) Icons.Outlined.LockOpen else Icons.Outlined.Lock,
-                label = if (compact) "Show all controls" else "Hide extra controls",
-                selected = compact,
-                onClick = onToggleCompact,
+                icon = if (chrome == EditorChrome.FULL) Icons.Outlined.LockOpen else Icons.Outlined.Lock,
+                label = chrome.lockLabel,
+                selected = chrome != EditorChrome.FULL,
+                onClick = onCycleChrome,
                 size = 48.dp,
             )
         }

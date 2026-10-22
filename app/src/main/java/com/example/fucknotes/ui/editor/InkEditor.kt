@@ -10,11 +10,10 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.MenuBook
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -23,9 +22,11 @@ import androidx.compose.ui.unit.dp
 import androidx.ink.strokes.Stroke
 import com.example.fucknotes.data.db.AttachmentEntity
 import com.example.fucknotes.data.ink.InkStroke
-import com.example.fucknotes.data.model.InkTool
 import com.example.fucknotes.data.model.FingerInputMode
+import com.example.fucknotes.data.model.InkTool
 import com.example.fucknotes.data.model.NoteType
+import com.example.fucknotes.ui.common.FloatingPanel
+import com.example.fucknotes.ui.common.ToolButton
 import com.example.fucknotes.ui.common.paperColorOr
 import com.example.fucknotes.ui.editor.ink.DefaultRuleColor
 import com.example.fucknotes.ui.editor.ink.EditorQuickBar
@@ -43,6 +44,12 @@ import com.example.fucknotes.ui.theme.brand
  * Nothing is docked: a canvas or notebook note is the page, and a docked bar would take a strip of
  * it on every screen the app runs on. The bars sit in the corners instead, so the only fixed cost
  * is the corner a hand rests in anyway.
+ *
+ * The corners are fixed so nothing ever overlaps:
+ *  - top-left: the note bar (back, pages, undo, redo, add page, more) — [EditorChrome.FULL] only;
+ *  - top-right: the pen bar, or in reading mode a single unlock button;
+ *  - bottom-left: the zoom readout and pinch lock — hidden while reading;
+ *  - bottom-right: the page counter with previous/next — always, for a notebook.
  *
  * The camera's position is read inside [ZoomReadout] and [PageCounter] rather than here, which
  * keeps a pan gesture from recomposing this function — re-supplying the ink layer's parameters
@@ -71,10 +78,8 @@ fun InkEditor(
     onSelectTool: (InkTool) -> Unit,
     onFingerInputMode: (FingerInputMode) -> Unit,
     onToggleZoomLock: () -> Unit,
-    compact: Boolean,
-    onToggleCompact: () -> Unit,
-    readMode: Boolean,
-    onToggleReadMode: () -> Unit,
+    chrome: EditorChrome,
+    onCycleChrome: () -> Unit,
     onAppendPage: () -> Int,
     onBack: () -> Unit,
     onPages: () -> Unit,
@@ -127,42 +132,52 @@ fun InkEditor(
             InkToolbar(
                 pens = state.pens, selectedPen = state.selectedPen, tool = state.tool,
                 fingerInputMode = state.fingerInputMode, onFingerInputMode = onFingerInputMode,
-                compact = compact, onSelectPen = onSelectPen, onEditPen = onEditPen,
-                onSelectTool = onSelectTool, onToggleCompact = onToggleCompact, modifier = barModifier,
+                chrome = chrome, onSelectPen = onSelectPen, onEditPen = onEditPen,
+                onSelectTool = onSelectTool, onCycleChrome = onCycleChrome, modifier = barModifier,
             )
         }
-        if (!readMode) BoxWithConstraints(Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(8.dp)) {
-            if (compact) {
-                penBar(Modifier.align(Alignment.TopEnd))
-            }
-            else if (maxWidth < 900.dp) {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    quickBar()
-                    penBar(Modifier.align(Alignment.End))
+
+        when (chrome) {
+            EditorChrome.FULL -> BoxWithConstraints(
+                Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(8.dp),
+            ) {
+                if (maxWidth < 900.dp) {
+                    // Too narrow for both bars side by side: stack them, note bar first.
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        quickBar()
+                        penBar(Modifier.align(Alignment.End))
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        quickBar()
+                        Spacer(Modifier.weight(1f))
+                        penBar(Modifier)
+                    }
                 }
-            } else {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    quickBar()
-                    Spacer(Modifier.weight(1f))
-                    penBar(Modifier)
-                }
             }
+
+            EditorChrome.COMPACT -> penBar(Modifier.align(Alignment.TopEnd).padding(8.dp))
+
+            EditorChrome.READING -> ReadingUnlock(
+                onClick = onCycleChrome,
+                modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
+            )
         }
 
-        if (!readMode) ZoomReadout(
+        if (chrome != EditorChrome.READING) ZoomReadout(
             camera = camera,
             locked = state.zoomLocked,
             onToggleLock = onToggleZoomLock,
             modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(end = 72.dp, top = 16.dp),
+                .align(Alignment.BottomStart)
+                .padding(16.dp),
         )
 
         if (notebook) {
@@ -171,32 +186,40 @@ fun InkEditor(
                 state = state,
                 pageCount = pageCount,
                 onAppendPage = onAppendPage,
-                modifier = Modifier.align(Alignment.TopCenter).padding(16.dp),
-            )
-        }
-
-        IconButton(
-            onClick = onToggleReadMode,
-            modifier = Modifier.align(Alignment.TopEnd).padding(16.dp),
-        ) {
-            Icon(
-                Icons.Outlined.MenuBook,
-                contentDescription = if (readMode) "Exit read mode" else "Read mode",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp),
             )
         }
 
         // Ink notes used to accept a picked image but offered no attachment surface, which made
         // the successful import look like a no-op. Keep the strip on the page so pictures and
         // recordings are visible immediately and can be removed without leaving the notebook.
-        if (!compact && !readMode) AttachmentStrip(
+        if (chrome == EditorChrome.FULL) AttachmentStrip(
             attachments = attachments.filter { it.pageIndex == null },
             playingPath = playingPath,
             onPlay = onPlayAttachment,
             onRemove = onRemoveAttachment,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = if (notebook) 76.dp else 16.dp),
+                .padding(start = 96.dp, end = 96.dp, bottom = 64.dp),
+        )
+    }
+}
+
+/**
+ * The only control left on a page being read.
+ *
+ * It is the same lock that cleared the page, so the way back is where the way in was: one tap
+ * restores every control.
+ */
+@Composable
+private fun ReadingUnlock(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    FloatingPanel(modifier, shape = CircleShape, elevation = 6.dp) {
+        ToolButton(
+            icon = Icons.Outlined.Lock,
+            label = EditorChrome.READING.lockLabel,
+            selected = true,
+            onClick = onClick,
+            size = 44.dp,
         )
     }
 }

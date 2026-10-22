@@ -64,7 +64,7 @@ fun HomeShelf(
 
             state.layout == LayoutMode.GRID -> LazyVerticalGrid(
                 columns = GridCells.Adaptive(150.dp),
-                contentPadding = PaddingValues(start = 18.dp, end = 18.dp, bottom = 40.dp),
+                contentPadding = PaddingValues(start = 18.dp, end = 18.dp, bottom = 104.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
@@ -87,7 +87,7 @@ fun HomeShelf(
             }
 
             else -> LazyColumn(
-                contentPadding = PaddingValues(start = 22.dp, end = 22.dp, bottom = 40.dp),
+                contentPadding = PaddingValues(start = 22.dp, end = 22.dp, bottom = 104.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(state.notes, key = { it.id }) { note ->

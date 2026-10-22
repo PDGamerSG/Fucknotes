@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.fucknotes.data.db.AttachmentEntity
 import com.example.fucknotes.data.ink.PageSpec
+import com.example.fucknotes.ui.common.ImmersiveDialogWindow
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -29,6 +30,7 @@ fun PageImagesSheet(
     onChange: (AttachmentEntity) -> Unit, onRemove: (AttachmentEntity) -> Unit, onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
+        ImmersiveDialogWindow()
         Column(Modifier.padding(20.dp)) {
             Text("Images on this page", style = MaterialTheme.typography.titleLarge)
             if (images.isEmpty()) Text("Use Import image in the page menu to add a picture.")

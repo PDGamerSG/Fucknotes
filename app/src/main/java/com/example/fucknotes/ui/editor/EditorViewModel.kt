@@ -711,25 +711,28 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
                 inkDirty = strokes !== snapshot
             }
 
-            repo.save(
-                existing.copy(
-                    title = s.title,
-                    body = s.body,
-                    type = s.type,
-                    checklistJson = repo.encodeChecklist(s.checklist),
-                    drawingJson = encodedInk,
-                    paperStyle = s.paperStyle,
-                    colorArgb = s.colorArgb,
-                    lineColorArgb = s.lineColorArgb,
-                    lineSpacingDp = s.lineSpacingDp,
-                    pageFormat = s.page.encode(),
-                    pageCount = snapshotPageCount.coerceAtLeast(1),
-                    pagesExplicitlyCreated = snapshotExplicitPages,
-                    pinned = s.pinned,
-                    archived = s.archived,
-                    locked = s.locked,
-                )
+            val next = existing.copy(
+                title = s.title,
+                body = s.body,
+                type = s.type,
+                checklistJson = repo.encodeChecklist(s.checklist),
+                drawingJson = encodedInk,
+                paperStyle = s.paperStyle,
+                colorArgb = s.colorArgb,
+                lineColorArgb = s.lineColorArgb,
+                lineSpacingDp = s.lineSpacingDp,
+                pageFormat = s.page.encode(),
+                pageCount = snapshotPageCount.coerceAtLeast(1),
+                pagesExplicitlyCreated = snapshotExplicitPages,
+                pinned = s.pinned,
+                archived = s.archived,
+                locked = s.locked,
             )
+            // Opening a note is not an edit. The shelf sorts by "last edited", and every leave,
+            // stop and screen pop used to rewrite the row — so reading a notebook moved it to the
+            // top. Only write, and only bump the timestamp, when something actually differs.
+            if (next == existing) return@withLock
+            repo.save(next)
         }
     }
 

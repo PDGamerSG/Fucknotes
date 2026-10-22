@@ -41,6 +41,7 @@ import com.example.fucknotes.data.model.NotebookDraft
 import com.example.fucknotes.data.model.PaperColors
 import com.example.fucknotes.data.model.PaperStyle
 import com.example.fucknotes.ui.common.ColorSwatchRow
+import com.example.fucknotes.ui.common.ImmersiveDialogWindow
 import com.example.fucknotes.ui.common.PageSizeRow
 import com.example.fucknotes.ui.common.PaperPreview
 import com.example.fucknotes.ui.common.PaperSectionLabel
@@ -70,6 +71,7 @@ fun NewNotebookDialog(
     val pageCountValid = initialPageCount in 1..MAX_INITIAL_NOTEBOOK_PAGES
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        ImmersiveDialogWindow()
         Surface(
             shape = RoundedCornerShape(Radii.sheet),
             color = MaterialTheme.colorScheme.surface,

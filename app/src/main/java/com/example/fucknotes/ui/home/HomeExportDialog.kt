@@ -7,6 +7,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import com.example.fucknotes.ui.common.ImmersiveDialogWindow
 
 enum class HomeExportMode(val label: String) {
     COMBINED("Save one combined PDF"),
@@ -23,6 +24,7 @@ fun HomeExportDialog(title: String, busy: Boolean, onDismiss: () -> Unit, onPick
         onDismissRequest = onDismiss,
         title = { Text("Export $title") },
         text = {
+            ImmersiveDialogWindow()
             Column {
                 Text("Includes every page, image and annotation. Collection exports also include subfolders.")
                 HomeExportMode.entries.forEach { mode ->

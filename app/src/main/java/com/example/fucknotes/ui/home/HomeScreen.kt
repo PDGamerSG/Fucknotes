@@ -274,7 +274,10 @@ fun HomeScreen(
         androidx.compose.material3.AlertDialog(
             onDismissRequest = {},
             title = { androidx.compose.material3.Text("Please wait") },
-            text = { androidx.compose.material3.Text(state.progress ?: "Preparing documents?") },
+            text = {
+                com.example.fucknotes.ui.common.ImmersiveDialogWindow()
+                androidx.compose.material3.Text(state.progress ?: "Preparing documents…")
+            },
             confirmButton = {},
         )
     }

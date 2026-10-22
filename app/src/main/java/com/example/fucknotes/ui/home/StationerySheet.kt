@@ -21,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.fucknotes.data.model.PenPreset
+import com.example.fucknotes.ui.common.ImmersiveDialogWindow
 import com.example.fucknotes.ui.editor.ink.PenEditorPopup
 import com.example.fucknotes.ui.editor.ink.PenGlyph
 import com.example.fucknotes.ui.editor.ink.penLabel
@@ -42,6 +43,7 @@ fun StationerySheet(
     var editing by remember { mutableIntStateOf(-1) }
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
+        ImmersiveDialogWindow()
         Column(
             Modifier
                 .padding(horizontal = 24.dp)

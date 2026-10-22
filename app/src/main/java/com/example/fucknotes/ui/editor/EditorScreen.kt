@@ -86,8 +86,9 @@ fun EditorScreen(
     val contentScroll = rememberScrollState()
 
     val isInkNote = state.type.isInk
-    var compact by rememberSaveable(state.noteId) { mutableStateOf(false) }
-    var readMode by rememberSaveable(state.noteId) { mutableStateOf(false) }
+    // One lock cycles the chrome: every control, the pen bar alone, or nothing but the page.
+    var chrome by rememberSaveable(state.noteId) { mutableStateOf(EditorChrome.FULL) }
+    val compact = chrome != EditorChrome.FULL
 
     // Handed to the ink surface as a stable lambda so committing a stroke does not recompose it.
     val inkStrokes = remember(viewModel) { { viewModel.strokes } }
@@ -181,10 +182,9 @@ fun EditorScreen(
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             Column {
-                // Read mode is an uncluttered reading surface. The book button and page
-                // navigation remain inside InkEditor, so the tab strip is deliberately hidden
-                // while an ink note is being read.
-                if (!compact && !(isInkNote && readMode)) EditorTabBar(
+                // Locked chrome is an uncluttered surface: the tab strip only shows while
+                // every control is out.
+                if (chrome == EditorChrome.FULL) EditorTabBar(
                     tabs = OpenTabs.tabs,
                     activeNoteId = state.noteId,
                     onSelect = { id -> if (id != state.noteId) scope.launch { viewModel.saveNow(); onOpenNote(id) } },
@@ -239,9 +239,11 @@ fun EditorScreen(
                     InkToolbar(
                         pens = state.pens, selectedPen = state.selectedPen, tool = state.tool,
                         fingerInputMode = state.fingerInputMode, onFingerInputMode = viewModel::setFingerInputMode,
-                        compact = compact, onSelectPen = viewModel::selectPen,
+                        // A typed note has no reading state to go to: its lock is a plain toggle.
+                        chrome = if (compact) EditorChrome.COMPACT else EditorChrome.FULL,
+                        onSelectPen = viewModel::selectPen,
                         onEditPen = viewModel::editPen, onSelectTool = viewModel::setTool,
-                        onToggleCompact = { compact = !compact },
+                        onCycleChrome = { chrome = if (compact) EditorChrome.FULL else EditorChrome.COMPACT },
                     )
                 }
             } else if (!isInkNote) {
@@ -295,10 +297,8 @@ fun EditorScreen(
                     onSelectTool = viewModel::setTool,
                     onFingerInputMode = viewModel::setFingerInputMode,
                     onToggleZoomLock = viewModel::toggleZoomLock,
-                    compact = compact,
-                    readMode = readMode,
-                    onToggleReadMode = { readMode = !readMode },
-                    onToggleCompact = { compact = !compact },
+                    chrome = chrome,
+                    onCycleChrome = { chrome = chrome.next() },
                     onAppendPage = viewModel::appendPage,
                     onBack = leaveNote,
                     onPages = { showPages = true },

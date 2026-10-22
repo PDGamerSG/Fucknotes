@@ -35,6 +35,7 @@ import com.example.fucknotes.data.ink.PageSpec
 import com.example.fucknotes.data.ink.InkStroke
 import com.example.fucknotes.data.ink.NotebookLayout
 import com.example.fucknotes.data.model.PaperStyle
+import com.example.fucknotes.ui.common.ImmersiveDialogWindow
 import com.example.fucknotes.ui.common.PaperPreview
 import com.example.fucknotes.ui.common.paperColorOr
 import com.example.fucknotes.ui.theme.brand
@@ -64,6 +65,7 @@ fun PagesSheet(
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
+        ImmersiveDialogWindow()
         Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 28.dp)) {
             Text("Pages", style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(4.dp))

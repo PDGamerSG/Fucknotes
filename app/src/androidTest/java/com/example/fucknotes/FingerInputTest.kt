@@ -21,6 +21,7 @@ import com.example.fucknotes.data.model.DefaultPenTray
 import com.example.fucknotes.data.model.FingerInputMode
 import com.example.fucknotes.data.model.InkTool
 import com.example.fucknotes.data.model.PaperStyle
+import com.example.fucknotes.ui.editor.EditorChrome
 import com.example.fucknotes.ui.editor.ink.InkCamera
 import com.example.fucknotes.ui.editor.ink.InkSurface
 import com.example.fucknotes.ui.editor.ink.InkToolbar
@@ -148,15 +149,15 @@ class FingerInputTest {
     @Test fun toolbarCyclesTouchModesWithoutOpeningAMenu() {
         var selected by mutableStateOf(0)
         var mode by mutableStateOf(FingerInputMode.HAND)
-        var compact by mutableStateOf(true)
+        var chrome by mutableStateOf(EditorChrome.COMPACT)
         val pens = DefaultPenTray
         compose.setContent {
             FucknotesTheme {
                 InkToolbar(
                     pens = pens, selectedPen = selected, tool = pens[selected].tool,
-                    fingerInputMode = mode, compact = compact, onSelectPen = { selected = it },
+                    fingerInputMode = mode, chrome = chrome, onSelectPen = { selected = it },
                     onEditPen = { _, _, _ -> }, onSelectTool = {}, onFingerInputMode = { mode = it },
-                    onToggleCompact = { compact = !compact },
+                    onCycleChrome = { chrome = chrome.next() },
                 )
             }
         }
@@ -168,8 +169,12 @@ class FingerInputTest {
             compose.onNodeWithContentDescription(penLabel(pens[index])).performScrollTo().performClick().assertIsSelected()
             compose.runOnIdle { assertEquals(index, selected) }
         }
+        // The lock steps COMPACT -> READING -> FULL; the bar is shown in COMPACT and FULL.
+        compose.onNodeWithContentDescription(EditorChrome.COMPACT.lockLabel).assertIsDisplayed().performClick()
+        compose.runOnIdle { assertEquals(EditorChrome.READING, chrome); chrome = EditorChrome.FULL }
+        compose.onNodeWithContentDescription(EditorChrome.FULL.lockLabel).assertIsDisplayed()
         for (expanded in listOf(false, true)) {
-            if (expanded) compose.onNodeWithContentDescription("Show all controls").performClick()
+            compose.runOnIdle { chrome = if (expanded) EditorChrome.FULL else EditorChrome.COMPACT }
             repeat(2) {
                 for (next in listOf(FingerInputMode.DRAW, FingerInputMode.DISABLED, FingerInputMode.HAND)) {
                     compose.onNode(hasContentDescription("Finger input:", substring = true)).performClick()

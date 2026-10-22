@@ -15,6 +15,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -22,9 +23,14 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.example.fucknotes.ui.theme.Radii
 import com.example.fucknotes.ui.theme.brand
 
@@ -136,4 +142,30 @@ fun ToolDivider(modifier: Modifier = Modifier, height: Dp = 20.dp) {
             .size(width = 1.dp, height = height)
             .background(MaterialTheme.colorScheme.outlineVariant)
     )
+}
+
+/**
+ * Keeps the system bars hidden inside a dialog or bottom sheet.
+ *
+ * The activity hides them, but every dialog is its own window with its own insets controller, so
+ * opening the pages sheet used to bring the status bar back over the toolbar. Called once from the
+ * top of a dialog's content, this finds the dialog's window and applies the same immersive policy.
+ */
+@Composable
+fun ImmersiveDialogWindow() {
+    val view = LocalView.current
+    LaunchedEffect(view) {
+        var node: Any? = view
+        var window: android.view.Window? = null
+        while (node != null && window == null) {
+            window = (node as? DialogWindowProvider)?.window
+            node = (node as? android.view.View)?.parent
+        }
+        val target = window ?: return@LaunchedEffect
+        WindowCompat.setDecorFitsSystemWindows(target, false)
+        WindowInsetsControllerCompat(target, target.decorView).apply {
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            hide(WindowInsetsCompat.Type.systemBars())
+        }
+    }
 }

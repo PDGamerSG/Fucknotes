@@ -1,6 +1,49 @@
 # Notes workflow changes
 
-Validated on the connected Xiaomi 2410CRP4CI (Android 16) on 2026-10-22. The current debug build is installed without clearing app data. The checks below distinguish automated coverage, interactive checks and remaining scenarios.
+Validated on the connected Xiaomi 2410CRP4CI (Android 16) on 2026-10-22. The checks below
+distinguish automated coverage, interactive checks and remaining scenarios.
+
+## Latest pass (chrome lock, page navigation, immersive sheets) — 2026-10-22, macOS
+
+Changes:
+
+- The pen bar's lock cycles the editor chrome: Full controls → Pen bar only → Reading mode → Full.
+  Reading mode shows only the page, the bottom-right page counter and one unlock button. The old
+  book icon is gone.
+- Page navigation is a floating panel in the bottom-right corner in every chrome state.
+- The zoom readout / pinch lock moved to the bottom-left; it no longer covers the highlighter
+  swatches.
+- Bottom sheets and dialogs keep the system bars hidden (the pages sheet used to drop the status
+  bar over the toolbar).
+- Settings is grouped into cards at a 760 dp maximum width. The home grid leaves room under the
+  last row for the corner button; the rail's bottom rows sit on a wash so "Light mode" is legible.
+- Opening a note and leaving it no longer rewrites the row: `EditorViewModel.saveNow` skips the
+  write when nothing differs, so "last edited" and the shelf order only change on real edits.
+
+Executed:
+
+```bash
+./gradlew :app:testDebugUnitTest :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon -Dkotlin.incremental=false
+adb -s b86e61d8 shell am instrument -w -r com.example.fucknotes.test/androidx.test.runner.AndroidJUnitRunner
+```
+
+- 17 JVM tests passed (14 existing plus `EditorChromeTest`: cycle order, reachability, labels).
+- 11 instrumented tests passed on the physical tablet, including the new
+  `EditorChromeTest.lockCyclesControlsPenBarAndReadingWithPageCounterAlwaysPresent` (each state
+  shows exactly its controls; the arrow past the last page adds a sheet) and the locked-surface
+  test that the previous pass had not yet run on the device.
+- Screenshots on the tablet confirmed all three chrome states, page 1 → 2 via the bottom-right
+  arrow, the pages sheet without a status bar, the overflow menu, settings cards, the New notebook
+  dialog, and light mode.
+
+Install note: the tablet build had been signed with the Windows debug keystore, so this Mac's
+build could not update it. The app data (`databases`, `files`) was snapshotted with `run-as`,
+verified locally with `sqlite3` (11 live notes, 10 in trash, 23 attachments), the package was
+reinstalled, and the snapshot was restored before the first launch. All notes, folders and
+settings were present afterwards; the snapshot is kept in `build/tablet-backup-20261022-164709/`
+and `~/fucknotes-tablet-appdata-backup.tar` on the Mac.
+
+## Earlier passes
 
 ## Implemented
 
