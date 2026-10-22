@@ -31,8 +31,7 @@ Changes:
   is refused with advice to save as `.pptx`. Code: `media/pptx/` (`OoxmlXml`, `PptxColors`,
   `PptxDeck`, `PptxRenderer`) and `media/PptxImporter.kt`.
 - Polish: import and export show a progress dialog with a ring and the current step; the shelf
-  grid has room between tiles and a count under the title (with the hold-to-move hint in manual
-  order); search and trash use the same row as the shelf list; the editor's bars fade and slide as
+  grid has room between tiles and a count under the title; search and trash use the same row as the shelf list; the editor's bars fade and slide as
   the lock cycles.
 - Finger navigation in every chrome state: one finger scrolls the page in "Pen only" and under
   the zoom lock (the lock now pins only the scale and the double-tap swap). Fingers that were on

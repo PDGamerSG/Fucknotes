@@ -64,8 +64,7 @@ fun HomeShelf(
             )
             if (!state.loading && state.notes.isNotEmpty()) {
                 Text(
-                    "${state.notes.size} ${if (state.notes.size == 1) "note" else "notes"}" +
-                        if (state.sort == com.example.fucknotes.data.model.SortOrder.MANUAL) "  ·  hold a note for two seconds to move it" else "",
+                    "${state.notes.size} ${if (state.notes.size == 1) "note" else "notes"}",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 2.dp),
