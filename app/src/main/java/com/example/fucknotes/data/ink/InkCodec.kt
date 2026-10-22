@@ -122,11 +122,16 @@ object InkCodec {
             epsilon = (0.1f / worldToScreenScale.coerceAtLeast(0.05f)).coerceIn(0.001f, 1f),
         ).also { brushTools[it] = tool }
 
-    /** Clamp rather than multiply alpha: repeated saves must never fade a highlight. */
+    /**
+     * Clamp rather than multiply alpha: repeated saves must never fade a highlight.  A quarter
+     * opacity keeps black text readable underneath the chisel tip on both paper and imported PDFs.
+     */
     internal fun colorForTool(tool: InkTool, argb: Int): Int =
         if (tool == InkTool.HIGHLIGHTER) {
-            (argb and 0x00FFFFFF) or (minOf(argb ushr 24, 96) shl 24)
+            (argb and 0x00FFFFFF) or (minOf(argb ushr 24, HIGHLIGHTER_ALPHA) shl 24)
         } else argb
+
+    private const val HIGHLIGHTER_ALPHA = 64
 
     @OptIn(ExperimentalInkCustomBrushApi::class)
     private fun familyForTool(tool: InkTool): BrushFamily = when (tool) {

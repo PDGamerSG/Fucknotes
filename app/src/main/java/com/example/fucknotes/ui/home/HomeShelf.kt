@@ -76,6 +76,8 @@ fun HomeShelf(
                         selectionMode = state.inSelectionMode,
                         hasImages = (state.mediaByNote[note.id]?.images ?: 0) > 0,
                         hasAudio = (state.mediaByNote[note.id]?.audio ?: 0) > 0,
+                        firstPageImagePath = state.firstPageImageByNote[note.id],
+                        darkReader = state.settings.darkReader,
                         onClick = {
                             if (state.inSelectionMode) onToggleSelect(note.id) else onOpenNote(note.id)
                         },
@@ -92,6 +94,8 @@ fun HomeShelf(
                     NoteRow(
                         note = note,
                         preview = previewOf(note),
+                        firstPageImagePath = state.firstPageImageByNote[note.id],
+                        darkReader = state.settings.darkReader,
                         selected = note.id in state.selection,
                         onClick = {
                             if (state.inSelectionMode) onToggleSelect(note.id) else onOpenNote(note.id)

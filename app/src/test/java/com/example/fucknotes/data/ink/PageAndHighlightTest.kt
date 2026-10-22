@@ -20,7 +20,7 @@ class PageAndHighlightTest {
     @Test fun legacyOpaqueHighlightsBecomeTransparentWithoutRepeatedFading() {
         val opaque = 0xFFFFDF43.toInt()
         val translucent = InkCodec.colorForTool(InkTool.HIGHLIGHTER, opaque)
-        assertEquals(96, translucent ushr 24)
+        assertEquals(64, translucent ushr 24)
         assertEquals(opaque and 0xFFFFFF, translucent and 0xFFFFFF)
         assertEquals(translucent, InkCodec.colorForTool(InkTool.HIGHLIGHTER, translucent))
         assertEquals(opaque, InkCodec.colorForTool(InkTool.PEN, opaque))

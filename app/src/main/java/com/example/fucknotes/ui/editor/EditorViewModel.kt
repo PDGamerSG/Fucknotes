@@ -78,6 +78,8 @@ data class EditorUiState(
     val fingerInputMode: FingerInputMode = FingerInputMode.DRAW,
     /** Mirrors the app-wide setting; true pins the page scale against stray pinches. */
     val zoomLocked: Boolean = false,
+    /** Mirrors the app-wide dark reader setting. */
+    val darkReader: Boolean = false,
     /** Actions assigned to the physical Xiaomi Pen controls. */
     val penPrimaryAction: PenButtonAction = PenButtonAction.TOGGLE_ERASER,
     val penSecondaryAction: PenButtonAction = PenButtonAction.UNDO,
@@ -174,6 +176,7 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
                 _state.value = current.copy(
                     fingerInputMode = s.fingerInputMode,
                     zoomLocked = s.zoomLocked,
+                    darkReader = s.darkReader,
                     pens = s.penTray,
                     selectedPen = index,
                     penPrimaryAction = s.penPrimaryAction,

@@ -24,6 +24,7 @@ fun FucknotesTheme(
     themeMode: ThemeMode = ThemeMode.SYSTEM,
     accent: AccentPreset = AccentPreset.INDIGO,
     dynamicColor: Boolean = false,
+    darkReader: Boolean = false,
     fontScalePercent: Int = 100,
     content: @Composable () -> Unit,
 ) {
@@ -31,7 +32,7 @@ fun FucknotesTheme(
         ThemeMode.SYSTEM -> isSystemInDarkTheme()
         ThemeMode.LIGHT -> false
         ThemeMode.DARK -> true
-    }
+    } || darkReader
     val context = LocalContext.current
     val seed = Color(accent.seedArgb)
     val scheme = when {

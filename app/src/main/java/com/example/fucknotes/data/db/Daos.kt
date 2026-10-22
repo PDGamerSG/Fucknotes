@@ -255,6 +255,10 @@ interface AttachmentDao {
     @Query("SELECT * FROM attachments WHERE noteId = :noteId ORDER BY createdAt ASC")
     suspend fun forNote(noteId: Long): List<AttachmentEntity>
 
+    /** First-page images are used as the shelf preview for imported PDFs and placed page images. */
+    @Query("SELECT * FROM attachments WHERE type = 'IMAGE' AND pageIndex = 0 ORDER BY createdAt ASC")
+    fun observeFirstPageImages(): Flow<List<AttachmentEntity>>
+
     @Query("SELECT * FROM attachments")
     suspend fun allAttachments(): List<AttachmentEntity>
 

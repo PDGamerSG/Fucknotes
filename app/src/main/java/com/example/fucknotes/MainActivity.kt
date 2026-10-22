@@ -76,6 +76,7 @@ class MainActivity : FragmentActivity() {
                 themeMode = settings.themeMode,
                 accent = settings.accent,
                 dynamicColor = settings.dynamicColor,
+                darkReader = settings.darkReader,
                 fontScalePercent = settings.fontScalePercent,
             ) {
                 Surface(

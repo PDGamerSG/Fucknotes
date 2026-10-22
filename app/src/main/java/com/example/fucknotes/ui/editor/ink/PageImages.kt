@@ -2,6 +2,8 @@ package com.example.fucknotes.ui.editor.ink
 
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
 import android.graphics.RectF
 import android.util.LruCache
@@ -43,7 +45,13 @@ internal fun rememberPageImages(attachments: List<AttachmentEntity>, maxEdge: In
 }
 
 @Composable
-internal fun PageImages(attachments: List<AttachmentEntity>, camera: InkCamera, page: PageSpec, notebook: Boolean) {
+internal fun PageImages(
+    attachments: List<AttachmentEntity>,
+    camera: InkCamera,
+    page: PageSpec,
+    notebook: Boolean,
+    darkReader: Boolean = false,
+) {
     val bounds = camera.visibleWorldBounds(camera.viewportWidthPx, camera.viewportHeightPx)
     val visible = attachments.filter { image ->
         image.pageIndex != null && image.pageWidth > 0 && image.pageHeight > 0 &&
@@ -57,19 +65,39 @@ internal fun PageImages(attachments: List<AttachmentEntity>, camera: InkCamera, 
             native.save()
             native.concat(camera.worldToScreen())
             visible.forEach { image ->
-                bitmaps[image.id]?.let { bitmap -> drawPageImage(native, image, bitmap, page, notebook) }
+                bitmaps[image.id]?.let { bitmap -> drawPageImage(native, image, bitmap, page, notebook, darkReader) }
             }
             native.restore()
         }
     }
 }
 
-internal fun drawPageImage(canvas: Canvas, image: AttachmentEntity, bitmap: Bitmap, page: PageSpec, notebook: Boolean = true) {
+internal fun drawPageImage(
+    canvas: Canvas,
+    image: AttachmentEntity,
+    bitmap: Bitmap,
+    page: PageSpec,
+    notebook: Boolean = true,
+    darkReader: Boolean = false,
+) {
     val top = if (notebook) NotebookLayout.topOf(image.pageIndex ?: 0, page) else 0f
     canvas.save()
     if (notebook) canvas.clipRect(0f, top, page.widthDp, top + page.heightDp)
-    canvas.drawBitmap(bitmap, null, RectF(image.pageX, top + image.pageY,
-        image.pageX + image.pageWidth, top + image.pageY + image.pageHeight),
-        Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    if (darkReader) {
+        paint.colorFilter = ColorMatrixColorFilter(ColorMatrix(floatArrayOf(
+            -1f, 0f, 0f, 0f, 255f,
+            0f, -1f, 0f, 0f, 255f,
+            0f, 0f, -1f, 0f, 255f,
+            0f, 0f, 0f, 1f, 0f,
+        )))
+    }
+    canvas.drawBitmap(
+        bitmap,
+        null,
+        RectF(image.pageX, top + image.pageY,
+            image.pageX + image.pageWidth, top + image.pageY + image.pageHeight),
+        paint,
+    )
     canvas.restore()
 }

@@ -51,3 +51,6 @@ Thumbs.db
 # Signing / secrets
 google-services.json
 secrets.properties
+
+# File-sync conflict copies are preserved under build/sync-conflict-backups and must not enter the source set
+*.sync-conflict-*

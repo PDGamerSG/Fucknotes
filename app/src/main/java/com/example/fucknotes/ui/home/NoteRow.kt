@@ -43,6 +43,8 @@ import com.example.fucknotes.ui.theme.brand
 fun NoteRow(
     note: NoteEntity,
     preview: String,
+    firstPageImagePath: String? = null,
+    darkReader: Boolean = false,
     selected: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
@@ -68,6 +70,8 @@ fun NoteRow(
         NotePagePreview(
             note = note,
             preview = "",
+            firstPageImagePath = firstPageImagePath,
+            darkReader = darkReader,
             modifier = Modifier
                 .width(44.dp)
                 .height(58.dp),

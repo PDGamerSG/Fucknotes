@@ -184,4 +184,49 @@ class FingerInputTest {
             }
         }
     }
+
+    @Test fun zoomLockBlocksFingerGesturesButKeepsStylusWriting() {
+        val camera = InkCamera(1f)
+        var strokes by mutableStateOf(emptyList<InkStroke>())
+        var swaps = 0
+        compose.setContent {
+            FucknotesTheme {
+                InkSurface(
+                    strokes = { strokes }, camera = camera, tool = InkTool.PEN,
+                    colorArgb = 0xFF2386DC.toInt(), widthDp = 3f, enabled = true,
+                    fingerInputMode = FingerInputMode.HAND, zoomLocked = true, notebook = false,
+                    paperStyle = PaperStyle.DOTTED, pageSpec = PageSpec.Default,
+                    ruleColor = Color.Gray, ruleSpacingDp = 24f, deskColor = Color.Gray,
+                    onStrokesFinished = { finished -> strokes = strokes + finished.map { InkStroke(it, InkTool.PEN) } },
+                    onErase = {}, onToggleEraser = { swaps++ },
+                    modifier = Modifier.fillMaxSize().testTag("locked-page"),
+                )
+            }
+        }
+        compose.onNodeWithTag("locked-page").performTouchInput {
+            swipe(Offset(200f, 400f), Offset(600f, 800f))
+            doubleClick(Offset(300f, 500f))
+            pinch(Offset(100f, 300f), Offset(400f, 300f), Offset(40f, 240f), Offset(460f, 360f))
+        }
+        compose.runOnIdle {
+            assertEquals("Locked touch must not pan", 0f, camera.panX, 0f)
+            assertEquals("Locked touch must not pan", 0f, camera.panY, 0f)
+            assertEquals("Locked touch must not zoom", 1f, camera.zoom, 0f)
+            assertEquals("Locked touch must not toggle tools", 0, swaps)
+        }
+
+        val start = SystemClock.uptimeMillis()
+        for (i in 0..12) {
+            val action = when (i) { 0 -> MotionEvent.ACTION_DOWN; 12 -> MotionEvent.ACTION_UP; else -> MotionEvent.ACTION_MOVE }
+            val properties = MotionEvent.PointerProperties().apply { id = 0; toolType = MotionEvent.TOOL_TYPE_STYLUS }
+            val coords = MotionEvent.PointerCoords().apply {
+                x = 240f + i * 12f; y = 520f; pressure = if (i == 12) 0f else 0.7f
+            }
+            val event = MotionEvent.obtain(start, start + i * 16L, action, 1, arrayOf(properties),
+                arrayOf(coords), 0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_STYLUS, 0)
+            dispatchAtEventTime(event)
+        }
+        compose.waitUntil(5_000) { strokes.isNotEmpty() }
+        compose.runOnIdle { assertEquals("Locked mode must keep stylus writing", 1, strokes.size) }
+    }
 }

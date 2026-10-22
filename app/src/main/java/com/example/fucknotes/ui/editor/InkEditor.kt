@@ -10,6 +10,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.systemGestureExclusion
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.MenuBook
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -68,6 +73,8 @@ fun InkEditor(
     onToggleZoomLock: () -> Unit,
     compact: Boolean,
     onToggleCompact: () -> Unit,
+    readMode: Boolean,
+    onToggleReadMode: () -> Unit,
     onAppendPage: () -> Int,
     onBack: () -> Unit,
     onPages: () -> Unit,
@@ -102,8 +109,11 @@ fun InkEditor(
             onStrokesFinished = onStrokesFinished,
             onErase = onErase,
             onToggleEraser = onToggleEraser,
-            modifier = Modifier.fillMaxSize(),
             pageColor = state.colorArgb.paperColorOr(PaperWhite),
+            darkReader = state.darkReader,
+            modifier = Modifier
+                .fillMaxSize()
+                .then(if (state.zoomLocked) Modifier.systemGestureExclusion() else Modifier),
         )
 
         val quickBar: @Composable () -> Unit = {
@@ -121,8 +131,10 @@ fun InkEditor(
                 onSelectTool = onSelectTool, onToggleCompact = onToggleCompact, modifier = barModifier,
             )
         }
-        BoxWithConstraints(Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(8.dp)) {
-            if (compact) penBar(Modifier.align(Alignment.TopEnd))
+        if (!readMode) BoxWithConstraints(Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(8.dp)) {
+            if (compact) {
+                penBar(Modifier.align(Alignment.TopEnd))
+            }
             else if (maxWidth < 900.dp) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
@@ -144,31 +156,40 @@ fun InkEditor(
             }
         }
 
-        if (!compact) ZoomReadout(
+        if (!readMode) ZoomReadout(
             camera = camera,
             locked = state.zoomLocked,
             onToggleLock = onToggleZoomLock,
             modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(16.dp),
+                .align(Alignment.TopEnd)
+                .padding(end = 72.dp, top = 16.dp),
         )
 
-        if (notebook && !compact) {
+        if (notebook) {
             PageCounter(
                 camera = camera,
                 state = state,
                 pageCount = pageCount,
                 onAppendPage = onAppendPage,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(16.dp),
+                modifier = Modifier.align(Alignment.TopCenter).padding(16.dp),
+            )
+        }
+
+        IconButton(
+            onClick = onToggleReadMode,
+            modifier = Modifier.align(Alignment.TopEnd).padding(16.dp),
+        ) {
+            Icon(
+                Icons.Outlined.MenuBook,
+                contentDescription = if (readMode) "Exit read mode" else "Read mode",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
 
         // Ink notes used to accept a picked image but offered no attachment surface, which made
         // the successful import look like a no-op. Keep the strip on the page so pictures and
         // recordings are visible immediately and can be removed without leaving the notebook.
-        if (!compact) AttachmentStrip(
+        if (!compact && !readMode) AttachmentStrip(
             attachments = attachments.filter { it.pageIndex == null },
             playingPath = playingPath,
             onPlay = onPlayAttachment,

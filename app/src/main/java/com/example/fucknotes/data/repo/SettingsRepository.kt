@@ -42,6 +42,7 @@ class SettingsRepository(private val context: Context) {
         val themeMode = stringPreferencesKey("theme_mode")
         val accent = stringPreferencesKey("accent")
         val dynamicColor = booleanPreferencesKey("dynamic_color")
+        val darkReader = booleanPreferencesKey("dark_reader")
         val layout = stringPreferencesKey("layout")
         val sort = stringPreferencesKey("sort")
         val defaultPaper = stringPreferencesKey("default_paper")
@@ -73,6 +74,8 @@ class SettingsRepository(private val context: Context) {
          * from. It stays available for anyone who prefers their system's colours.
          */
         val dynamicColor: Boolean = false,
+        /** Repaints note pages in a dark, low-glare palette while leaving the stored note unchanged. */
+        val darkReader: Boolean = false,
         val layout: LayoutMode = LayoutMode.GRID,
         val sort: SortOrder = SortOrder.UPDATED_DESC,
         val defaultPaper: PaperStyle = PaperStyle.PLAIN,
@@ -108,6 +111,7 @@ class SettingsRepository(private val context: Context) {
         themeMode = enumOr(this[Keys.themeMode], ThemeMode.SYSTEM),
         accent = enumOr(this[Keys.accent], AccentPreset.INDIGO),
         dynamicColor = this[Keys.dynamicColor] ?: false,
+        darkReader = this[Keys.darkReader] ?: false,
         layout = enumOr(this[Keys.layout], LayoutMode.GRID),
         sort = enumOr(this[Keys.sort], SortOrder.UPDATED_DESC),
         defaultPaper = enumOr(this[Keys.defaultPaper], PaperStyle.PLAIN),
@@ -140,6 +144,7 @@ class SettingsRepository(private val context: Context) {
     suspend fun setThemeMode(v: ThemeMode) = edit { it[Keys.themeMode] = v.name }
     suspend fun setAccent(v: AccentPreset) = edit { it[Keys.accent] = v.name }
     suspend fun setDynamicColor(v: Boolean) = edit { it[Keys.dynamicColor] = v }
+    suspend fun setDarkReader(v: Boolean) = edit { it[Keys.darkReader] = v }
     suspend fun setLayout(v: LayoutMode) = edit { it[Keys.layout] = v.name }
     suspend fun setSort(v: SortOrder) = edit { it[Keys.sort] = v.name }
     suspend fun setDefaultPaper(v: PaperStyle) = edit { it[Keys.defaultPaper] = v.name }

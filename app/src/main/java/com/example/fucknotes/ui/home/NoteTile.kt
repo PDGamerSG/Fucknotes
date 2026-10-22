@@ -4,6 +4,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,7 +34,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -44,6 +48,7 @@ import com.example.fucknotes.ui.common.PaperPreview
 import com.example.fucknotes.ui.components.relativeStamp
 import com.example.fucknotes.ui.theme.Radii
 import com.example.fucknotes.ui.theme.brand
+import coil.compose.rememberAsyncImagePainter
 
 /**
  * A note as it appears on the shelf: the page itself, then its name underneath.
@@ -61,6 +66,8 @@ fun NoteTile(
     selectionMode: Boolean,
     hasImages: Boolean,
     hasAudio: Boolean,
+    firstPageImagePath: String? = null,
+    darkReader: Boolean = false,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -78,7 +85,13 @@ fun NoteTile(
                 .aspectRatio(0.74f)
                 .shadow(3.dp, RoundedCornerShape(10.dp), ambientColor = Color(0x14000000))
         ) {
-            NotePagePreview(note = note, preview = preview, modifier = Modifier.fillMaxSize())
+            NotePagePreview(
+                note = note,
+                preview = preview,
+                firstPageImagePath = firstPageImagePath,
+                darkReader = darkReader,
+                modifier = Modifier.fillMaxSize(),
+            )
 
             if (selected) {
                 Box(
@@ -135,21 +148,43 @@ fun NoteTile(
  * the shelf gives nothing away.
  */
 @Composable
-fun NotePagePreview(note: NoteEntity, preview: String, modifier: Modifier = Modifier) {
+fun NotePagePreview(
+    note: NoteEntity,
+    preview: String,
+    firstPageImagePath: String? = null,
+    darkReader: Boolean = false,
+    modifier: Modifier = Modifier,
+) {
     val brand = MaterialTheme.brand
     Box(modifier) {
         PaperPreview(
             style = note.paperStyle,
             modifier = Modifier.fillMaxSize(),
-            paperColor = if (note.colorArgb != 0) Color(note.colorArgb) else brand.tile,
+            paperColor = if (darkReader) Color(0xFF202632)
+            else if (note.colorArgb != 0) Color(note.colorArgb) else brand.tile,
             lineColor = if (note.lineColorArgb != 0) Color(note.lineColorArgb) else brand.tileBorder,
             spacingDp = note.lineSpacingDp.takeIf { it > 0 }?.toFloat() ?: 24f,
             zoom = 0.22f,
             corner = 10.dp,
         )
 
-        when {
-            preview.isNotBlank() -> Text(
+        if (!firstPageImagePath.isNullOrBlank()) {
+            Image(
+                painter = rememberAsyncImagePainter(firstPageImagePath),
+                contentDescription = "First page preview",
+                contentScale = ContentScale.Crop,
+                colorFilter = if (darkReader) ColorFilter.colorMatrix(
+                    ColorMatrix(floatArrayOf(
+                        -1f, 0f, 0f, 0f, 255f,
+                        0f, -1f, 0f, 0f, 255f,
+                        0f, 0f, -1f, 0f, 255f,
+                        0f, 0f, 0f, 1f, 0f,
+                    ))
+                ) else null,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else if (preview.isNotBlank()) {
+            Text(
                 preview,
                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 7.sp, lineHeight = 11.sp),
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),

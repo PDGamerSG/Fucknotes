@@ -55,6 +55,8 @@ data class HomeUiState(
     val settings: SettingsRepository.Settings = SettingsRepository.Settings(),
     val tagsByNote: Map<Long, List<String>> = emptyMap(),
     val mediaByNote: Map<Long, NoteMediaFlags> = emptyMap(),
+    /** First page image path, when a note has one (PDF imports use this for the shelf thumbnail). */
+    val firstPageImageByNote: Map<Long, String> = emptyMap(),
     /** Live note tally per folder id, for the rail's row counts. */
     val countByFolder: Map<Long?, Int> = emptyMap(),
     val loading: Boolean = true,
@@ -110,17 +112,22 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     private data class Decorations(
         val tagsByNote: Map<Long, List<String>>,
         val mediaByNote: Map<Long, NoteMediaFlags>,
+        val firstPageImageByNote: Map<Long, String>,
         val countByFolder: Map<Long?, Int>,
     )
 
     private val decorations = combine(
         repo.observeTagLabels(),
         repo.observeMediaFlags(),
+        repo.observeFirstPageImages(),
         repo.observeFolderCounts(),
-    ) { labels, media, counts ->
+    ) { labels, media, firstPageImages, counts ->
         Decorations(
             tagsByNote = labels.groupBy({ it.noteId }, { it.name }),
             mediaByNote = media.associateBy { it.noteId },
+            firstPageImageByNote = firstPageImages
+                .groupBy { it.noteId }
+                .mapValues { (_, images) -> images.first().path },
             countByFolder = counts,
         )
     }
@@ -144,6 +151,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             settings = settings,
             tagsByNote = decor.tagsByNote,
             mediaByNote = decor.mediaByNote,
+            firstPageImageByNote = decor.firstPageImageByNote,
             countByFolder = decor.countByFolder,
             loading = false,
             progress = progress,

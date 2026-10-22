@@ -43,6 +43,12 @@ android {
     }
 }
 
+// The workstation sync service can create timestamped conflict copies beside Kotlin sources.
+// Keep those backups out of every Kotlin compilation even if one appears while Gradle is running.
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    exclude("**/*.sync-conflict-*")
+}
+
 kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)

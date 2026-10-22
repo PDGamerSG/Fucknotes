@@ -87,6 +87,7 @@ fun EditorScreen(
 
     val isInkNote = state.type.isInk
     var compact by rememberSaveable(state.noteId) { mutableStateOf(false) }
+    var readMode by rememberSaveable(state.noteId) { mutableStateOf(false) }
 
     // Handed to the ink surface as a stable lambda so committing a stroke does not recompose it.
     val inkStrokes = remember(viewModel) { { viewModel.strokes } }
@@ -180,7 +181,10 @@ fun EditorScreen(
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             Column {
-                if (!compact) EditorTabBar(
+                // Read mode is an uncluttered reading surface. The book button and page
+                // navigation remain inside InkEditor, so the tab strip is deliberately hidden
+                // while an ink note is being read.
+                if (!compact && !(isInkNote && readMode)) EditorTabBar(
                     tabs = OpenTabs.tabs,
                     activeNoteId = state.noteId,
                     onSelect = { id -> if (id != state.noteId) scope.launch { viewModel.saveNow(); onOpenNote(id) } },
@@ -292,6 +296,8 @@ fun EditorScreen(
                     onFingerInputMode = viewModel::setFingerInputMode,
                     onToggleZoomLock = viewModel::toggleZoomLock,
                     compact = compact,
+                    readMode = readMode,
+                    onToggleReadMode = { readMode = !readMode },
                     onToggleCompact = { compact = !compact },
                     onAppendPage = viewModel::appendPage,
                     onBack = leaveNote,
@@ -362,6 +368,7 @@ fun EditorScreen(
                         onToggleEraser = viewModel::toggleEraser,
                         modifier = Modifier.fillMaxSize(),
                         pageColor = androidx.compose.ui.graphics.Color.Transparent,
+                        darkReader = state.darkReader,
                         contentScroll = contentScroll,
                     )
                 }

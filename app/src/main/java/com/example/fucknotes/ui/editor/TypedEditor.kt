@@ -79,7 +79,10 @@ fun TypedEditor(
     Column(
         modifier
             .fillMaxSize()
-            .background(state.colorArgb.paperColorOr(MaterialTheme.colorScheme.background))
+            .background(
+                if (state.darkReader) Color(0xFF202632)
+                else state.colorArgb.paperColorOr(MaterialTheme.colorScheme.background),
+            )
     ) {
         TextField(
             value = state.title,
@@ -95,7 +98,8 @@ fun TypedEditor(
             PaperBackground(
                 style = state.paperStyle,
                 spacing = state.ruleSpacingDp.dp,
-                lineColor = state.lineColorArgb.paperColorOr(DefaultRuleColor),
+                lineColor = if (state.darkReader) Color(0xFF566172)
+                else state.lineColorArgb.paperColorOr(DefaultRuleColor),
                 modifier = Modifier.fillMaxSize(),
             ) {
                 when (state.type) {

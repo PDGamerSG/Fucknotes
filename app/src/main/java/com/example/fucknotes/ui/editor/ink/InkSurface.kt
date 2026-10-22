@@ -122,6 +122,8 @@ fun InkSurface(
      * strokes onto a near-black background and look empty.
      */
     pageColor: Color = PaperWhite,
+    /** Inverts paper, imported pages and ink colours for low-glare reading. */
+    darkReader: Boolean = false,
     attachments: List<com.example.fucknotes.data.db.AttachmentEntity> = emptyList(),
     pageCount: () -> Int = { 1 },
     /** When annotating typed content, scrolling moves the text and ink as one document. */
@@ -140,6 +142,7 @@ fun InkSurface(
     val currentEnabled by rememberUpdatedState(enabled)
     val currentWidth by rememberUpdatedState(widthDp)
     val currentColor by rememberUpdatedState(colorArgb)
+    val currentDarkReader by rememberUpdatedState(darkReader)
     val currentFingerInputMode by rememberUpdatedState(fingerInputMode)
     val currentZoomLocked by rememberUpdatedState(zoomLocked)
     val currentPageCount by rememberUpdatedState(pageCount)
@@ -162,8 +165,13 @@ fun InkSurface(
         }
     }
 
-    val brush = remember(tool, colorArgb, widthDp, camera.scale) {
-        if (tool.isBrush) InkCodec.brushFor(tool, colorArgb, widthDp, camera.scale) else null
+    val brush = remember(tool, colorArgb, widthDp, camera.scale, darkReader) {
+        if (tool.isBrush) InkCodec.brushFor(
+            tool,
+            if (darkReader) darkReaderArgb(colorArgb) else colorArgb,
+            widthDp,
+            camera.scale,
+        ) else null
     }
 
     /**
@@ -181,7 +189,7 @@ fun InkSurface(
         {
             InkCodec.brushFor(
                 tool = currentTool.takeIf { it.isBrush } ?: InkTool.PEN,
-                colorArgb = currentColor,
+                colorArgb = if (currentDarkReader) darkReaderArgb(currentColor) else currentColor,
                 widthDp = currentWidth,
                 worldToScreenScale = camera.scale,
             )
@@ -254,6 +262,16 @@ fun InkSurface(
                         }
 
                         val touchDisabled = currentFingerInputMode == FingerInputMode.DISABLED
+                        // The corner lock is also a writing-surface lock: while it is on, every
+                        // finger/palm packet is consumed here so the page cannot pan, pinch, or
+                        // react to an accidental edge drag. The stylus remains fully usable.
+                        if (currentZoomLocked && !stylusInEvent) {
+                            event.changes.filter { it.type != PointerType.Stylus }.forEach { it.consume() }
+                            gestureActive = false
+                            lastTapMs = 0L
+                            lastErasePoint = null
+                            continue
+                        }
                         if (touchDisabled || stylusContactActive) {
                             event.changes.filter { it.type != PointerType.Stylus }.forEach { it.consume() }
                             // Ignore finger-only packets, including releases, before tap, pan,
@@ -404,28 +422,35 @@ fun InkSurface(
         }
 
         // Paper.
+        val renderedPageColor = if (darkReader && pageColor != Color.Transparent) {
+            Color(0xFF202632)
+        } else pageColor
+        val renderedRuleColor = if (darkReader) {
+            ruleColor.copy(alpha = 0.62f)
+        } else ruleColor
+
         Canvas(Modifier.fillMaxSize()) {
             if (notebook) {
                 drawNotebookPages(
                     camera = camera,
                     pageWidthDp = pageWidthDp,
                     pageHeightDp = pageHeightDp,
-                    pageColor = pageColor,
+                    pageColor = renderedPageColor,
                     style = paperStyle,
-                    ruleColor = ruleColor,
+                    ruleColor = renderedRuleColor,
                     ruleSpacingDp = ruleSpacingDp,
                     pageCount = pageCount().coerceAtLeast(1),
                 )
             } else {
-                drawPaper(paperStyle, ruleColor, ruleSpacingDp, camera)
+                drawPaper(paperStyle, renderedRuleColor, ruleSpacingDp, camera)
             }
         }
 
-        PageImages(attachments, camera, pageSpec, notebook)
+        PageImages(attachments, camera, pageSpec, notebook, darkReader)
 
         // Cool only the page and imported backgrounds. Wet ink uses a separate front buffer;
         // tinting the dry layer would change the ink's color as soon as the pen is lifted.
-        if (nightPaper && pageColor != Color.Transparent) {
+        if (nightPaper && !darkReader && pageColor != Color.Transparent) {
             Canvas(Modifier.fillMaxSize()) { drawRect(Color(0x38213249)) }
         }
 
@@ -455,7 +480,11 @@ fun InkSurface(
                         val pageBounds = WorldRect(0f, top, pageWidthDp, bottom)
                         currentStrokes().forEach { inkStroke ->
                             if (isVisible(inkStroke.stroke, pageBounds)) {
-                                renderer.draw(native, inkStroke.stroke, matrix)
+                                renderer.draw(
+                                    native,
+                                    if (darkReader) inkStroke.stroke.forDarkReader() else inkStroke.stroke,
+                                    matrix,
+                                )
                             }
                         }
                         native.restore()
@@ -466,7 +495,11 @@ fun InkSurface(
                 native.concat(matrix)
                 currentStrokes().forEach { inkStroke ->
                     if (isVisible(inkStroke.stroke, viewport)) {
-                        renderer.draw(native, inkStroke.stroke, matrix)
+                        renderer.draw(
+                            native,
+                            if (darkReader) inkStroke.stroke.forDarkReader() else inkStroke.stroke,
+                            matrix,
+                        )
                     }
                 }
                 native.restore()

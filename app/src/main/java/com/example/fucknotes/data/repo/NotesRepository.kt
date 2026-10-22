@@ -262,6 +262,8 @@ class NotesRepository(private val db: AppDatabase) {
 
     fun observeAttachments(noteId: Long): Flow<List<AttachmentEntity>> = attachments.observeForNote(noteId)
 
+    fun observeFirstPageImages(): Flow<List<AttachmentEntity>> = attachments.observeFirstPageImages()
+
     suspend fun addAttachment(attachment: AttachmentEntity): Long = attachments.insert(attachment)
 
     suspend fun updateAttachment(attachment: AttachmentEntity) = attachments.update(attachment)

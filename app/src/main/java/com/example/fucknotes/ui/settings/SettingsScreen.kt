@@ -82,6 +82,7 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     fun setThemeMode(v: ThemeMode) = viewModelScope.launch { settingsRepo.setThemeMode(v) }
     fun setAccent(v: AccentPreset) = viewModelScope.launch { settingsRepo.setAccent(v) }
     fun setDynamicColor(v: Boolean) = viewModelScope.launch { settingsRepo.setDynamicColor(v) }
+    fun setDarkReader(v: Boolean) = viewModelScope.launch { settingsRepo.setDarkReader(v) }
     fun setDefaultPaper(v: PaperStyle) = viewModelScope.launch { settingsRepo.setDefaultPaper(v) }
     fun setFontScale(v: Int) = viewModelScope.launch { settingsRepo.setFontScale(v) }
     fun setKeepScreenOn(v: Boolean) = viewModelScope.launch { settingsRepo.setKeepScreenOn(v) }
@@ -184,6 +185,12 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                     onChange = viewModel::setDynamicColor,
                 )
             }
+            SwitchRow(
+                title = "Dark reader",
+                subtitle = "Use dark pages and soften bright imported documents",
+                checked = settings.darkReader,
+                onChange = viewModel::setDarkReader,
+            )
             SettingRow(
                 title = "Theme colour",
                 subtitle = settings.accent.label,
