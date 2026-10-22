@@ -17,6 +17,11 @@ Changes:
   bar over the toolbar).
 - Settings is grouped into cards at a 760 dp maximum width. The home grid leaves room under the
   last row for the corner button; the rail's bottom rows sit on a wash so "Light mode" is legible.
+- Back from a note: the system back gesture and back button leave the note only while every
+  control is out (full chrome). In pen-bar-only and reading modes the writing surface opts out of
+  the system's edge gestures and the back handler swallows a back press, so an edge swipe or a
+  stray press cannot leave the page; the lock button is the way out. The zoom lock no longer
+  excludes system gestures, which is what had been blocking the back swipe with the lock on.
 - PowerPoint import: "Import PowerPoint" in the create menu (and Open with / Share for `.pptx`)
   converts the deck to a PDF on the device — backgrounds, master and layout decoration, inherited
   placeholder geometry and text styles, runs with bullets, alignment and auto-fit, pictures with

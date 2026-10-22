@@ -70,6 +70,9 @@ and export, first-page previews, dark reader, folder hierarchy, home export.
   `lockLabel` used as the lock button's content description (tests key off these strings).
 - `ui/editor/EditorScreen.kt`: owns `chrome` (`rememberSaveable` per note). Tab strip and the typed
   note's top bar show only in `FULL`. A typed note's lock is a plain `FULL ↔ COMPACT` toggle.
+- Back: `EditorScreen`'s `BackHandler` calls `leaveNote()` only in `EditorChrome.FULL` and
+  swallows back otherwise; `InkEditor` applies `systemGestureExclusion()` to the surface when the
+  chrome is not `FULL` (no longer tied to the zoom lock).
 - `ui/editor/InkEditor.kt`: lays out the corners. Top-left note bar (`FULL`), top-right pen bar
   (`FULL`, `COMPACT`) or unlock button (`READING`), bottom-left zoom chip (not `READING`),
   bottom-right page counter (always, notebooks), attachment strip (`FULL`).

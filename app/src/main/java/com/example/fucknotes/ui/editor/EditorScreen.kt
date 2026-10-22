@@ -165,7 +165,12 @@ fun EditorScreen(
         }
     }
 
-    androidx.activity.compose.BackHandler { leaveNote() }
+    // Back leaves the note only while every control is out. With the chrome locked or in reading
+    // mode, an edge swipe or a stray back press is a hand on the page, not an instruction, so it
+    // is swallowed here; the lock button is the way out of those modes.
+    androidx.activity.compose.BackHandler {
+        if (chrome == EditorChrome.FULL) leaveNote()
+    }
     androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_STOP) {
         viewModel.flushPendingSave()
     }

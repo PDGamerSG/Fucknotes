@@ -53,6 +53,11 @@ import com.example.fucknotes.ui.theme.brand
  * it on every screen the app runs on. The bars sit in the corners instead, so the only fixed cost
  * is the corner a hand rests in anyway.
  *
+ * While the chrome is locked or the page is being read, the surface also opts out of the system's
+ * edge gestures: a swipe from the edge is then just a swipe on the page, and cannot leave the note
+ * or summon the bars. With every control out, the edges belong to the system again so the back
+ * gesture works.
+ *
  * The corners are fixed so nothing ever overlaps:
  *  - top-left: the note bar (back, pages, undo, redo, add page, more) — [EditorChrome.FULL] only;
  *  - top-right: the pen bar, or in reading mode a single unlock button;
@@ -127,7 +132,7 @@ fun InkEditor(
             reading = chrome == EditorChrome.READING,
             modifier = Modifier
                 .fillMaxSize()
-                .then(if (state.zoomLocked) Modifier.systemGestureExclusion() else Modifier),
+                .then(if (chrome != EditorChrome.FULL) Modifier.systemGestureExclusion() else Modifier),
         )
 
         val quickBar: @Composable () -> Unit = {
