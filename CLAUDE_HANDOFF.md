@@ -111,6 +111,11 @@ and export, first-page previews, dark reader, folder hierarchy, home export.
   into that app's info page. Android drops a stale default by itself when the candidate set
   changes, which is what happened on the tablet (Xodo held PDF and .ppt). `DocumentIntentTest`
   queries the resolver on device for every shape.
+- Google Drive sync and editable PDFs: see `docs/drive-sync.md` for the design, the file map, the
+  one-time Google Cloud setup (Android OAuth client with the debug key's SHA-1), and the first-run
+  checklist. Written 2026-10-22, compiled and unit-tested, **not yet run against a Google
+  account**. `ServiceLocator.drive()` builds the `DriveSync`; `MainActivity.onStart` calls
+  `syncIfDue()`; the shelf's note stamp (`DriveDao.observeNoteStamp`) debounces auto sync.
 - Migrations can be tested on device: `room-testing` is on the androidTest classpath and the
   exported schemas are androidTest assets; `AppDatabase.migrationForTests(from, to)` exposes one.
 - Back: `EditorScreen`'s `BackHandler` calls `leaveNote()` only in `EditorChrome.FULL` and

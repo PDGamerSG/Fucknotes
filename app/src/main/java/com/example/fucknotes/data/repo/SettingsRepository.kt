@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.example.fucknotes.data.model.AccentPreset
@@ -62,6 +63,14 @@ class SettingsRepository(private val context: Context) {
         val penSecondaryAction = stringPreferencesKey("pen_secondary_action")
         val penTertiaryAction = stringPreferencesKey("pen_tertiary_action")
         val openTabs = stringPreferencesKey("open_tabs")
+        val installId = stringPreferencesKey("install_id")
+        val driveEmail = stringPreferencesKey("drive_email")
+        val driveName = stringPreferencesKey("drive_name")
+        val driveRootId = stringPreferencesKey("drive_root_id")
+        val driveAutoSync = booleanPreferencesKey("drive_auto_sync")
+        val driveLastSyncAt = longPreferencesKey("drive_last_sync_at")
+        val driveLastError = stringPreferencesKey("drive_last_error")
+        val editablePdfExports = booleanPreferencesKey("editable_pdf_exports")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -104,7 +113,19 @@ class SettingsRepository(private val context: Context) {
         val penPrimaryAction: PenButtonAction = PenButtonAction.TOGGLE_ERASER,
         val penSecondaryAction: PenButtonAction = PenButtonAction.UNDO,
         val penTertiaryAction: PenButtonAction = PenButtonAction.REDO,
-    )
+        /** The Google account whose Drive holds the notes folder; blank when not logged in. */
+        val driveEmail: String = "",
+        val driveName: String = "",
+        /** Drive id of the app's top folder, once it exists. */
+        val driveRootId: String = "",
+        val driveAutoSync: Boolean = true,
+        val driveLastSyncAt: Long = 0,
+        val driveLastError: String = "",
+        /** PDF exports carry the note's own data, so they can be opened back into an editable note. */
+        val editablePdfExports: Boolean = true,
+    ) {
+        val driveSignedIn: Boolean get() = driveEmail.isNotBlank()
+    }
 
     val settings: Flow<Settings> = context.dataStore.data.map { it.toSettings() }
 
@@ -147,6 +168,13 @@ class SettingsRepository(private val context: Context) {
         penPrimaryAction = enumOr(this[Keys.penPrimaryAction], PenButtonAction.TOGGLE_ERASER),
         penSecondaryAction = enumOr(this[Keys.penSecondaryAction], PenButtonAction.UNDO),
         penTertiaryAction = enumOr(this[Keys.penTertiaryAction], PenButtonAction.REDO),
+        driveEmail = this[Keys.driveEmail].orEmpty(),
+        driveName = this[Keys.driveName].orEmpty(),
+        driveRootId = this[Keys.driveRootId].orEmpty(),
+        driveAutoSync = this[Keys.driveAutoSync] ?: true,
+        driveLastSyncAt = this[Keys.driveLastSyncAt] ?: 0L,
+        driveLastError = this[Keys.driveLastError].orEmpty(),
+        editablePdfExports = this[Keys.editablePdfExports] ?: true,
     )
 
     private inline fun <reified T : Enum<T>> enumOr(raw: String?, fallback: T): T =
@@ -172,6 +200,27 @@ class SettingsRepository(private val context: Context) {
     suspend fun setPenPrimaryAction(v: PenButtonAction) = edit { it[Keys.penPrimaryAction] = v.name }
     suspend fun setPenSecondaryAction(v: PenButtonAction) = edit { it[Keys.penSecondaryAction] = v.name }
     suspend fun setPenTertiaryAction(v: PenButtonAction) = edit { it[Keys.penTertiaryAction] = v.name }
+    suspend fun setDriveAccount(email: String, name: String) = edit { it[Keys.driveEmail] = email; it[Keys.driveName] = name }
+    suspend fun setDriveRootId(id: String) = edit { it[Keys.driveRootId] = id }
+    suspend fun setDriveAutoSync(v: Boolean) = edit { it[Keys.driveAutoSync] = v }
+    suspend fun setDriveLastSync(at: Long, error: String = "") = edit { it[Keys.driveLastSyncAt] = at; it[Keys.driveLastError] = error }
+    suspend fun setDriveLastError(error: String) = edit { it[Keys.driveLastError] = error }
+    suspend fun setEditablePdfExports(v: Boolean) = edit { it[Keys.editablePdfExports] = v }
+    suspend fun clearDriveAccount() = edit {
+        it.remove(Keys.driveEmail); it.remove(Keys.driveName); it.remove(Keys.driveRootId)
+        it.remove(Keys.driveLastSyncAt); it.remove(Keys.driveLastError)
+    }
+
+    /**
+     * A random id for this install, minted once. Editable PDFs carry it next to the note id, so a
+     * file coming back to the same install finds its own note instead of making a copy.
+     */
+    suspend fun installId(): String {
+        context.dataStore.data.first()[Keys.installId]?.takeIf { it.isNotBlank() }?.let { return it }
+        val fresh = java.util.UUID.randomUUID().toString()
+        edit { it[Keys.installId] = fresh }
+        return fresh
+    }
 
     // ---- note lock ---------------------------------------------------------
 

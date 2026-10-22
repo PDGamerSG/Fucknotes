@@ -12,7 +12,9 @@ import com.example.fucknotes.data.model.AttachmentType
 import com.example.fucknotes.data.model.MAX_NOTEBOOK_PAGES
 import com.example.fucknotes.data.model.NoteType
 import com.example.fucknotes.data.model.PaperStyle
+import com.example.fucknotes.ServiceLocator
 import com.example.fucknotes.data.repo.NotesRepository
+import com.example.fucknotes.export.EditablePdf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -30,6 +32,13 @@ class PdfImporter(private val context: Context, private val repo: NotesRepositor
                 context.contentResolver.openInputStream(source)?.use { input ->
                     sourceFile.outputStream().use { input.copyTo(it) }
                 } ?: error("The PDF could not be opened")
+                // A PDF this app exported carries the note inside it; bring that back whole.
+                val parts = EditablePdf.read(sourceFile)
+                if (NoteRestorer.payloadOf(parts) != null) {
+                    onProgress(1, 1)
+                    return@withContext NoteRestorer(context, repo, ServiceLocator.settings(context))
+                        .restore(parts, folderId).noteId
+                }
                 val name = MediaStore.displayName(context, source).replace(Regex("(?i)\\.pdf$"), "")
                 val backgrounds = mutableListOf<AttachmentEntity>()
                 var spec = PageSpec.Default

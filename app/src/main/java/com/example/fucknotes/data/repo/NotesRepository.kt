@@ -12,6 +12,9 @@ import com.example.fucknotes.data.ink.InkStroke
 import com.example.fucknotes.data.ink.PageSpec
 import com.example.fucknotes.data.model.ChecklistItem
 import com.example.fucknotes.data.model.NoteType
+import kotlinx.coroutines.flow.first
+import java.io.File
+import com.example.fucknotes.data.model.AttachmentType
 import com.example.fucknotes.data.model.PageAppearance
 import com.example.fucknotes.data.model.MAX_NOTEBOOK_PAGES
 import com.example.fucknotes.data.model.PaperStyle
@@ -47,6 +50,57 @@ class NotesRepository(private val db: AppDatabase) {
         backgrounds.forEach { attachments.insert(it.copy(noteId = id)) }
         id
     }
+
+    /** Folder names from the top down to [folderId]; empty for an unfiled note. */
+    suspend fun folderPath(folderId: Long?): List<String> {
+        if (folderId == null) return emptyList()
+        val all = folders.allFolders().associateBy { it.id }
+        val path = ArrayDeque<String>()
+        var id: Long? = folderId
+        var guard = 0
+        while (id != null && guard++ < 64) {
+            val folder = all[id] ?: break
+            path.addFirst(folder.name)
+            id = folder.parentId
+        }
+        return path.toList()
+    }
+
+    /** Finds or makes the folder at [path], one level at a time; null for an empty path. */
+    suspend fun folderForPath(path: List<String>): Long? {
+        var parent: Long? = null
+        for (name in path) {
+            val existing = folders.children(parent).firstOrNull { it.name.equals(name, ignoreCase = true) }
+            parent = existing?.id ?: createFolder(name, parent)
+        }
+        return parent
+    }
+
+    /** Inserts a note that came back from an editable PDF, with its images and tags. */
+    suspend fun restoreNote(note: NoteEntity, images: List<AttachmentEntity>, tagNames: List<String>): Long =
+        db.withTransaction {
+            val id = notes.insert(note.copy(id = 0))
+            images.forEach { attachments.insert(it.copy(id = 0, noteId = id)) }
+            tagNames.forEach { addTagToNote(id, it) }
+            id
+        }
+
+    /**
+     * Overwrites a note's content from an editable PDF that is newer than it: the row, the page
+     * images (old ones go, since the file carries the full set) and the tags.
+     */
+    suspend fun replaceNoteContent(note: NoteEntity, images: List<AttachmentEntity>, tagNames: List<String>) =
+        db.withTransaction {
+            notes.update(note)
+            attachments.forNote(note.id).filter { it.type == AttachmentType.IMAGE }.forEach { old ->
+                attachments.delete(old.id)
+                File(old.path).delete()
+            }
+            images.forEach { attachments.insert(it.copy(id = 0, noteId = note.id)) }
+            val current = tags.observeTagsForNote(note.id).first()
+            tagNames.filter { name -> current.none { it.name.equals(name, ignoreCase = true) } }
+                .forEach { addTagToNote(note.id, it) }
+        }
 
     /** Includes descendants so exporting a collection never silently omits its folders. */
     suspend fun notesInFolderTree(folderId: Long): List<NoteEntity> {

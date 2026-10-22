@@ -2,7 +2,10 @@ package com.example.fucknotes.ui.home
 
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
@@ -97,6 +100,27 @@ fun HomeScreen(
         ActivityResultContracts.CreateDocument(BackupManager.MIME)
     ) { uri -> uri?.let(viewModel::backupTo) }
 
+    // Google's account and consent sheet, when Drive is used for the first time.
+    val driveConsent = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+        viewModel.driveConsentResult(result.data)
+    }
+    val driveStatus by viewModel.driveStatus.collectAsStateWithLifecycle()
+    val driveControl: @Composable () -> Unit = {
+        DriveAction(
+            email = state.settings.driveEmail,
+            status = driveStatus,
+            lastSyncAt = state.settings.driveLastSyncAt,
+            lastError = state.settings.driveLastError,
+            autoSync = state.settings.driveAutoSync,
+            onLogin = { viewModel.driveLogin { intent -> driveConsent.launch(IntentSenderRequest.Builder(intent).build()) } },
+            onSyncNow = viewModel::driveSyncNow,
+            onRestore = viewModel::driveRestore,
+            onOpenFolder = { viewModel.driveFolderUrl { url -> context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } },
+            onAutoSync = viewModel::setDriveAutoSync,
+            onLogout = viewModel::driveLogout,
+        )
+    }
+
     val exportVisiblePdf: () -> Unit = { exportTarget = viewModel.exportTarget() }
     val exportSelectedPdf: () -> Unit = { exportTarget = viewModel.exportTarget(selected = true) }
 
@@ -159,6 +183,7 @@ fun HomeScreen(
 
         val sheet: @Composable () -> Unit = {
             HomeSheet(
+                drive = driveControl,
                 state = state,
                 viewModel = viewModel,
                 snackbar = snackbar,
@@ -286,6 +311,7 @@ fun HomeScreen(
 /** The right-hand pane: the action row, or the selection bar, above the shelf. */
 @Composable
 private fun HomeSheet(
+    drive: @Composable () -> Unit,
     state: HomeUiState,
     viewModel: HomeViewModel,
     snackbar: SnackbarHostState,
@@ -330,6 +356,7 @@ private fun HomeSheet(
                     onBackup = onBackup,
                     onExport = onExport,
                     onSearch = onSearch,
+                    drive = drive,
                     onToggleLayout = {
                         viewModel.setLayout(
                             if (state.layout == LayoutMode.GRID) LayoutMode.LIST else LayoutMode.GRID

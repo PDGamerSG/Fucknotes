@@ -79,6 +79,9 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     private val settingsRepo = ServiceLocator.settings(app)
     private val notesRepo = ServiceLocator.notes(app)
     private val backup = ServiceLocator.backup(app)
+    private val drive = ServiceLocator.drive(app)
+
+    val driveStatus: StateFlow<com.example.fucknotes.drive.DriveSync.Status> = drive.status
 
     val settings: StateFlow<SettingsRepository.Settings> = settingsRepo.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsRepository.Settings())
@@ -102,6 +105,41 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     fun setPenPrimaryAction(v: PenButtonAction) = viewModelScope.launch { settingsRepo.setPenPrimaryAction(v) }
     fun setPenSecondaryAction(v: PenButtonAction) = viewModelScope.launch { settingsRepo.setPenSecondaryAction(v) }
     fun setPenTertiaryAction(v: PenButtonAction) = viewModelScope.launch { settingsRepo.setPenTertiaryAction(v) }
+    fun setEditablePdfExports(v: Boolean) = viewModelScope.launch { settingsRepo.setEditablePdfExports(v) }
+    fun setDriveAutoSync(v: Boolean) = viewModelScope.launch { settingsRepo.setDriveAutoSync(v) }
+
+    fun driveLogin(onConsent: (android.app.PendingIntent) -> Unit) = viewModelScope.launch {
+        when (val result = drive.signIn()) {
+            is com.example.fucknotes.drive.DriveSync.SignIn.Consent -> onConsent(result.intent)
+            is com.example.fucknotes.drive.DriveSync.SignIn.Done -> _message.value = "Drive connected as ${result.email}"
+            is com.example.fucknotes.drive.DriveSync.SignIn.Failed -> _message.value = result.message
+        }
+    }
+
+    fun driveConsentResult(data: android.content.Intent?) = viewModelScope.launch {
+        when (val result = drive.finishSignIn(data)) {
+            is com.example.fucknotes.drive.DriveSync.SignIn.Done -> _message.value = "Drive connected as ${result.email}"
+            is com.example.fucknotes.drive.DriveSync.SignIn.Failed -> _message.value = result.message
+            is com.example.fucknotes.drive.DriveSync.SignIn.Consent -> Unit
+        }
+    }
+
+    fun driveSyncNow() = viewModelScope.launch {
+        runCatching { drive.syncNow() }
+            .onSuccess { _message.value = "Drive is up to date" }
+            .onFailure { if (it !is kotlinx.coroutines.CancellationException) _message.value = "Sync failed: ${it.message}" }
+    }
+
+    fun driveRestore() = viewModelScope.launch {
+        runCatching { drive.restoreFromDrive() }
+            .onSuccess { count -> _message.value = if (count == 0) "Everything in Drive is already here" else "Restored $count from Drive" }
+            .onFailure { if (it !is kotlinx.coroutines.CancellationException) _message.value = "Restore failed: ${it.message}" }
+    }
+
+    fun driveLogout() = viewModelScope.launch {
+        drive.signOut()
+        _message.value = "Logged out of Drive"
+    }
 
 
 
@@ -294,6 +332,58 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                         subtitle = "Prompt to back up when the app starts",
                         checked = settings.autoBackup,
                         onChange = viewModel::setAutoBackup,
+                    )
+                }
+
+                SettingsGroup("Google Drive") {
+                    val driveStatus by viewModel.driveStatus.collectAsStateWithLifecycle()
+                    val driveConsent = rememberLauncherForActivityResult(
+                        ActivityResultContracts.StartIntentSenderForResult()
+                    ) { result -> viewModel.driveConsentResult(result.data) }
+                    if (!settings.driveSignedIn) {
+                        SettingRow(
+                            title = "Log in with Drive",
+                            subtitle = "Keeps a Fucknotes folder in your Google Drive: one folder per collection, one PDF per note.",
+                            onClick = {
+                                viewModel.driveLogin { intent ->
+                                    driveConsent.launch(androidx.activity.result.IntentSenderRequest.Builder(intent).build())
+                                }
+                            },
+                        )
+                    } else {
+                        SettingRow(
+                            title = settings.driveEmail,
+                            subtitle = when {
+                                driveStatus.phase == com.example.fucknotes.drive.DriveSync.Phase.RUNNING -> driveStatus.message
+                                settings.driveLastError.isNotBlank() -> "Last sync failed: ${settings.driveLastError}"
+                                settings.driveLastSyncAt > 0 -> "Synced ${com.example.fucknotes.ui.home.relative(settings.driveLastSyncAt)}"
+                                else -> "Connected; the first sync runs shortly"
+                            },
+                            onClick = viewModel::driveSyncNow,
+                        )
+                        RowDivider()
+                        SwitchRow(
+                            title = "Auto sync",
+                            subtitle = "Upload changed notes shortly after they are edited, and when the app opens",
+                            checked = settings.driveAutoSync,
+                            onChange = viewModel::setDriveAutoSync,
+                        )
+                        RowDivider()
+                        SettingRow(
+                            title = "Restore notes from Drive",
+                            subtitle = "Bring in every note in the Drive folder that is not on this device",
+                            enabled = driveStatus.phase != com.example.fucknotes.drive.DriveSync.Phase.RUNNING,
+                            onClick = viewModel::driveRestore,
+                        )
+                        RowDivider()
+                        SettingRow(title = "Log out of Drive", subtitle = "Your files stay in your Drive", onClick = viewModel::driveLogout)
+                    }
+                    RowDivider()
+                    SwitchRow(
+                        title = "Editable PDF exports",
+                        subtitle = "Exported PDFs carry the note inside them, so opening one in Fucknotes gives the note back with its ink to erase and change",
+                        checked = settings.editablePdfExports,
+                        onChange = viewModel::setEditablePdfExports,
                     )
                 }
 

@@ -15,7 +15,8 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 /** Writes through Android's document picker; no broad storage permission is needed. */
-class FolderExporter(private val context: Context, private val exporter: NoteExporter) {
+/** [editable] attaches each note's data to its PDF, the way the editor's export and Drive do. */
+class FolderExporter(private val context: Context, private val exporter: NoteExporter, private val editable: Boolean = true) {
     suspend fun save(
         notes: List<NoteEntity>, folders: List<FolderEntity>, rootId: Long?, title: String,
         mode: HomeExportMode, destination: Uri, onProgress: (Int, Int) -> Unit,
@@ -34,7 +35,7 @@ class FolderExporter(private val context: Context, private val exporter: NoteExp
                     ZipOutputStream(raw.buffered()).use { zip ->
                         notes.forEachIndexed { index, note ->
                             currentCoroutineContext().ensureActive()
-                            val file = exporter.export(note, ExportFormat.PDF)
+                            val file = exporter.export(note, ExportFormat.PDF, editable = editable)
                             try {
                                 zip.putNextEntry(ZipEntry(paths.getValue(note.id).joinToString("/")))
                                 file.inputStream().use { it.copyTo(zip) }
@@ -63,7 +64,7 @@ class FolderExporter(private val context: Context, private val exporter: NoteExp
                                 dir.createDirectory(part) ?: error("Cannot create $part")
                             }
                         }
-                        val file = exporter.export(note, ExportFormat.PDF)
+                        val file = exporter.export(note, ExportFormat.PDF, editable = editable)
                         try {
                             val target = dir.createFile("application/pdf", parts.last())
                                 ?: error("Cannot save ${parts.last()}")

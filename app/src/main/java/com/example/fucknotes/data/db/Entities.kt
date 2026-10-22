@@ -58,6 +58,29 @@ data class NoteEntity(
     val appearance: PageAppearance = PageAppearance.FOLLOW,
 )
 
+/** Which Drive file carries a note, and the state of that note when it was last uploaded. */
+@Entity(tableName = "drive_files")
+data class DriveFileEntity(
+    @PrimaryKey val noteId: Long,
+    val fileId: String,
+    /** The sync folder the file sits in: "unfiled", "archive" or "folder:<id>". */
+    val folderKey: String,
+    /** The file name used on Drive, so a renamed note is renamed there too. */
+    val name: String,
+    /** The note's updatedAt at upload time; a newer local edit means an upload is due. */
+    val syncedUpdatedAt: Long,
+    val syncedAt: Long,
+)
+
+/** Which Drive folder stands for a sync folder key ("root", "unfiled", "archive", "folder:<id>"). */
+@Entity(tableName = "drive_folders")
+data class DriveFolderEntity(
+    @PrimaryKey val folderKey: String,
+    val fileId: String,
+    val name: String,
+    val parentKey: String?,
+)
+
 @Entity(
     tableName = "folders",
     indices = [Index("parentId")],

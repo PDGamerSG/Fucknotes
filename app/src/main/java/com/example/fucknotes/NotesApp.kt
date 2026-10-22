@@ -6,6 +6,8 @@ import com.example.fucknotes.data.backup.BackupManager
 import com.example.fucknotes.data.db.AppDatabase
 import com.example.fucknotes.data.repo.NotesRepository
 import com.example.fucknotes.data.repo.SettingsRepository
+import com.example.fucknotes.drive.DriveAuth
+import com.example.fucknotes.drive.DriveSync
 import com.example.fucknotes.ui.editor.tabs.OpenTabs
 import coil.ImageLoader
 import coil.ImageLoaderFactory
@@ -24,6 +26,7 @@ object ServiceLocator {
     @Volatile private var repo: NotesRepository? = null
     @Volatile private var settings: SettingsRepository? = null
     @Volatile private var backup: BackupManager? = null
+    @Volatile private var drive: DriveSync? = null
     private val persistence = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     fun notes(context: Context): NotesRepository = repo ?: synchronized(this) {
@@ -36,6 +39,13 @@ object ServiceLocator {
 
     fun backup(context: Context): BackupManager = backup ?: synchronized(this) {
         backup ?: BackupManager(context.applicationContext, AppDatabase.get(context)).also { backup = it }
+    }
+
+    fun drive(context: Context): DriveSync = drive ?: synchronized(this) {
+        drive ?: DriveSync(
+            context.applicationContext, AppDatabase.get(context), notes(context), settings(context),
+            DriveAuth(context.applicationContext),
+        ).also { drive = it }
     }
 
     /** Short writes that must survive a screen being popped, such as adding a notebook sheet. */

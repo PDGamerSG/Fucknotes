@@ -15,8 +15,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         TagEntity::class,
         NoteTagCrossRef::class,
         AttachmentEntity::class,
+        DriveFileEntity::class,
+        DriveFolderEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -26,6 +28,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun folderDao(): FolderDao
     abstract fun tagDao(): TagDao
     abstract fun attachmentDao(): AttachmentDao
+    abstract fun driveDao(): DriveDao
 
     companion object {
         private const val NAME = "fucknotes.db"
@@ -95,9 +98,24 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Google Drive sync bookkeeping: which Drive file and folder stand for which note and folder. */
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `drive_files` (`noteId` INTEGER NOT NULL, `fileId` TEXT NOT NULL, " +
+                        "`folderKey` TEXT NOT NULL, `name` TEXT NOT NULL, `syncedUpdatedAt` INTEGER NOT NULL, " +
+                        "`syncedAt` INTEGER NOT NULL, PRIMARY KEY(`noteId`))"
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `drive_folders` (`folderKey` TEXT NOT NULL, `fileId` TEXT NOT NULL, " +
+                        "`name` TEXT NOT NULL, `parentKey` TEXT, PRIMARY KEY(`folderKey`))"
+                )
+            }
+        }
+
         /** The migration between two adjacent versions, for the instrumentation tests. */
         fun migrationForTests(from: Int, to: Int): Migration =
-            listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+            listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
                 .first { it.startVersion == from && it.endVersion == to }
 
         fun get(context: Context): AppDatabase = instance ?: synchronized(this) {
@@ -112,6 +130,7 @@ abstract class AppDatabase : RoomDatabase() {
                 .addMigrations(MIGRATION_4_5)
                 .addMigrations(MIGRATION_5_6)
                 .addMigrations(MIGRATION_6_7)
+                .addMigrations(MIGRATION_7_8)
                 // Foreign keys drive the note -> tag/attachment cascades.
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
                 .build()

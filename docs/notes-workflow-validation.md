@@ -3,7 +3,24 @@
 Validated on the connected Xiaomi 2410CRP4CI (Android 16) on 2026-10-22. The checks below
 distinguish automated coverage, interactive checks and remaining scenarios.
 
-## Latest pass (open PDF and PowerPoint files from other apps) — 2026-10-22, macOS
+## Latest pass (Google Drive sync, editable PDFs) — 2026-10-22, macOS — code only
+
+Written without the tablet, at the owner's request. See `docs/drive-sync.md`.
+
+- Unit tests (JVM): `EditablePdfTest` (round trip, well-formed incremental update, declines
+  cross-reference streams, name rules, deflate), `NotePayloadTest` (JSON round trip, restore
+  decision rule), `SyncPlannerTest` (upload / move / rename / trash rules, unique names, query
+  escaping, folder order, relative times). 61 unit tests pass.
+- Device tests written, not run: `EditablePdfDeviceTest` (export → `PdfRenderer` opens it →
+  import returns the same note on the same install → a foreign copy restores with the same ink,
+  paper, appearance, pages and tags; a plain PDF still imports as pages; migration 7 → 8).
+- Debug, androidTest and release APKs build. The release build is R8-minified with Play services
+  auth and kotlinx.serialization on the classpath; the first device run should watch logcat for
+  a stripped serializer.
+- Not verified: the Google consent flow, Drive uploads, folder mirroring, restore. These need the
+  OAuth client registered in Google Cloud first.
+
+## Previous pass (open PDF and PowerPoint files from other apps) — 2026-10-22, macOS
 
 Problem on the tablet: Fucknotes never appeared when a PDF or deck was opened. The manifest
 already offered PDF and PPTX, but Xodo held an "always" default for `application/pdf` and

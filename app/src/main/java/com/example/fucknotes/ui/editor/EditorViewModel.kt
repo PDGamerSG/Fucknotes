@@ -40,6 +40,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
@@ -648,7 +649,8 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
         viewModelScope.launch {
             saveNow()
             val note = repo.getNote(noteId) ?: return@launch
-            runCatching { exporter.export(note, format, darkStyle) }
+            val editable = format == ExportFormat.PDF && settings.settings.first().editablePdfExports
+            runCatching { exporter.export(note, format, darkStyle, editable) }
                 .onSuccess { onReady(it, format.mime) }
                 .onFailure { emit("Export failed: ${it.message}") }
         }

@@ -4,6 +4,9 @@
 
     <!-- Voice notes. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Google Drive sync. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Photos use the system camera app, which owns the camera permission. -->
 
     <uses-feature

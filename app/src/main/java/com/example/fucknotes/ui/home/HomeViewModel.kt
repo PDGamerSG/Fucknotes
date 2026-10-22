@@ -83,6 +83,10 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     private val settingsRepo = ServiceLocator.settings(app)
     private val backup = ServiceLocator.backup(app)
     private val exporter = NoteExporter(app, repo)
+    private val drive = ServiceLocator.drive(app)
+
+    /** Live word on the Drive sync, for the control at the top of the shelf. */
+    val driveStatus: StateFlow<com.example.fucknotes.drive.DriveSync.Status> = drive.status
 
     private val _message = MutableStateFlow<String?>(null)
     private val progress = MutableStateFlow<String?>(null)
@@ -368,7 +372,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             val target = request.target
             val notes = target.folderId?.let { repo.notesInFolderTree(it) }
                 ?: target.noteIds.mapNotNull { repo.getNote(it) }
-            com.example.fucknotes.export.FolderExporter(getApplication(), exporter).save(
+            com.example.fucknotes.export.FolderExporter(getApplication(), exporter, state.value.settings.editablePdfExports).save(
                 notes, state.value.folders, target.folderId, target.title, request.mode, destination,
             ) { done, total -> progress.value = "Exporting note $done of $total…" }
             _message.value = "Saved ${notes.size} ${if (notes.size == 1) "note" else "notes"}"
@@ -376,6 +380,52 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             if (error is kotlinx.coroutines.CancellationException) throw error
             _message.value = "Export failed: ${error.message}"
         } finally { progress.value = null }
+    }
+
+    // ---- Google Drive ------------------------------------------------------
+
+    /** Starts the login; [onConsent] shows Google's sheet when the account has not agreed yet. */
+    fun driveLogin(onConsent: (android.app.PendingIntent) -> Unit) = viewModelScope.launch {
+        when (val result = drive.signIn()) {
+            is com.example.fucknotes.drive.DriveSync.SignIn.Consent -> onConsent(result.intent)
+            is com.example.fucknotes.drive.DriveSync.SignIn.Done -> _message.value = "Drive connected as ${result.email}"
+            is com.example.fucknotes.drive.DriveSync.SignIn.Failed -> _message.value = result.message
+        }
+    }
+
+    fun driveConsentResult(data: android.content.Intent?) = viewModelScope.launch {
+        when (val result = drive.finishSignIn(data)) {
+            is com.example.fucknotes.drive.DriveSync.SignIn.Done -> _message.value = "Drive connected as ${result.email}"
+            is com.example.fucknotes.drive.DriveSync.SignIn.Failed -> _message.value = result.message
+            is com.example.fucknotes.drive.DriveSync.SignIn.Consent -> Unit
+        }
+    }
+
+    fun driveSyncNow() = viewModelScope.launch {
+        runCatching { drive.syncNow() }
+            .onSuccess { _message.value = "Drive is up to date" }
+            .onFailure { if (it !is kotlinx.coroutines.CancellationException) _message.value = "Sync failed: ${it.message}" }
+    }
+
+    fun driveRestore() = viewModelScope.launch {
+        runCatching { drive.restoreFromDrive() }
+            .onSuccess { count ->
+                _message.value = if (count == 0) "Everything in Drive is already here"
+                else "Restored $count ${if (count == 1) "note" else "notes"} from Drive"
+            }
+            .onFailure { if (it !is kotlinx.coroutines.CancellationException) _message.value = "Restore failed: ${it.message}" }
+    }
+
+    fun driveFolderUrl(onReady: (String) -> Unit) = viewModelScope.launch {
+        val url = drive.folderUrl()
+        if (url == null) _message.value = "The Drive folder is made on the first sync" else onReady(url)
+    }
+
+    fun setDriveAutoSync(v: Boolean) = viewModelScope.launch { settingsRepo.setDriveAutoSync(v) }
+
+    fun driveLogout() = viewModelScope.launch {
+        drive.signOut()
+        _message.value = "Logged out of Drive. Your files stay in your Drive."
     }
 
     // ---- preferences -------------------------------------------------------

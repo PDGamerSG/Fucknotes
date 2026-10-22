@@ -14,6 +14,7 @@ import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
 import androidx.core.content.FileProvider
+import com.example.fucknotes.ServiceLocator
 import com.example.fucknotes.data.db.AttachmentEntity
 import com.example.fucknotes.data.db.NoteEntity
 import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
@@ -47,6 +48,8 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
     /** Shared across every export; creating one per page would reload the native renderer. */
     private val inkRenderer by lazy { CanvasStrokeRenderer.create() }
 
+    private val editableNotes by lazy { EditableNotes(context, repo, ServiceLocator.settings(context)) }
+
     private companion object {
         /**
          * Ink world units are dp. One dp is 150/160 px on a 150 dpi page, so 1:1 is ~0.94 — but
@@ -73,16 +76,27 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
         const val BODY_SIZE = 28f
     }
 
-    suspend fun export(note: NoteEntity, format: ExportFormat, darkStyle: Boolean = false): File =
+    suspend fun export(
+        note: NoteEntity,
+        format: ExportFormat,
+        darkStyle: Boolean = false,
+        /** PDF only: attach the note's own data so the file opens back into an editable note. */
+        editable: Boolean = false,
+    ): File =
         withContext(Dispatchers.IO) {
             val attachments = attachmentsOf(note.id)
             when (format) {
-                ExportFormat.PDF -> exportPdf(mapOf(note.id to attachments), listOf(note), darkStyle)
+                ExportFormat.PDF -> exportPdf(mapOf(note.id to attachments), listOf(note), darkStyle).also { file ->
+                    if (editable) editableNotes.embedInto(file, note, attachments)
+                }
                 ExportFormat.IMAGE -> exportImage(note, attachments, darkStyle)
                 ExportFormat.TEXT -> exportText(listOf(note), markdown = false)
                 ExportFormat.MARKDOWN -> exportText(listOf(note), markdown = true)
             }
         }
+
+    /** The note as a PDF that can come back as a note: what Drive holds and what "Export as PDF" shares. */
+    suspend fun exportEditablePdf(note: NoteEntity): File = export(note, ExportFormat.PDF, editable = true)
 
     /** Bulk export: every note goes into one document. */
     suspend fun exportAll(notes: List<NoteEntity>, format: ExportFormat, darkStyle: Boolean = false): File =

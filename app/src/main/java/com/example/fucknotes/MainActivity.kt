@@ -131,6 +131,12 @@ class MainActivity : FragmentActivity() {
         documentOpen.accept(intent)
     }
 
+    override fun onStart() {
+        super.onStart()
+        // Drive catches up when the app comes back, if an account is connected and it is time.
+        ServiceLocator.drive(this).syncIfDue()
+    }
+
     /** Xiaomi Pen buttons arrive as Android stylus key events on some firmware versions. */
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val button = penButtonFor(event)

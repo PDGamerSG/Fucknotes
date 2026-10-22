@@ -297,3 +297,42 @@ interface AttachmentDao {
     @Query("DELETE FROM attachments WHERE noteId = :noteId")
     suspend fun deleteForNote(noteId: Long)
 }
+
+
+/** Drive sync bookkeeping. Rows exist only while an account is connected. */
+@Dao
+interface DriveDao {
+    @Query("SELECT * FROM drive_files")
+    suspend fun allFiles(): List<DriveFileEntity>
+
+    @Query("SELECT * FROM drive_files WHERE noteId = :noteId")
+    suspend fun file(noteId: Long): DriveFileEntity?
+
+    @Query("SELECT * FROM drive_files WHERE fileId = :fileId")
+    suspend fun fileByDriveId(fileId: String): DriveFileEntity?
+
+    @Upsert
+    suspend fun upsertFile(file: DriveFileEntity)
+
+    @Query("DELETE FROM drive_files WHERE noteId = :noteId")
+    suspend fun deleteFile(noteId: Long)
+
+    @Query("SELECT * FROM drive_folders")
+    suspend fun allFolders(): List<DriveFolderEntity>
+
+    @Upsert
+    suspend fun upsertFolder(folder: DriveFolderEntity)
+
+    @Query("DELETE FROM drive_folders WHERE folderKey = :folderKey")
+    suspend fun deleteFolder(folderKey: String)
+
+    @Query("DELETE FROM drive_files")
+    suspend fun clearFiles()
+
+    @Query("DELETE FROM drive_folders")
+    suspend fun clearFolders()
+
+    /** Changes on every note write, trash or delete; the sync engine debounces on it. */
+    @Query("SELECT COUNT(*) || ':' || COALESCE(MAX(updatedAt), 0) || ':' || COALESCE(SUM(CASE WHEN deletedAt IS NULL THEN 0 ELSE 1 END), 0) FROM notes")
+    fun observeNoteStamp(): Flow<String>
+}

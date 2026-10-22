@@ -70,6 +70,8 @@ fun SheetTopBar(
     onToggleLayout: () -> Unit,
     onSort: (SortOrder) -> Unit,
     modifier: Modifier = Modifier,
+    /** The Drive login or status control, first on the right so the account is always in view. */
+    drive: @Composable () -> Unit = {},
 ) {
     var sortMenu by remember { mutableStateOf(false) }
 
@@ -85,6 +87,8 @@ fun SheetTopBar(
 
         Spacer(Modifier.weight(1f))
 
+        drive()
+        Spacer(Modifier.width(6.dp))
         ToolButton(icon = Icons.Outlined.CloudUpload, label = "Back up", onClick = onBackup)
         ToolButton(icon = Icons.Outlined.FileDownload, label = "Export notes as PDF", onClick = onExport)
         ToolButton(icon = Icons.Outlined.Search, label = "Search", onClick = onSearch)
