@@ -7,6 +7,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.example.fucknotes.data.model.AttachmentType
 import com.example.fucknotes.data.model.NoteType
+import com.example.fucknotes.data.model.PageAppearance
 import com.example.fucknotes.data.model.PaperStyle
 
 @Entity(
@@ -53,6 +54,8 @@ data class NoteEntity(
      * Gaps are kept wide so a move usually lands between its neighbours without renumbering.
      */
     val position: Long = 0,
+    /** Light or night colours for this note's pages; FOLLOW takes the app-wide setting. */
+    val appearance: PageAppearance = PageAppearance.FOLLOW,
 )
 
 @Entity(

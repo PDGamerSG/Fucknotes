@@ -20,6 +20,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Crop32
 import androidx.compose.material.icons.outlined.CropPortrait
+import androidx.compose.material.icons.outlined.DarkMode
+import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.UnfoldMore
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -36,6 +38,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.fucknotes.data.ink.PageFormat
@@ -184,6 +188,50 @@ private fun OrientationToggle(landscape: Boolean, onChange: (Boolean) -> Unit) {
                     tint = if (active) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+        }
+    }
+}
+
+/**
+ * Light or night pages for one note.
+ *
+ * Two choices and nothing in between: a notebook is either read in daylight colours or in the
+ * night palette, and the app-wide setting only stands in for notes that never chose.
+ */
+@Composable
+fun AppearanceRow(dark: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        PaperSectionLabel("Mode")
+        Spacer(Modifier.width(14.dp))
+        Row(
+            Modifier
+                .clip(RoundedCornerShape(Radii.chip))
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(Radii.chip)),
+        ) {
+            listOf(
+                Triple(false, Icons.Outlined.LightMode, "Light"),
+                Triple(true, Icons.Outlined.DarkMode, "Dark"),
+            ).forEach { (isDark, icon, label) ->
+                val active = dark == isDark
+                Row(
+                    Modifier
+                        .background(if (active) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
+                        .clickable { onChange(isDark) }
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    val tint = if (active) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant
+                    Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp), tint = tint)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        label,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = tint,
+                        modifier = Modifier.semantics { contentDescription = "$label mode" },
+                    )
+                }
             }
         }
     }

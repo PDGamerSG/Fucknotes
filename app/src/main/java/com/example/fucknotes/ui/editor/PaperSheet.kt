@@ -18,6 +18,7 @@ import com.example.fucknotes.data.ink.PageSpec
 import com.example.fucknotes.data.model.LineColors
 import com.example.fucknotes.data.model.PaperColors
 import com.example.fucknotes.data.model.PaperStyle
+import com.example.fucknotes.ui.common.AppearanceRow
 import com.example.fucknotes.ui.common.ColorSwatchRow
 import com.example.fucknotes.ui.common.ImmersiveDialogWindow
 import com.example.fucknotes.ui.common.PageSizeRow
@@ -25,6 +26,7 @@ import com.example.fucknotes.ui.common.PaperSectionLabel
 import com.example.fucknotes.ui.common.SpacingRow
 import com.example.fucknotes.ui.common.TemplatePicker
 import com.example.fucknotes.ui.common.paperColorOr
+import com.example.fucknotes.ui.editor.ink.NightPalette
 import com.example.fucknotes.ui.theme.brand
 
 /**
@@ -43,6 +45,8 @@ fun PaperSheet(
     spacingDp: Int,
     page: PageSpec,
     notebook: Boolean,
+    dark: Boolean,
+    onDark: (Boolean) -> Unit,
     onStyle: (PaperStyle) -> Unit,
     onPaperColor: (Int) -> Unit,
     onLineColor: (Int) -> Unit,
@@ -56,24 +60,29 @@ fun PaperSheet(
             Text("Paper", style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(16.dp))
 
+            AppearanceRow(dark = dark, onChange = onDark)
+            Spacer(Modifier.height(18.dp))
+
             TemplatePicker(
                 selected = style,
-                paperColor = paperColorArgb.paperColorOr(Color.White),
-                lineColor = lineColorArgb.paperColorOr(MaterialTheme.brand.tileBorder),
+                paperColor = if (dark) NightPalette.paper else paperColorArgb.paperColorOr(Color.White),
+                lineColor = if (dark) NightPalette.rule else lineColorArgb.paperColorOr(MaterialTheme.brand.tileBorder),
                 spacingDp = spacingDp.takeIf { it > 0 }?.toFloat() ?: 24f,
                 onPick = onStyle,
             )
 
             Spacer(Modifier.height(20.dp))
             Row(Modifier.fillMaxWidth()) {
-                Column(Modifier.weight(1f)) {
-                    PaperSectionLabel("Paper colour")
-                    Spacer(Modifier.height(8.dp))
-                    ColorSwatchRow(
-                        colors = PaperColors,
-                        selectedArgb = paperColorArgb,
-                        onPick = onPaperColor,
-                    )
+                if (!dark) {
+                    Column(Modifier.weight(1f)) {
+                        PaperSectionLabel("Paper colour")
+                        Spacer(Modifier.height(8.dp))
+                        ColorSwatchRow(
+                            colors = PaperColors,
+                            selectedArgb = paperColorArgb,
+                            onPick = onPaperColor,
+                        )
+                    }
                 }
                 Column(Modifier.weight(1f)) {
                     PaperSectionLabel("Line colour")

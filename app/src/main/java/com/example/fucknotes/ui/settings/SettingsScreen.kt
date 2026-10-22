@@ -199,7 +199,7 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
                     RowDivider()
                     SwitchRow(
                         title = "Dark mode for pages",
-                        subtitle = "Night colours for pages, imported documents and ink. Also in a note's ⋯ menu.",
+                        subtitle = "Night colours for imported documents and for notes that have not chosen. Each notebook picks light or dark when it is made; change it from its ⋯ menu.",
                         checked = settings.darkReader,
                         onChange = viewModel::setDarkReader,
                     )

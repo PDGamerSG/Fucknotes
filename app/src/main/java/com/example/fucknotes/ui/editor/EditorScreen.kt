@@ -56,6 +56,7 @@ import com.example.fucknotes.ui.editor.ink.InkSurface
 import com.example.fucknotes.ui.editor.ink.InkToolbar
 import com.example.fucknotes.ui.editor.tabs.EditorTabBar
 import com.example.fucknotes.ui.editor.tabs.OpenTabs
+import com.example.fucknotes.ui.theme.PageTheme
 import com.example.fucknotes.ui.theme.brand
 import kotlinx.coroutines.launch
 
@@ -69,6 +70,21 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditorScreen(
+    viewModel: EditorViewModel,
+    onBack: () -> Unit,
+    onOpenNote: (Long) -> Unit,
+) {
+    // The chrome follows the open note: a notebook made in dark mode is read with dark bars even
+    // while the rest of the app is light, and a light one stays light at night.
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    PageTheme(dark = state.darkReader) {
+        EditorContent(viewModel, onBack, onOpenNote)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun EditorContent(
     viewModel: EditorViewModel,
     onBack: () -> Unit,
     onOpenNote: (Long) -> Unit,
@@ -400,6 +416,8 @@ fun EditorScreen(
             spacingDp = state.lineSpacingDp,
             page = state.page,
             notebook = state.type == NoteType.NOTEBOOK,
+            dark = state.darkReader,
+            onDark = viewModel::setDarkPages,
             onStyle = viewModel::setPaperStyle,
             onPaperColor = viewModel::setColor,
             onLineColor = viewModel::setLineColor,

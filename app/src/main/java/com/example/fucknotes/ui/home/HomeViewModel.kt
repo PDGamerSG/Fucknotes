@@ -207,6 +207,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                 pageSpec = draft.page,
                 pageCount = draft.initialPageCount,
                 pagesExplicitlyCreated = true,
+                appearance = draft.appearance,
             )
         )
     }

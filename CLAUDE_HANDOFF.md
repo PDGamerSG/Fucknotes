@@ -84,10 +84,22 @@ and export, first-page previews, dark reader, folder hierarchy, home export.
 - Dark mode for pages: `ui/editor/ink/DarkReader.kt` holds `NightPalette` (paper, rule,
   `imageMatrix` for bitmaps, `applyImageMatrix` for JVM tests), `darkReaderArgb(argb, tool)`
   (HSL lightness inversion, hue kept, highlighter exception) and `InkStroke.forDarkReader()`
-  (cached night `Stroke` per stroke). Toggle lives in the editor ⋯ menu (`EditorOverflowMenu`
-  `darkReader`/`onToggleDarkReader` → `EditorViewModel.toggleDarkReader`) and in Settings; both
-  write the one `darkReader` preference. Consumers: `InkSurface`, `PageImages`, `PagesSheet`,
+  (cached night `Stroke` per stroke). Consumers: `InkSurface`, `PageImages`, `PagesSheet`,
   `AttachmentStrip`, `NoteTile`/`NoteRow`, `TypedEditor`, and the theme (dark while on).
+- Light or dark per note: `NoteEntity.appearance` (`PageAppearance.FOLLOW / LIGHT / DARK`, db v7,
+  `MIGRATION_6_7`, stored as the enum name). `PageAppearance.isDark(appDarkReader)` resolves it;
+  `EditorUiState.darkReader` is a computed property over `appearance` + `appDarkReader`, so every
+  editor consumer still reads `state.darkReader`. The New notebook dialog and the Paper sheet
+  carry an `AppearanceRow` (Light / Dark, `ui/common/PaperControls.kt`); the dialog preselects
+  from the app-wide setting (`initialDark`) and the draft carries `appearance` into
+  `NotesRepository.createNote`. The editor ⋯ switch now flips the *note*
+  (`EditorViewModel.setDarkPages`), not the preference; Settings' "Dark mode for pages" is the
+  default for `FOLLOW` notes (old notes, imported documents). Shelf, search and trash tiles call
+  `note.appearance.isDark(settings.darkReader)`. `PageTheme(dark)` (Theme.kt) wraps the editor so
+  its chrome matches the open note; it always nests the same tree, because switching between a
+  bare `content()` and a wrapped one recreated the editor and closed its sheets.
+- Migrations can be tested on device: `room-testing` is on the androidTest classpath and the
+  exported schemas are androidTest assets; `AppDatabase.migrationForTests(from, to)` exposes one.
 - Back: `EditorScreen`'s `BackHandler` calls `leaveNote()` only in `EditorChrome.FULL` and
   swallows back otherwise; `InkEditor` applies `systemGestureExclusion()` to the surface when the
   chrome is not `FULL` (no longer tied to the zoom lock).

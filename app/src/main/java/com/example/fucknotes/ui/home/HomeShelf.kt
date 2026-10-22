@@ -120,7 +120,7 @@ fun HomeShelf(
                             hasImages = (state.mediaByNote[note.id]?.images ?: 0) > 0,
                             hasAudio = (state.mediaByNote[note.id]?.audio ?: 0) > 0,
                             firstPageImagePath = state.firstPageImageByNote[note.id],
-                            darkReader = state.settings.darkReader,
+                            darkReader = note.appearance.isDark(state.settings.darkReader),
                             interaction = Modifier.holdToDrag(
                                 state = reorder,
                                 id = note.id,
@@ -176,7 +176,7 @@ fun HomeShelf(
                             note = note,
                             preview = previewOf(note),
                             firstPageImagePath = state.firstPageImageByNote[note.id],
-                            darkReader = state.settings.darkReader,
+                            darkReader = note.appearance.isDark(state.settings.darkReader),
                             selected = note.id in state.selection,
                             interaction = Modifier.holdToDrag(
                                 state = reorder,

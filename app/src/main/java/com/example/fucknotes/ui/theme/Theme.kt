@@ -7,6 +7,7 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import com.example.fucknotes.data.model.AccentPreset
@@ -28,6 +29,45 @@ fun FucknotesTheme(
     fontScalePercent: Int = 100,
     content: @Composable () -> Unit,
 ) {
+    val spec = ThemeSpec(themeMode, accent, dynamicColor, darkReader, fontScalePercent)
+    CompositionLocalProvider(LocalThemeSpec provides spec) {
+        ThemedContent(spec, content)
+    }
+}
+
+/** The choices the theme was built from, kept so a screen can rebuild it with one of them changed. */
+data class ThemeSpec(
+    val themeMode: ThemeMode = ThemeMode.SYSTEM,
+    val accent: AccentPreset = AccentPreset.INDIGO,
+    val dynamicColor: Boolean = false,
+    val darkReader: Boolean = false,
+    val fontScalePercent: Int = 100,
+)
+
+val LocalThemeSpec = staticCompositionLocalOf { ThemeSpec() }
+
+/**
+ * The app theme with the night flag taken from one note instead of the app-wide setting.
+ *
+ * Wrapped around the editor, so its bars and sheets sit on the same dark or light ground as the
+ * page being read. Everything else about the theme — accent, type size, dynamic colour — is kept.
+ */
+@Composable
+fun PageTheme(dark: Boolean, content: @Composable () -> Unit) {
+    val spec = LocalThemeSpec.current.copy(darkReader = dark)
+    // Always the same tree, whether or not the flag differs from the app's: switching between a
+    // bare `content()` and a wrapped one would recreate the editor and drop its open sheets, its
+    // camera and its chrome state the moment the note changed mode.
+    CompositionLocalProvider(LocalThemeSpec provides spec) { ThemedContent(spec, content) }
+}
+
+@Composable
+private fun ThemedContent(spec: ThemeSpec, content: @Composable () -> Unit) {
+    val themeMode = spec.themeMode
+    val accent = spec.accent
+    val dynamicColor = spec.dynamicColor
+    val darkReader = spec.darkReader
+    val fontScalePercent = spec.fontScalePercent
     val dark = when (themeMode) {
         ThemeMode.SYSTEM -> isSystemInDarkTheme()
         ThemeMode.LIGHT -> false

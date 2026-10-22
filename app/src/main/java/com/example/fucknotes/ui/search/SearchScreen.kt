@@ -157,7 +157,7 @@ fun SearchScreen(
                             note = note,
                             preview = viewModel.previewOf(note),
                             firstPageImagePath = covers[note.id],
-                            darkReader = darkReader,
+                            darkReader = note.appearance.isDark(darkReader),
                             selected = false,
                             interaction = Modifier.clickable { onOpenNote(note.id) },
                         )

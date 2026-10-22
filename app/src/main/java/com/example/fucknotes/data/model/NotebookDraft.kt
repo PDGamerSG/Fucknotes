@@ -19,6 +19,8 @@ data class NotebookDraft(
     val lineColorArgb: Int = LineColors.first(),
     val spacingDp: Int = DEFAULT_RULE_SPACING_DP.toInt(),
     val page: PageSpec = PageSpec.Default,
+    /** Light or night pages. The sheet preselects whatever the app is set to. */
+    val appearance: PageAppearance = PageAppearance.LIGHT,
 )
 
 /** Upper bound used by the creation form and the persisted notebook page controls. */

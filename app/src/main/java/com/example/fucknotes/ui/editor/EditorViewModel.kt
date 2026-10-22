@@ -22,6 +22,7 @@ import com.example.fucknotes.data.model.FingerInputMode
 import com.example.fucknotes.data.model.InkTool
 import com.example.fucknotes.data.model.NoteType
 import com.example.fucknotes.data.model.MAX_NOTEBOOK_PAGES
+import com.example.fucknotes.data.model.PageAppearance
 import com.example.fucknotes.data.model.PaperStyle
 import com.example.fucknotes.data.model.PenPreset
 import com.example.fucknotes.data.model.PenButton
@@ -78,8 +79,10 @@ data class EditorUiState(
     val fingerInputMode: FingerInputMode = FingerInputMode.DRAW,
     /** Mirrors the app-wide setting; true pins the page scale against stray pinches. */
     val zoomLocked: Boolean = false,
-    /** Mirrors the app-wide dark reader setting. */
-    val darkReader: Boolean = false,
+    /** This note's own light-or-dark choice; FOLLOW takes the app-wide setting. */
+    val appearance: PageAppearance = PageAppearance.FOLLOW,
+    /** Mirrors the app-wide "Dark mode for pages" setting, which a FOLLOW note takes. */
+    val appDarkReader: Boolean = false,
     /** Actions assigned to the physical Xiaomi Pen controls. */
     val penPrimaryAction: PenButtonAction = PenButtonAction.TOGGLE_ERASER,
     val penSecondaryAction: PenButtonAction = PenButtonAction.UNDO,
@@ -95,6 +98,9 @@ data class EditorUiState(
      * layered-ink toggle says; on a text note it follows the toggle.
      */
     val inkActive: Boolean get() = inkMode || type.isInk
+
+    /** Night colours for this note's pages. */
+    val darkReader: Boolean get() = appearance.isDark(appDarkReader)
 
     /** The pen the brush tools draw with. Falls back to the first slot if an index goes stale. */
     val activePen: PenPreset get() = pens.getOrElse(selectedPen) { DefaultPenTray.first() }
@@ -176,7 +182,7 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
                 _state.value = current.copy(
                     fingerInputMode = s.fingerInputMode,
                     zoomLocked = s.zoomLocked,
-                    darkReader = s.darkReader,
+                    appDarkReader = s.darkReader,
                     pens = s.penTray,
                     selectedPen = index,
                     penPrimaryAction = s.penPrimaryAction,
@@ -207,6 +213,7 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
                 lineColorArgb = note.lineColorArgb,
                 lineSpacingDp = note.lineSpacingDp,
                 page = PageSpec.decode(note.pageFormat),
+                appearance = note.appearance,
                 pinned = false,
                 locked = false,
                 archived = note.archived,
@@ -380,8 +387,13 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
     }
 
     /** Night colours for every page, image and stroke; app-wide, like the lock. */
-    fun toggleDarkReader() {
-        viewModelScope.launch { settings.setDarkReader(!_state.value.darkReader) }
+    /** Flips this note between light and night pages; the choice is the note's, not the app's. */
+    fun toggleDarkReader() = setDarkPages(!_state.value.darkReader)
+
+    /** Light or night pages for this note, kept with it like its paper. */
+    fun setDarkPages(dark: Boolean) {
+        _state.value = _state.value.copy(appearance = PageAppearance.of(dark))
+        scheduleSave()
     }
 
     /** Pins or releases the page scale for every ink note. */
@@ -733,6 +745,7 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
                 lineColorArgb = s.lineColorArgb,
                 lineSpacingDp = s.lineSpacingDp,
                 pageFormat = s.page.encode(),
+                appearance = s.appearance,
                 pageCount = snapshotPageCount.coerceAtLeast(1),
                 pagesExplicitlyCreated = snapshotExplicitPages,
                 pinned = s.pinned,

@@ -48,6 +48,9 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+    // Exported Room schemas ride along with the instrumentation APK so migrations can be run
+    // against a database built from an older version.
+    sourceSets.getByName("androidTest").assets.srcDir("$projectDir/schemas")
 }
 
 // The workstation sync service can create timestamped conflict copies beside Kotlin sources.
@@ -110,4 +113,5 @@ dependencies {
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
     androidTestImplementation(libs.androidx.espresso.core)
+    androidTestImplementation(libs.androidx.room.testing)
 }

@@ -12,6 +12,7 @@ import com.example.fucknotes.data.ink.InkStroke
 import com.example.fucknotes.data.ink.PageSpec
 import com.example.fucknotes.data.model.ChecklistItem
 import com.example.fucknotes.data.model.NoteType
+import com.example.fucknotes.data.model.PageAppearance
 import com.example.fucknotes.data.model.MAX_NOTEBOOK_PAGES
 import com.example.fucknotes.data.model.PaperStyle
 import com.example.fucknotes.data.model.SortOrder
@@ -89,6 +90,7 @@ class NotesRepository(private val db: AppDatabase) {
         pageSpec: PageSpec = PageSpec.Default,
         pageCount: Int = 1,
         pagesExplicitlyCreated: Boolean = false,
+        appearance: PageAppearance = PageAppearance.FOLLOW,
     ): Long {
         val now = System.currentTimeMillis()
         val storedPageCount = if (type == NoteType.NOTEBOOK) pageCount.coerceIn(1, MAX_NOTEBOOK_PAGES) else 1
@@ -112,6 +114,7 @@ class NotesRepository(private val db: AppDatabase) {
                 pageFormat = pageSpec.encode(),
                 pageCount = storedPageCount,
                 pagesExplicitlyCreated = type == NoteType.NOTEBOOK && pagesExplicitlyCreated,
+                appearance = appearance,
             )
         )
     }

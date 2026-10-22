@@ -3,7 +3,38 @@
 Validated on the connected Xiaomi 2410CRP4CI (Android 16) on 2026-10-22. The checks below
 distinguish automated coverage, interactive checks and remaining scenarios.
 
-## Latest pass (chrome lock, page navigation, immersive sheets) — 2026-10-22, macOS
+## Latest pass (light or dark per notebook) — 2026-10-22, macOS
+
+Changes:
+
+- The New notebook sheet has a Mode row: Light or Dark. It starts from the app-wide "Dark mode
+  for pages" setting. The preview and the template cards show the night palette while Dark is
+  chosen, and the paper-colour row steps aside (a night page is always the slate).
+- The choice is stored with the note (`appearance` column, database version 7). Existing notes
+  and imported documents keep following the app-wide setting, as before.
+- The editor's ⋯ "Dark mode" switch and a Mode row at the top of the Paper sheet change the open
+  note only; the Settings switch is now the default for notes that have not chosen.
+- Shelf, search and trash thumbnails follow each note's own choice.
+- The editor's chrome follows the open note (dark bars on a dark notebook even in a light app).
+
+Verified on the tablet:
+
+- The real database migrated 6 → 7 in place on first launch: 23 notes, all `FOLLOW`, no error in
+  logcat, every note opened as before. A run-as snapshot was taken first
+  (`build/tablet-backup-20261022-212403/appdata.tar`, also `~/fucknotes-tablet-appdata-backup.tar`).
+- New notebook → Dark → Create: the page opens on the night slate with night swatches while the
+  app-wide setting is off. ⋯ → Dark mode off turns that one note light (`LIGHT` in the row); the
+  Paper sheet's Mode row turns it back (`DARK`), live, with the sheet staying open. The app-wide
+  preference never changed. The shelf tile for that notebook is dark; its neighbours are not.
+- Automated: `PageAppearanceTest` (JVM: resolution, editor state, draft default, converter) and
+  `NotebookAppearanceTest` (device: the sheet's choice reaches the draft from both starting
+  states, the paper-colour row hides on Dark, the value is stored and duplicated with the note,
+  and a version-6 database with a row migrates to 7 with `FOLLOW`). Full device suite: 31 tests.
+
+Known: a light page inside the dark app theme keeps the existing cool veil (`InkSurface`
+`nightPaper`), so a "Light" notebook reads as it did before this change rather than pure white.
+
+## Previous pass (chrome lock, page navigation, immersive sheets) — 2026-10-22, macOS
 
 Changes:
 

@@ -250,6 +250,7 @@ fun HomeScreen(
     if (showNewNotebook) {
         NewNotebookDialog(
             initialTitle = remember { viewModel.suggestedNotebookTitle() },
+            initialDark = state.settings.darkReader,
             onDismiss = { showNewNotebook = false },
             onCreate = { draft ->
                 showNewNotebook = false

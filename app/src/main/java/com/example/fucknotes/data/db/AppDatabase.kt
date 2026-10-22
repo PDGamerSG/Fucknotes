@@ -16,7 +16,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         NoteTagCrossRef::class,
         AttachmentEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -85,6 +85,21 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Light or dark pages per note. Existing notes follow the app-wide setting, which is what
+         * they did before, so nothing changes on screen until a note chooses for itself.
+         */
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE notes ADD COLUMN appearance TEXT NOT NULL DEFAULT 'FOLLOW'")
+            }
+        }
+
+        /** The migration between two adjacent versions, for the instrumentation tests. */
+        fun migrationForTests(from: Int, to: Int): Migration =
+            listOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                .first { it.startVersion == from && it.endVersion == to }
+
         fun get(context: Context): AppDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
@@ -96,6 +111,7 @@ abstract class AppDatabase : RoomDatabase() {
                 .addMigrations(MIGRATION_3_4)
                 .addMigrations(MIGRATION_4_5)
                 .addMigrations(MIGRATION_5_6)
+                .addMigrations(MIGRATION_6_7)
                 // Foreign keys drive the note -> tag/attachment cascades.
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
                 .build()
