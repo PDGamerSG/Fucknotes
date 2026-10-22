@@ -21,7 +21,6 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.Brush
 import androidx.compose.material.icons.outlined.CheckBox
 import androidx.compose.material.icons.outlined.Image
-import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -228,9 +227,12 @@ private fun MetaIcon(icon: ImageVector, label: String) {
     )
 }
 
+/**
+ * The badge marks what is *not* an ordinary notebook. A shelf is mostly notebooks, so a book icon
+ * on every tile said nothing; the brush on a canvas and the box on a checklist are the signal.
+ */
 private fun typeBadge(type: NoteType): ImageVector? = when (type) {
     NoteType.CHECKLIST -> Icons.Outlined.CheckBox
     NoteType.DRAWING -> Icons.Outlined.Brush
-    NoteType.NOTEBOOK -> Icons.Outlined.MenuBook
-    NoteType.TEXT -> null
+    NoteType.NOTEBOOK, NoteType.TEXT -> null
 }
