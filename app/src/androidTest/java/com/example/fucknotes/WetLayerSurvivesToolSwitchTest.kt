@@ -10,7 +10,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.ink.authoring.InProgressStrokesView
+import androidx.ink.authoring.InProgressShapesView
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.fucknotes.data.ink.InkStroke
 import com.example.fucknotes.data.ink.PageSpec
@@ -31,13 +31,15 @@ import org.junit.runner.RunWith
  * Switching to the eraser and back must not rebuild the wet-ink surface: rebuilding it is what
  * made the first strokes after the switch invisible until they were committed.
  */
+@OptIn(androidx.ink.authoring.ExperimentalCustomShapeWorkflowApi::class)
 @RunWith(AndroidJUnit4::class)
 class WetLayerSurvivesToolSwitchTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
-    private fun wetView(): InProgressStrokesView? {
-        fun find(view: View): InProgressStrokesView? {
-            if (view is InProgressStrokesView) return view
+    // Ink 1.0.0's compose wrapper hosts the generic shapes view, not InProgressStrokesView.
+    private fun wetView(): InProgressShapesView<*, *, *>? {
+        fun find(view: View): InProgressShapesView<*, *, *>? {
+            if (view is InProgressShapesView<*, *, *>) return view
             if (view is ViewGroup) for (i in 0 until view.childCount) find(view.getChildAt(i))?.let { return it }
             return null
         }

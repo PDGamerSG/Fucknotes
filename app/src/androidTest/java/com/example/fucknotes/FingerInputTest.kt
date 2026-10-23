@@ -166,7 +166,7 @@ class FingerInputTest {
                 )
             }
         }
-        compose.onAllNodes(hasContentDescription("Pen,", substring = true)).assertCountEquals(3)
+        compose.onAllNodes(hasContentDescription("Pen,", substring = true)).assertCountEquals(4)
         compose.onAllNodes(hasContentDescription("Highlighter,", substring = true)).assertCountEquals(2)
         compose.onNodeWithContentDescription("Pen").assertDoesNotExist()
         compose.onNodeWithContentDescription("Highlighter").assertDoesNotExist()

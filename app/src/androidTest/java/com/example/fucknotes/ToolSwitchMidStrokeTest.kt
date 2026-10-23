@@ -44,7 +44,11 @@ class ToolSwitchMidStrokeTest {
         val properties = MotionEvent.PointerProperties().apply { id = 0; toolType = MotionEvent.TOOL_TYPE_STYLUS }
         val coords = MotionEvent.PointerCoords().apply { this.x = x; this.y = y; pressure = if (action == MotionEvent.ACTION_UP) 0f else 0.6f }
         val event = MotionEvent.obtain(start, at, action, 1, arrayOf(properties), arrayOf(coords), 0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_STYLUS, 0)
-        try { compose.runOnUiThread { compose.activity.window.decorView.dispatchTouchEvent(event) } } finally { event.recycle() }
+        try {
+            // Ink stamps strokes with real time; an event from the future is not what a pen sends.
+            SystemClock.sleep((at - SystemClock.uptimeMillis()).coerceAtLeast(0L))
+            compose.runOnUiThread { compose.activity.window.decorView.dispatchTouchEvent(event) }
+        } finally { event.recycle() }
     }
 
     @Test fun switchingToTheEraserMidStrokeStillCommitsTheStroke() {
@@ -76,7 +80,8 @@ class ToolSwitchMidStrokeTest {
         compose.waitForIdle()
         for (i in 7..12) send(MotionEvent.ACTION_MOVE, 300f + i * 20f, 500f, start, start + i * 12L)
         send(MotionEvent.ACTION_UP, 560f, 500f, start, start + 13 * 12L)
-        compose.waitForIdle()
+        // The wet layer hands the stroke over from its render thread, after the UI is idle.
+        compose.waitUntil(5_000) { strokes.isNotEmpty() }
         assertEquals("the stroke the pen was drawing is kept whole", 1, strokes.size)
         assertEquals("nothing was erased by the stroke that was being written", 0, erased)
 
@@ -121,6 +126,7 @@ class ToolSwitchMidStrokeTest {
         for (i in 5..10) send(MotionEvent.ACTION_MOVE, 300f + i * 20f, 300f, start, start + i * 12L)
         send(MotionEvent.ACTION_UP, 520f, 300f, start, start + 11 * 12L)
         compose.waitForIdle()
-        assertEquals("the erase gesture does not turn into a stroke halfway", 1, strokes.size)
+        SystemClock.sleep(500)
+        compose.runOnIdle { assertEquals("the erase gesture does not turn into a stroke halfway", 1, strokes.size) }
     }
 }

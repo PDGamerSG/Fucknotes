@@ -51,12 +51,14 @@ class LassoDeviceTest {
         return InkStroke(Stroke(brush, inputs), InkTool.PEN)
     }
 
-    private fun stylus(points: List<Offset>) {
+    /** Touches the glass at the given *world* points; the surface sets the camera's density. */
+    private fun stylus(camera: InkCamera, points: List<Offset>) {
         val start = SystemClock.uptimeMillis()
         points.forEachIndexed { i, p ->
             val action = when (i) { 0 -> MotionEvent.ACTION_DOWN; points.lastIndex -> MotionEvent.ACTION_UP; else -> MotionEvent.ACTION_MOVE }
             val properties = MotionEvent.PointerProperties().apply { id = 0; toolType = MotionEvent.TOOL_TYPE_STYLUS }
-            val coords = MotionEvent.PointerCoords().apply { x = p.x; y = p.y; pressure = if (action == MotionEvent.ACTION_UP) 0f else 0.6f }
+            val screen = Offset(p.x * camera.scale + camera.panX, p.y * camera.scale + camera.panY)
+            val coords = MotionEvent.PointerCoords().apply { x = screen.x; y = screen.y; pressure = if (action == MotionEvent.ACTION_UP) 0f else 0.6f }
             val event = MotionEvent.obtain(start, start + i * 12L, action, 1, arrayOf(properties), arrayOf(coords),
                 0, 0, 1f, 1f, 0, 0, InputDevice.SOURCE_STYLUS, 0)
             try { compose.runOnUiThread { compose.activity.window.decorView.dispatchTouchEvent(event) } } finally { event.recycle() }
@@ -65,7 +67,7 @@ class LassoDeviceTest {
     }
 
     @Test fun circleSelectsAndDragMoves() {
-        val camera = InkCamera(1f) // scale 1 and no pan: screen units are world units
+        val camera = InkCamera(1f) // the surface overwrites the density; stylus() maps world to screen
         val lasso = LassoState()
         val strokes = listOf(line(300f, 300f, 400f, 300f), line(900f, 900f, 1000f, 900f))
         var moved: Triple<Set<Int>, Float, Float>? = null
@@ -90,12 +92,12 @@ class LassoDeviceTest {
             val a = i / 24f * 2 * Math.PI
             Offset(350f + 120f * Math.cos(a).toFloat(), 300f + 80f * Math.sin(a).toFloat())
         }
-        stylus(loop)
+        stylus(camera, loop)
         assertEquals(setOf(0), lasso.selection)
         assertTrue(lasso.loop.isEmpty())
 
         // Drag from inside the box 60 right, 40 down.
-        stylus(listOf(Offset(350f, 300f), Offset(370f, 310f), Offset(390f, 330f), Offset(410f, 340f), Offset(410f, 340f)))
+        stylus(camera, listOf(Offset(350f, 300f), Offset(370f, 310f), Offset(390f, 330f), Offset(410f, 340f), Offset(410f, 340f)))
         val (indices, dx, dy) = requireNotNull(moved)
         assertEquals(setOf(0), indices)
         assertEquals(60f, dx, 1f)
@@ -103,7 +105,7 @@ class LassoDeviceTest {
         assertEquals(Offset.Zero, lasso.drag)
 
         // A tap away from the selection lets it go.
-        stylus(listOf(Offset(1500f, 1500f), Offset(1500f, 1500f)))
+        stylus(camera, listOf(Offset(600f, 600f), Offset(600f, 600f)))
         assertTrue(lasso.selection.isEmpty())
     }
 
