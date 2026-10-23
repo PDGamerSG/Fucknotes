@@ -1,9 +1,46 @@
 # Notes workflow changes
 
-Validated on the connected Xiaomi 2410CRP4CI (Android 16) on 2026-10-22. The checks below
+Validated on the connected Xiaomi 2410CRP4CI (Android 16) on 2026-10-22 and 2026-10-23. The checks below
 distinguish automated coverage, interactive checks and remaining scenarios.
 
-## Latest pass (pen button toggles, tool change mid-stroke) — 2026-10-23, macOS — code only
+## Latest pass (tablet verification of the 2026-10-22/23 work) — 2026-10-23, macOS, tablet
+
+The tablet had run the 2026-10-22 22:22 build (1.1.0) through all of yesterday's and today's
+fixes; everything below is the first run of that code on the device. Data was snapshotted with
+`run-as` before the first launch (`build/tablet-backup-20261023-181348/appdata.tar`); the DB
+migrated to v8 and all 14 notebooks are intact.
+
+- Full instrumentation suite: 44 tests, 4 failed on first run, all four were test bugs, fixed in
+  `bb00e80` and green afterwards: the lasso test assumed screen pixels were world units (the
+  surface sets the camera's density, 2.75 here); the wet-layer test looked for
+  `InProgressStrokesView` but ink 1.0.0's compose wrapper hosts `InProgressShapesView`; the
+  mid-stroke test asserted before the asynchronous stroke handoff; the toolbar test counted three
+  pen swatches. The app code did not change.
+- Reported again today: "switch from eraser to blue, the pen output shows only after some time".
+  Scripted on the real editor with a scratch notebook: draw, erase (checked: the row is paper),
+  switch back to blue, write a 2.5 s stroke and screenshot while the pen is still moving. Wet ink
+  was on the page mid-stroke in 24 of 24 cycles — 12 switching through the toolbar, 12 through a
+  stylus-sourced `KEYCODE_PAGE_DOWN` key, which is what this tablet makes of the Focus Pen's
+  primary switch. Not reproducible on this build; the report matches the wet-layer rebuild fixed
+  in `8fe1373`, which the tablet did not have until today.
+- Rename sits in ⋯; Export as PDF asks Light/Dark; both PDFs pulled from the app cache and
+  rendered: dots are faint and sheet-sized, the dark page is night slate with night-blue ink.
+- Cold open of "Db and caching" (23 pages of ink plus an image) recorded with `screenrecord`:
+  home → blank desk at +0 ms → full page at +230 ms from the tap landing. No title / "Start
+  writing" frame.
+- Select tool on the real UI: the dashed box and the Duplicate/Delete/Deselect bar appear after
+  circling a line; dragging inside the box moved the stroke (pixels checked before and after).
+- Release build installed over the debug one at the end (`app-release.apk`, 18:55), launched,
+  home shows 14 notes. The scratch notebook "Claude repro" was moved to Trash.
+
+Driving notes for next time: `input stylus keyevent KEYCODE_STYLUS_BUTTON_PRIMARY` never
+reaches the app (the system keeps stylus button keycodes); `input stylus keyevent KEYCODE_PAGE_DOWN`
+does and toggles the eraser once. `input stylus motionevent DOWN/MOVE/UP` works for a lasso loop
+but each command is its own process and later finger taps on the toolbar were sometimes dropped
+afterwards; for a mid-stroke screenshot use a long `input stylus swipe … 2500` in the background
+instead.
+
+## Previous pass (pen button toggles, tool change mid-stroke) — 2026-10-23, macOS — code only
 
 Reported: switching eraser ↔ pen with the Xiaomi Pen's button sometimes leaves the pen "not
 working"; toolbar taps are fine. Two causes addressed, neither reproducible without the pen:

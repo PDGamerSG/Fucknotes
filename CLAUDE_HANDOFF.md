@@ -115,7 +115,13 @@ and export, first-page previews, dark reader, folder hierarchy, home export.
 - Pen buttons: `MainActivity` feeds every key and motion packet into `input/PenPresses.kt`, which
   decides what is a new press; only then `PenInputBus.emit`. Do not emit from the activity
   directly. `InkSurface`'s gesture loop latches `gestureTool` at pointer down and uses it until
-  every pointer lifts, so a tool change mid-gesture applies to the next stroke.
+  every pointer lifts, so a tool change mid-gesture applies to the next stroke. To emulate the
+  Focus Pen's primary switch from adb use `input stylus keyevent KEYCODE_PAGE_DOWN` (what this
+  tablet reports for it); `KEYCODE_STYLUS_BUTTON_*` key events never reach the app.
+- Device tests that inject stylus events: `InkSurface` overwrites the camera's density from the
+  display (2.75 on the tablet), so convert world points to screen through `camera.scale`/`pan`
+  (see `LassoDeviceTest.stylus`). A finished stroke is handed over after `waitForIdle`; use
+  `waitUntil`. The wet layer is an `InProgressShapesView` (ink 1.0.0), not `InProgressStrokesView`.
 - Opening a note: `EditorViewModel` publishes the row first (`loaded = true`), then `loadInk`
   streams strokes in growing batches via `InkCodec.parse` + `decodeStroke` in parallel, appending
   to `strokes`. `inkLoaded` gates ink encoding in `saveNow` and the empty-note discard; never
