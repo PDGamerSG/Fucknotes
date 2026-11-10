@@ -24,6 +24,14 @@ import kotlin.math.min
  * page of text from glaring in a dark room.
  */
 object NightPalette {
+    fun paper(pitchBlack: Boolean): Color = if (pitchBlack) Color.Black else paper
+
+    fun imageMatrix(pitchBlack: Boolean): FloatArray = if (!pitchBlack) imageMatrix else blackImageMatrix
+
+    private val blackImageMatrix: FloatArray by lazy {
+        imageMatrix.copyOf().apply { this[4] -= 24f; this[9] -= 28f; this[14] -= 36f }
+    }
+
     /** The sheet, a dark slate rather than black: enough depth for the chrome to float on. */
     val paper: Color = Color(0xFF181C24)
 

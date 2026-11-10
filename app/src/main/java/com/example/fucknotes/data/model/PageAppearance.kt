@@ -10,13 +10,14 @@ package com.example.fucknotes.data.model
 enum class PageAppearance {
     FOLLOW,
     LIGHT,
-    DARK;
+    DARK,
+    PITCH_BLACK;
 
     /** Night colours or not, given the app-wide setting this note may be following. */
     fun isDark(appDarkReader: Boolean): Boolean = when (this) {
         FOLLOW -> appDarkReader
         LIGHT -> false
-        DARK -> true
+        DARK, PITCH_BLACK -> true
     }
 
     companion object {

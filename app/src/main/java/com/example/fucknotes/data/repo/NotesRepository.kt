@@ -1,6 +1,7 @@
 package com.example.fucknotes.data.repo
 
-import androidx.room.withTransaction
+import androidx.room.immediateTransaction
+import androidx.room.useWriterConnection
 import com.example.fucknotes.data.db.AppDatabase
 import com.example.fucknotes.data.db.AttachmentEntity
 import com.example.fucknotes.data.db.FolderEntity
@@ -23,6 +24,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
 
+/** Keeps multi-table writes atomic on Room's native SQLite driver. */
+private suspend fun <R> AppDatabase.writeTransaction(block: suspend () -> R): R =
+    useWriterConnection { connection -> connection.immediateTransaction { block() } }
+
 /** Single funnel for every read and write the UI performs. */
 class NotesRepository(private val db: AppDatabase) {
 
@@ -44,7 +49,7 @@ class NotesRepository(private val db: AppDatabase) {
 
     suspend fun createImportedNotebook(
         title: String, folderId: Long?, page: PageSpec, backgrounds: List<AttachmentEntity>,
-    ): Long = db.withTransaction {
+    ): Long = db.writeTransaction {
         val id = createNote(NoteType.NOTEBOOK, folderId, title, paperStyle = PaperStyle.PLAIN,
             pageSpec = page, pageCount = backgrounds.size, pagesExplicitlyCreated = true)
         backgrounds.forEach { attachments.insert(it.copy(noteId = id)) }
@@ -78,7 +83,7 @@ class NotesRepository(private val db: AppDatabase) {
 
     /** Inserts a note that came back from an editable PDF, with its images and tags. */
     suspend fun restoreNote(note: NoteEntity, images: List<AttachmentEntity>, tagNames: List<String>): Long =
-        db.withTransaction {
+        db.writeTransaction {
             val id = notes.insert(note.copy(id = 0))
             images.forEach { attachments.insert(it.copy(id = 0, noteId = id)) }
             tagNames.forEach { addTagToNote(id, it) }
@@ -90,7 +95,7 @@ class NotesRepository(private val db: AppDatabase) {
      * images (old ones go, since the file carries the full set) and the tags.
      */
     suspend fun replaceNoteContent(note: NoteEntity, images: List<AttachmentEntity>, tagNames: List<String>) =
-        db.withTransaction {
+        db.writeTransaction {
             notes.update(note)
             attachments.forNote(note.id).filter { it.type == AttachmentType.IMAGE }.forEach { old ->
                 attachments.delete(old.id)
@@ -262,7 +267,7 @@ class NotesRepository(private val db: AppDatabase) {
      * been squeezed together by earlier moves, every note is renumbered with a wide step first.
      * Only `position` changes: moving a note is not editing it.
      */
-    suspend fun moveNote(id: Long, beforeId: Long?, afterId: Long?) = db.withTransaction {
+    suspend fun moveNote(id: Long, beforeId: Long?, afterId: Long?) = db.writeTransaction {
         var target = NotePositions.between(positionOf(beforeId), positionOf(afterId))
         if (target == null) {
             renumberAll()
@@ -278,7 +283,7 @@ class NotesRepository(private val db: AppDatabase) {
      * Switching from a live sort to manual must not shuffle the shelf under the finger, so the
      * displayed sequence is written as positions first; a drag can then move within it.
      */
-    suspend fun adoptOrder(ids: List<Long>) = db.withTransaction {
+    suspend fun adoptOrder(ids: List<Long>) = db.writeTransaction {
         ids.forEachIndexed { index, id -> notes.setPosition(id, index.toLong() * NotePositions.STEP) }
     }
 

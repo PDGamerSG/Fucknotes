@@ -82,6 +82,7 @@ fun ToolButton(
      * that has been cut. Defaults to a ring of air equal to the pen swatches' own.
      */
     discSize: Dp = size - 8.dp,
+    tint: Color? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
     Box(
@@ -98,8 +99,8 @@ fun ToolButton(
             modifier = Modifier.size(iconSize),
             tint = when {
                 !enabled -> scheme.onSurfaceVariant.copy(alpha = 0.35f)
-                selected -> scheme.primary
-                else -> scheme.onSurfaceVariant
+                selected -> tint ?: scheme.primary
+                else -> tint ?: scheme.onSurfaceVariant
             },
         )
     }

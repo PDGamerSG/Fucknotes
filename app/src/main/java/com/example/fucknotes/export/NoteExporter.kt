@@ -236,7 +236,8 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
         dark: Boolean,
         firstPageNumber: Int,
     ): Int {
-        val background = if (dark) Color.parseColor("#12131A") else Color.WHITE
+        val background = if (dark && note.appearance == com.example.fucknotes.data.model.PageAppearance.PITCH_BLACK) Color.BLACK
+            else if (dark) Color.parseColor("#12131A") else Color.WHITE
         val ink = if (dark) Color.parseColor("#E8E8EF") else Color.parseColor("#1B1B1F")
         val faint = if (dark) Color.parseColor("#2A2C36") else Color.parseColor("#E4E4EA")
         val bodyPaint = TextPaint().apply {
@@ -320,7 +321,8 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
         firstPageNumber: Int,
     ): Int {
         var pageNumber = firstPageNumber
-        val background = if (dark) Color.parseColor("#12131A") else Color.WHITE
+        val background = if (dark && note.appearance == com.example.fucknotes.data.model.PageAppearance.PITCH_BLACK) Color.BLACK
+            else if (dark) Color.parseColor("#12131A") else Color.WHITE
         val faint = if (dark) Color.parseColor("#2A2C36") else Color.parseColor("#E4E4EA")
         attachments.filter { it.type == AttachmentType.IMAGE && it.pageIndex == null }.forEach { attachment ->
             val info = PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNumber++).create()
@@ -405,7 +407,7 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
         // image through the night matrix and every stroke in its night colour. Drawing the stored
         // ink as is onto a dark sheet left black handwriting invisible.
         val background = when {
-            dark -> NightPalette.paper.toArgb()
+            dark -> NightPalette.paper(note.appearance == com.example.fucknotes.data.model.PageAppearance.PITCH_BLACK).toArgb()
             note.colorArgb != 0 -> note.colorArgb
             else -> Color.WHITE
         }
@@ -427,7 +429,7 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
             val bitmap = MediaStore.decodeImage(File(image.path))
             try {
                 canvas.drawBitmap(bitmap, null, android.graphics.RectF(image.pageX, image.pageY,
-                    image.pageX + image.pageWidth, image.pageY + image.pageHeight), imagePaint(dark))
+                    image.pageX + image.pageWidth, image.pageY + image.pageHeight), imagePaint(dark, note.appearance == com.example.fucknotes.data.model.PageAppearance.PITCH_BLACK))
             } finally { bitmap.recycle() }
         }
         canvas.restore()
@@ -503,7 +505,8 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
         dark: Boolean,
         pageIndex: Int,
     ) {
-        val background = if (dark) Color.parseColor("#12131A") else Color.WHITE
+        val background = if (dark && note.appearance == com.example.fucknotes.data.model.PageAppearance.PITCH_BLACK) Color.BLACK
+            else if (dark) Color.parseColor("#12131A") else Color.WHITE
         val ink = if (dark) Color.parseColor("#E8E8EF") else Color.parseColor("#1B1B1F")
         val faint = if (dark) Color.parseColor("#2A2C36") else Color.parseColor("#E4E4EA")
 
@@ -546,7 +549,8 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
         }
 
         // Ink sits on top of the text, matching how the editor layers them.
-        drawInk(canvas, repo.inkOf(note), y + 24f, attachments, PageSpec.decode(note.pageFormat), dark)
+        drawInk(canvas, repo.inkOf(note), y + 24f, attachments, PageSpec.decode(note.pageFormat), dark,
+            note.appearance == com.example.fucknotes.data.model.PageAppearance.PITCH_BLACK)
     }
 
     private fun drawWrapped(canvas: Canvas, text: String, paint: TextPaint, top: Float, maxLines: Int = Int.MAX_VALUE): Float {
@@ -617,7 +621,7 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
      * past 1:1, which keeps small sketches at their natural size instead of blowing them up.
      */
     private fun drawInk(canvas: Canvas, strokes: List<InkStroke>, bodyTop: Float,
-        attachments: List<AttachmentEntity> = emptyList(), spec: PageSpec = PageSpec.Default, dark: Boolean = false) {
+        attachments: List<AttachmentEntity> = emptyList(), spec: PageSpec = PageSpec.Default, dark: Boolean = false, pitchBlack: Boolean = false) {
         val images = attachments.filter { it.pageIndex != null }
         if (strokes.isEmpty() && images.isEmpty()) return
 
@@ -662,7 +666,7 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
             try {
                 val y = NotebookLayout.topOf(image.pageIndex ?: 0, spec) + image.pageY
                 canvas.drawBitmap(bitmap, null, android.graphics.RectF(image.pageX, y,
-                    image.pageX + image.pageWidth, y + image.pageHeight), imagePaint(dark))
+                    image.pageX + image.pageWidth, y + image.pageHeight), imagePaint(dark, pitchBlack))
             } finally { bitmap.recycle() }
         }
         strokes.forEach { inkStroke ->
@@ -696,8 +700,8 @@ class NoteExporter(private val context: Context, private val repo: NotesReposito
     }
 
     /** Bitmap paint for a page image: filtered, and through the night matrix on a dark export. */
-    private fun imagePaint(dark: Boolean): Paint = Paint(Paint.FILTER_BITMAP_FLAG).apply {
-        if (dark) colorFilter = ColorMatrixColorFilter(NightPalette.imageMatrix)
+    private fun imagePaint(dark: Boolean, pitchBlack: Boolean = false): Paint = Paint(Paint.FILTER_BITMAP_FLAG).apply {
+        if (dark) colorFilter = ColorMatrixColorFilter(NightPalette.imageMatrix(pitchBlack))
     }
 
     // ---- sharing -----------------------------------------------------------

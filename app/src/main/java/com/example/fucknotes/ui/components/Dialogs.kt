@@ -136,14 +136,16 @@ fun ColorPickerDialog(
     selected: Int,
     onDismiss: () -> Unit,
     onPick: (Int) -> Unit,
+    title: String = "Note colour",
+    colors: List<Int> = NoteColors,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Note colour") },
+        title = { Text(title) },
         text = {
             ImmersiveDialogWindow()
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                NoteColors.chunked(4).forEach { row ->
+                colors.chunked(4).forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         row.forEach { argb ->
                             val swatch = if (argb == 0) MaterialTheme.colorScheme.surfaceVariant else Color(argb)

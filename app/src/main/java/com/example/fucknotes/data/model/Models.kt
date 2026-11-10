@@ -53,6 +53,12 @@ enum class InkTool {
 
     /** Circle strokes to select them, then drag the circled part somewhere else. */
     LASSO,
+
+    /** Drag a clean vector shape using the current pen's colour and width. */
+    SHAPE,
+
+    /** Temporary red highlight, rendered only in memory and never stored in the note. */
+    LASER,
     ;
 
     val isBrush: Boolean get() = this == PEN || this == MARKER || this == HIGHLIGHTER || this == DASHED

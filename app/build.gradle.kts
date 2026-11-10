@@ -14,10 +14,11 @@ android {
         applicationId = "com.example.fucknotes"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = 3
+        versionName = "1.2.0"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = providers.gradleProperty("androidTestRunner")
+            .getOrElse("androidx.test.runner.AndroidJUnitRunner")
     }
 
     buildTypes {
@@ -90,6 +91,7 @@ dependencies {
 
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
+    implementation(libs.androidx.sqlite.bundled)
     ksp(libs.androidx.room.compiler)
 
     implementation(libs.androidx.datastore.preferences)

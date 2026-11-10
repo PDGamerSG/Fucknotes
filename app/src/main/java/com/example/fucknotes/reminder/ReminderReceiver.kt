@@ -1,11 +1,13 @@
 package com.example.fucknotes.reminder
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -32,13 +34,14 @@ class ReminderReceiver : BroadcastReceiver() {
         }
     }
 
+    // Retained for legacy alarms; the permission check always gates Android 13+ posting.
+    @SuppressLint("MissingPermission", "NotificationPermission")
     private fun notify(context: Context, noteId: Long, title: String) {
         if (noteId <= 0) return
-        val granted = ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.POST_NOTIFICATIONS,
-        ) == PackageManager.PERMISSION_GRANTED
-        if (!granted) return
+        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(
+                context, Manifest.permission.POST_NOTIFICATIONS,
+            ) != PackageManager.PERMISSION_GRANTED
+        ) return
 
         val open = PendingIntent.getActivity(
             context,

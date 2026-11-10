@@ -70,7 +70,7 @@ fun NewNotebookDialog(
     var draft by remember {
         mutableStateOf(NotebookDraft(title = initialTitle, appearance = PageAppearance.of(initialDark)))
     }
-    val dark = draft.appearance == PageAppearance.DARK
+    val dark = draft.appearance.isDark(initialDark)
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         ImmersiveDialogWindow()
@@ -103,6 +103,8 @@ fun NewNotebookDialog(
                     AppearanceRow(
                         dark = dark,
                         onChange = { draft = draft.copy(appearance = PageAppearance.of(it)) },
+                        pitchBlack = draft.appearance == PageAppearance.PITCH_BLACK,
+                        onPitchBlack = { draft = draft.copy(appearance = PageAppearance.PITCH_BLACK) },
                     )
 
                     Spacer(Modifier.height(14.dp))
@@ -113,7 +115,7 @@ fun NewNotebookDialog(
                     Spacer(Modifier.height(10.dp))
                     TemplatePicker(
                         selected = draft.paperStyle,
-                        paperColor = if (dark) NightPalette.paper else draft.paperColorArgb.paperColorOr(Color.White),
+                        paperColor = if (dark) NightPalette.paper(draft.appearance == PageAppearance.PITCH_BLACK) else draft.paperColorArgb.paperColorOr(Color.White),
                         lineColor = if (dark) NightPalette.rule else draft.lineColorArgb.paperColorOr(MaterialTheme.brand.tileBorder),
                         spacingDp = draft.spacingDp.toFloat(),
                         onPick = { draft = draft.copy(paperStyle = it) },
@@ -201,7 +203,7 @@ private fun NotebookSummary(
             modifier = Modifier
                 .width(104.dp)
                 .aspectRatio(draft.page.widthDp / draft.page.heightDp),
-            paperColor = if (dark) NightPalette.paper else draft.paperColorArgb.paperColorOr(Color.White),
+            paperColor = if (dark) NightPalette.paper(draft.appearance == PageAppearance.PITCH_BLACK) else draft.paperColorArgb.paperColorOr(Color.White),
             lineColor = if (dark) NightPalette.rule else draft.lineColorArgb.paperColorOr(MaterialTheme.brand.tileBorder),
             spacingDp = draft.spacingDp.toFloat(),
             zoom = 0.26f,

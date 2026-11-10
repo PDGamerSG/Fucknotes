@@ -26,6 +26,32 @@ import java.io.File
 /** Deferred device regression: imported pages must survive persistence and PDF export. */
 @RunWith(AndroidJUnit4::class)
 class PdfWorkflowTest {
+    @Test fun pitchBlackNotebookExportsBlackAndKeepsItsEditableAppearance() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
+        val repo = NotesRepository(db)
+        var exported: File? = null
+        try {
+            val id = repo.createNote(com.example.fucknotes.data.model.NoteType.NOTEBOOK, null,
+                "Black notebook", appearance = com.example.fucknotes.data.model.PageAppearance.PITCH_BLACK)
+            val note = requireNotNull(repo.getNote(id))
+            val file = NoteExporter(context, repo).export(note, ExportFormat.PDF, darkStyle = true, editable = true)
+            exported = file
+            PdfRenderer(ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)).use { pdf ->
+                pdf.openPage(0).use { page ->
+                    val bitmap = Bitmap.createBitmap(page.width, page.height, Bitmap.Config.ARGB_8888)
+                    try {
+                        page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                        assertEquals(Color.BLACK, bitmap.getPixel(20, 20))
+                    } finally { bitmap.recycle() }
+                }
+            }
+            val parts = com.example.fucknotes.export.EditablePdf.read(file)
+            val payload = requireNotNull(com.example.fucknotes.media.NoteRestorer.payloadOf(parts))
+            assertEquals("PITCH_BLACK", payload.appearance)
+        } finally { exported?.parentFile?.deleteRecursively(); db.close() }
+    }
+
     @Test fun legacyNotebookExportsEveryStoredPage() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()

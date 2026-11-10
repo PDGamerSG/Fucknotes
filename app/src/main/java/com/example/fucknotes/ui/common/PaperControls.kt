@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -22,6 +23,7 @@ import androidx.compose.material.icons.outlined.Crop32
 import androidx.compose.material.icons.outlined.CropPortrait
 import androidx.compose.material.icons.outlined.DarkMode
 import androidx.compose.material.icons.outlined.LightMode
+import androidx.compose.material.icons.outlined.NightsStay
 import androidx.compose.material.icons.outlined.UnfoldMore
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -196,35 +198,45 @@ private fun OrientationToggle(landscape: Boolean, onChange: (Boolean) -> Unit) {
 /**
  * Light or night pages for one note.
  *
- * Two choices and nothing in between: a notebook is either read in daylight colours or in the
- * night palette, and the app-wide setting only stands in for notes that never chose.
+ * Light, dark slate or pitch-black paper. The app-wide setting stands in for notes that never chose.
  */
 @Composable
-fun AppearanceRow(dark: Boolean, onChange: (Boolean) -> Unit, modifier: Modifier = Modifier) {
-    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+fun AppearanceRow(
+    dark: Boolean,
+    onChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    pitchBlack: Boolean = false,
+    onPitchBlack: (() -> Unit)? = null,
+) {
+    Column(modifier.fillMaxWidth()) {
         PaperSectionLabel("Mode")
-        Spacer(Modifier.width(14.dp))
+        Spacer(Modifier.height(8.dp))
         Row(
             Modifier
+                .fillMaxWidth()
                 .clip(RoundedCornerShape(Radii.chip))
                 .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(Radii.chip)),
         ) {
-            listOf(
-                Triple(false, Icons.Outlined.LightMode, "Light"),
-                Triple(true, Icons.Outlined.DarkMode, "Dark"),
-            ).forEach { (isDark, icon, label) ->
-                val active = dark == isDark
+            val choices = buildList {
+                add(Triple<Boolean?, _, _>(false, Icons.Outlined.LightMode, "Light"))
+                add(Triple<Boolean?, _, _>(true, Icons.Outlined.DarkMode, "Dark"))
+                if (onPitchBlack != null) add(Triple(null, Icons.Outlined.NightsStay, "Pitch black"))
+            }
+            choices.forEach { (isDark, icon, label) ->
+                val active = if (isDark == null) pitchBlack else !pitchBlack && dark == isDark
                 Row(
                     Modifier
+                        .weight(1f)
+                        .heightIn(min = 48.dp)
                         .background(if (active) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
-                        .clickable { onChange(isDark) }
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                        .clickable { if (isDark == null) onPitchBlack?.invoke() else onChange(isDark) }
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     val tint = if (active) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurfaceVariant
                     Icon(icon, contentDescription = null, modifier = Modifier.size(18.dp), tint = tint)
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(6.dp))
                     Text(
                         label,
                         style = MaterialTheme.typography.labelLarge,

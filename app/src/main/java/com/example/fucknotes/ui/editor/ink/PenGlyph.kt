@@ -78,4 +78,6 @@ fun penLabel(pen: PenPreset): String = when (pen.tool) {
     InkTool.ERASER -> "Eraser"
     InkTool.PAN -> "Pan"
     InkTool.LASSO -> "Select"
+    InkTool.SHAPE -> "Shapes"
+    InkTool.LASER -> "Temporary red highlighter"
 } + ", #${(pen.colorArgb and 0xFFFFFF).toString(16).padStart(6, '0')}, ${"%.1f".format(pen.widthDp)} point nib"

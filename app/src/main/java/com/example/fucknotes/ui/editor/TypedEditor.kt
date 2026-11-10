@@ -83,7 +83,7 @@ fun TypedEditor(
         modifier
             .fillMaxSize()
             .background(
-                if (state.darkReader) NightPalette.paper
+                if (state.darkReader) NightPalette.paper(state.pitchBlack)
                 else state.colorArgb.paperColorOr(MaterialTheme.colorScheme.background),
             )
     ) {
@@ -93,7 +93,7 @@ fun TypedEditor(
             placeholder = { Text("Title", style = MaterialTheme.typography.titleLarge) },
             textStyle = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
             singleLine = true,
-            colors = transparentTextFieldColors(),
+            colors = transparentTextFieldColors(state.darkReader),
             modifier = Modifier.fillMaxWidth(),
         )
 
@@ -113,7 +113,7 @@ fun TypedEditor(
                             value = state.body,
                             onValueChange = viewModel::setBody,
                             placeholder = { Text("Start writing…") },
-                            colors = transparentTextFieldColors(),
+                            colors = transparentTextFieldColors(state.darkReader),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .heightIn(min = 260.dp),
@@ -124,6 +124,7 @@ fun TypedEditor(
                             onPlay = onPlay,
                             onRemove = viewModel::removeAttachment,
                             darkReader = state.darkReader,
+                            pitchBlack = state.pitchBlack,
                         )
                         Spacer(Modifier.height(80.dp))
                     }
@@ -144,6 +145,7 @@ fun TypedEditor(
                 onPlay = onPlay,
                 onRemove = viewModel::removeAttachment,
                 darkReader = state.darkReader,
+                pitchBlack = state.pitchBlack,
             )
         }
         TagStrip(state = state, onAdd = onAddTag, onRemove = viewModel::removeTag)
@@ -152,7 +154,11 @@ fun TypedEditor(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun transparentTextFieldColors() = TextFieldDefaults.colors(
+internal fun transparentTextFieldColors(darkReader: Boolean = false) = TextFieldDefaults.colors(
+    focusedTextColor = if (darkReader) Color(0xFFE0E4EB) else MaterialTheme.colorScheme.onSurface,
+    unfocusedTextColor = if (darkReader) Color(0xFFE0E4EB) else MaterialTheme.colorScheme.onSurface,
+    focusedPlaceholderColor = if (darkReader) Color(0xFFADB5C3) else MaterialTheme.colorScheme.onSurfaceVariant,
+    unfocusedPlaceholderColor = if (darkReader) Color(0xFFADB5C3) else MaterialTheme.colorScheme.onSurfaceVariant,
     focusedContainerColor = Color.Transparent,
     unfocusedContainerColor = Color.Transparent,
     disabledContainerColor = Color.Transparent,
@@ -178,7 +184,7 @@ private fun ChecklistBody(state: EditorUiState, viewModel: EditorViewModel, cont
                     value = item.text,
                     onValueChange = { viewModel.updateChecklistItem(item.id, it) },
                     placeholder = { Text("List item") },
-                    colors = transparentTextFieldColors(),
+                    colors = transparentTextFieldColors(state.darkReader),
                     singleLine = true,
                     textStyle = MaterialTheme.typography.bodyLarge.copy(
                         textDecoration = if (item.checked) TextDecoration.LineThrough else null,
@@ -214,6 +220,7 @@ internal fun AttachmentStrip(
     modifier: Modifier = Modifier,
     /** Night colours for the pictures, like every other page image. */
     darkReader: Boolean = false,
+    pitchBlack: Boolean = false,
 ) {
     if (attachments.isEmpty()) return
     LazyRow(
@@ -230,7 +237,7 @@ internal fun AttachmentStrip(
                         painter = rememberAsyncImagePainter(attachment.path),
                         contentDescription = "Attached image",
                         contentScale = ContentScale.Crop,
-                        colorFilter = if (darkReader) ColorFilter.colorMatrix(ColorMatrix(NightPalette.imageMatrix)) else null,
+                        colorFilter = if (darkReader) ColorFilter.colorMatrix(ColorMatrix(NightPalette.imageMatrix(pitchBlack))) else null,
                         modifier = Modifier
                             .size(110.dp)
                             .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp)),

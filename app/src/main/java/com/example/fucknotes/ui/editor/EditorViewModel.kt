@@ -18,6 +18,7 @@ import kotlinx.coroutines.async
 import com.example.fucknotes.data.ink.InkCache
 import com.example.fucknotes.data.ink.InkStroke
 import com.example.fucknotes.data.ink.PageSpec
+import com.example.fucknotes.data.ink.InkShape
 import com.example.fucknotes.data.model.AttachmentType
 import com.example.fucknotes.data.model.ChecklistItem
 import com.example.fucknotes.data.model.DefaultPenTray
@@ -77,6 +78,7 @@ data class EditorUiState(
     // Ink editing state
     val inkMode: Boolean = false,
     val tool: InkTool = InkTool.PEN,
+    val shape: InkShape = InkShape.RECTANGLE,
     val pens: List<PenPreset> = DefaultPenTray,
     val selectedPen: Int = 0,
     /** Mirrors the app-wide finger mode without changing the selected stylus tool. */
@@ -105,6 +107,7 @@ data class EditorUiState(
 
     /** Night colours for this note's pages. */
     val darkReader: Boolean get() = appearance.isDark(appDarkReader)
+    val pitchBlack: Boolean get() = appearance == PageAppearance.PITCH_BLACK
 
     /** The pen the brush tools draw with. Falls back to the first slot if an index goes stale. */
     val activePen: PenPreset get() = pens.getOrElse(selectedPen) { DefaultPenTray.first() }
@@ -170,6 +173,9 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
 
     /** Set once the app-wide tray has arrived, so only the first copy may choose the tool. */
     private var trayRestored = false
+
+    /** The pen-tray slot to restore when the page-level highlighter shortcut is switched off. */
+    private var quickHighlighterPreviousPen: Int? = null
 
     /** Set when the ink changed, so an autosave triggered by typing does not re-encode the page. */
     private var inkDirty = false
@@ -399,6 +405,25 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
         }
     }
 
+    /** Toggles the page-level highlighter shortcut while preserving the brush the user had out. */
+    fun toggleQuickHighlighter() {
+        val current = _state.value
+        if (current.tool == InkTool.HIGHLIGHTER) {
+            val previous = quickHighlighterPreviousPen
+                ?.takeIf { index -> current.pens.getOrNull(index)?.tool?.let { it.isBrush && it != InkTool.HIGHLIGHTER } == true }
+            val fallback = current.pens.indexOfFirst { it.tool.isBrush && it.tool != InkTool.HIGHLIGHTER }
+            when {
+                previous != null -> selectPen(previous)
+                fallback >= 0 -> selectPen(fallback)
+                else -> setTool(InkTool.PEN)
+            }
+            quickHighlighterPreviousPen = null
+        } else {
+            quickHighlighterPreviousPen = current.selectedPen
+            setTool(InkTool.HIGHLIGHTER)
+        }
+    }
+
     /**
      * The double-tap swap: eraser out, then the pen back.
      *
@@ -447,8 +472,21 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
 
     /** Light or night pages for this note, kept with it like its paper. */
     fun setDarkPages(dark: Boolean) {
-        _state.value = _state.value.copy(appearance = PageAppearance.of(dark))
+        setPageAppearance(PageAppearance.of(dark))
+    }
+
+    fun setPageAppearance(appearance: PageAppearance) {
+        _state.value = _state.value.copy(appearance = appearance)
         scheduleSave()
+    }
+
+    fun selectShape(shape: InkShape) {
+        _state.value = _state.value.copy(tool = InkTool.SHAPE, shape = shape)
+    }
+
+    fun commitShape(stroke: Stroke, shape: InkShape) {
+        pushUndo()
+        applyStrokes(strokes + InkStroke(stroke, InkCodec.toolForStroke(stroke, InkTool.MARKER), shape))
     }
 
     /** Pins or releases the page scale for every ink note. */
@@ -518,6 +556,15 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
         val first = strokes.size
         applyStrokes(strokes + copies)
         return (first until first + copies.size).toSet()
+    }
+
+    /** Recolours selected vector strokes without changing their paths, tools, or shape metadata. */
+    fun recolorStrokes(indices: Set<Int>, colorArgb: Int) {
+        if (indices.isEmpty()) return
+        pushUndo()
+        applyStrokes(strokes.mapIndexed { index, stroke ->
+            if (index in indices) InkCodec.recolor(stroke, colorArgb) else stroke
+        })
     }
 
     fun undo() {

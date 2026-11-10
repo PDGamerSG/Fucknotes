@@ -34,7 +34,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -42,6 +41,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import com.example.fucknotes.data.model.NoteType
+import com.example.fucknotes.data.model.InkColors
 import com.example.fucknotes.data.model.PaperStyle
 import com.example.fucknotes.input.PenInputBus
 import com.example.fucknotes.export.ExportFormat
@@ -52,7 +52,7 @@ import com.example.fucknotes.ui.components.ColorPickerDialog
 import com.example.fucknotes.ui.components.ConfirmDialog
 import com.example.fucknotes.ui.components.TextPromptDialog
 import com.example.fucknotes.ui.editor.ink.DefaultRuleColor
-import com.example.fucknotes.ui.editor.ink.InkCamera
+import com.example.fucknotes.ui.editor.ink.rememberInkCamera
 import com.example.fucknotes.ui.editor.ink.InkSurface
 import com.example.fucknotes.ui.editor.ink.InkToolbar
 import com.example.fucknotes.ui.editor.tabs.EditorTabBar
@@ -97,9 +97,8 @@ private fun EditorContent(
     val player = remember { AudioPlayer() }
     var playing by remember { mutableStateOf<String?>(null) }
 
-    // Pan and zoom belong to the view, not the note, so the camera is remembered here.
-    val density = LocalDensity.current.density
-    val camera = remember(density) { InkCamera(density) }
+    // Keep page, pan and zoom through rotation without storing them in the note's content.
+    val camera = rememberInkCamera(state.noteId)
     val contentScroll = rememberScrollState()
 
     val isInkNote = state.type.isInk
@@ -109,6 +108,7 @@ private fun EditorContent(
 
     // Handed to the ink surface as a stable lambda so committing a stroke does not recompose it.
     val inkStrokes = remember(viewModel) { { viewModel.strokes } }
+    val typedLasso = remember(viewModel) { com.example.fucknotes.ui.editor.ink.LassoState() }
 
     var overflow by remember { mutableStateOf(false) }
     var showColor by remember { mutableStateOf(false) }
@@ -120,6 +120,9 @@ private fun EditorContent(
     var showRename by remember { mutableStateOf(false) }
     var showPdfExport by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var quickHighlighterVisible by rememberSaveable(state.noteId) { mutableStateOf(false) }
+    var showStrokeColor by remember { mutableStateOf(false) }
+    var recolorSelection by remember { mutableStateOf<Set<Int>>(emptySet()) }
     var pendingCameraPath by rememberSaveable(state.noteId) { mutableStateOf<String?>(null) }
 
     val pickImage = rememberLauncherForActivityResult(
@@ -280,6 +283,9 @@ private fun EditorContent(
                         onEditPen = viewModel::editPen, onSelectTool = viewModel::setTool,
                         onCycleChrome = { chrome = if (compact) EditorChrome.FULL else EditorChrome.COMPACT },
                         darkReader = state.darkReader,
+                        shape = state.shape, onSelectShape = viewModel::selectShape,
+                        canUndo = viewModel.canUndoInk,
+                        onUndo = { typedLasso.clear(); viewModel.undo() },
                     )
                 }
             } else if (!isInkNote) {
@@ -324,10 +330,15 @@ private fun EditorContent(
                     canRedo = viewModel.canRedoInk,
                     pageCount = { viewModel.pageCount },
                     onStrokesFinished = viewModel::commitStrokes,
+                    onShapeFinished = viewModel::commitShape,
+                    onSelectShape = viewModel::selectShape,
                     onErase = viewModel::eraseStrokes,
                     onToggleEraser = viewModel::toggleEraser,
                     onMoveStrokes = viewModel::moveStrokes,
                     onDuplicateStrokes = viewModel::duplicateStrokes,
+                    onLassoColor = { selection -> recolorSelection = selection; showStrokeColor = true },
+                    quickHighlighterVisible = quickHighlighterVisible,
+                    onToggleQuickHighlighter = viewModel::toggleQuickHighlighter,
                     onUndo = viewModel::undo,
                     onRedo = viewModel::redo,
                     onSelectPen = viewModel::selectPen,
@@ -366,6 +377,7 @@ private fun EditorContent(
                         onPaper = { showPaper = true },
                         onTags = { showTagDialog = true },
                         onRename = { showRename = true },
+                        onHighlighter = { quickHighlighterVisible = true },
                         onPdf = { showPdfExport = true },
                         onAddImage = { pickImage.launch(arrayOf("image/*")) },
                         onPageImages = { showPageImages = true },
@@ -410,6 +422,16 @@ private fun EditorContent(
                         pageColor = androidx.compose.ui.graphics.Color.Transparent,
                         darkReader = state.darkReader,
                         contentScroll = contentScroll,
+                        pitchBlack = state.pitchBlack,
+                        shape = state.shape, onShapeFinished = viewModel::commitShape,
+                        lasso = typedLasso, onMoveStrokes = viewModel::moveStrokes,
+                    )
+                    if (typedLasso.active) LassoActions(
+                        lasso = typedLasso, strokes = inkStrokes, camera = camera,
+                        onDelete = { viewModel.eraseStrokes(typedLasso.selection); typedLasso.clear() },
+                        onDuplicate = { typedLasso.selection = viewModel.duplicateStrokes(typedLasso.selection, 24f, 24f) },
+                        onColor = { recolorSelection = typedLasso.selection; showStrokeColor = true },
+                        onDismiss = typedLasso::clear,
                     )
                 }
             }
@@ -424,6 +446,21 @@ private fun EditorContent(
         )
     }
 
+    if (showStrokeColor) {
+        ColorPickerDialog(
+            selected = recolorSelection.firstOrNull()?.let { viewModel.strokes.getOrNull(it) }
+                ?.stroke?.brush?.colorIntArgb?.or(0xFF000000.toInt()) ?: state.activePen.colorArgb,
+            title = "Stroke colour",
+            colors = InkColors,
+            onDismiss = { showStrokeColor = false },
+            onPick = {
+                viewModel.recolorStrokes(recolorSelection, it)
+                recolorSelection = emptySet()
+                showStrokeColor = false
+            },
+        )
+    }
+
     if (showPaper) {
         PaperSheet(
             style = state.paperStyle,
@@ -434,6 +471,8 @@ private fun EditorContent(
             notebook = state.type == NoteType.NOTEBOOK,
             dark = state.darkReader,
             onDark = viewModel::setDarkPages,
+            pitchBlack = state.pitchBlack,
+            onPitchBlack = { viewModel.setPageAppearance(com.example.fucknotes.data.model.PageAppearance.PITCH_BLACK) },
             onStyle = viewModel::setPaperStyle,
             onPaperColor = viewModel::setColor,
             onLineColor = viewModel::setLineColor,
@@ -456,6 +495,7 @@ private fun EditorContent(
     if (showPages) {
         PagesSheet(
             darkReader = state.darkReader,
+            pitchBlack = state.pitchBlack,
             pageCount = viewModel.pageCount,
             currentPage = camera.pageAtCentre(state.page)
                 .coerceIn(0, (viewModel.pageCount - 1).coerceAtLeast(0)),
@@ -561,10 +601,12 @@ private fun EditorMenu(
     onOpenNote: (Long) -> Unit,
     onRename: () -> Unit = {},
     onPdf: () -> Unit = {},
+    onHighlighter: (() -> Unit)? = null,
 ) {
     EditorOverflowMenu(
         expanded = expanded,
         onRename = { onDismiss(); onRename() },
+        onHighlighter = onHighlighter?.let { action -> { onDismiss(); action() } },
         onDismiss = onDismiss,
         onColor = { onDismiss(); onColor() },
         onPaper = { onDismiss(); onPaper() },
@@ -591,5 +633,10 @@ private fun EditorMenu(
         onDelete = { onDismiss(); onDelete() },
         darkReader = state.darkReader,
         onToggleDarkReader = { onDismiss(); viewModel.toggleDarkReader() },
+        pitchBlack = state.pitchBlack,
+        onTogglePitchBlack = {
+            onDismiss()
+            viewModel.setPageAppearance(if (state.pitchBlack) com.example.fucknotes.data.model.PageAppearance.DARK else com.example.fucknotes.data.model.PageAppearance.PITCH_BLACK)
+        },
     )
 }

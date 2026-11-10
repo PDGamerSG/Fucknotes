@@ -1,5 +1,6 @@
 package com.example.fucknotes
 
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.os.Bundle
 import android.view.InputDevice
@@ -138,6 +139,8 @@ class MainActivity : FragmentActivity() {
     }
 
     /** Xiaomi Pen buttons arrive as Android stylus key events on some firmware versions. */
+    // ComponentActivity's library annotation is broader than this public Android override.
+    @SuppressLint("RestrictedApi")
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val button = penButtonFor(event)
         val device = event.device ?: InputDevice.getDevice(event.deviceId)
@@ -214,6 +217,8 @@ class MainActivity : FragmentActivity() {
             (isPenMouseSource && event.actionMasked == MotionEvent.ACTION_DOWN && state != 0)
     }
 
+    // Only pen-sourced navigation keys reach this mapping; gestures use Compose BackHandler.
+    @SuppressLint("GestureBackNavigation")
     private fun penButtonFor(event: KeyEvent): PenButton? = when (event.keyCode) {
         KeyEvent.KEYCODE_STYLUS_BUTTON_PRIMARY -> PenButton.PRIMARY
         KeyEvent.KEYCODE_STYLUS_BUTTON_SECONDARY -> PenButton.SECONDARY

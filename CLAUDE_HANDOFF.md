@@ -1,8 +1,27 @@
 # Claude handoff: Fucknotes editor and tablet work
 
+## 1.2.0 editor release — 2026-11-10
+
+The project is now available in `/Users/admin/Data/Company Project/Projects/Fucknotes`; the empty
+workspace was recovered from the complete checkout at `/Users/admin/Data/untitled folder/fucknotes`.
+Release notes are in `docs/releases/v1.2.0.md`. Version code is 3.
+
+`PageAppearance.PITCH_BLACK` uses the existing stored string column. Shapes are explicit
+(`InkTool.SHAPE`, `EditorUiState.shape`, `ShapeRecognizer.dragPoints`), never automatic changes to
+handwriting. `InkTool.LASER` uses `TemporaryHighlighter.kt`'s in-memory overlay and monotonic clock;
+it must never enter the note's strokes or undo history. Shapes and lasso finalize on the owning
+pointer's release before palm/touch early returns. A new stylus contact chooses its tool even if
+the palm stays down. Narrow toolbars use two rows; compact mode keeps Undo visible.
+Generated shape markers use Ink's raw input model at creation and decode. The stock marker's
+sliding-window smoothing rounds rectangles and shortens arrowheads; preserve the exact geometry.
+
+The Android 15 emulator is available through T3 Code's Device panel. Use the device tools and the
+device-bound `agent-device` command for UI actions; the older adb UI examples below are historical.
+The signing certificate matches the published 1.1.0 APK. Never clear app data or uninstall.
+
 This file records the state of the current implementation so the next agent can continue without
 repeating the investigation. The remote is `https://github.com/PDGamerSG/Fucknotes.git`, branch
-`main`. The latest pass was done on a Mac (`/Users/admin/Data/untitled folder/fucknotes`) with the
+`main`. The earlier tablet pass was done on a Mac (`/Users/admin/Data/untitled folder/fucknotes`) with the
 Xiaomi tablet attached over USB; earlier passes were done on Windows.
 
 ## User requirements handled in the latest pass

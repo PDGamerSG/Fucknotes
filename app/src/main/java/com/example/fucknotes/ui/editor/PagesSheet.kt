@@ -67,6 +67,7 @@ fun PagesSheet(
     onDismiss: () -> Unit,
     /** Thumbnails follow the page: night colours when dark mode is on. */
     darkReader: Boolean = false,
+    pitchBlack: Boolean = false,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         ImmersiveDialogWindow()
@@ -100,6 +101,7 @@ fun PagesSheet(
                         attachments = attachments.filter { it.pageIndex == index },
                         onClick = { onGoToPage(index) },
                         darkReader = darkReader,
+                        pitchBlack = pitchBlack,
                     )
                 }
             }
@@ -120,6 +122,7 @@ private fun PageThumb(
     attachments: List<com.example.fucknotes.data.db.AttachmentEntity>,
     onClick: () -> Unit,
     darkReader: Boolean = false,
+    pitchBlack: Boolean = false,
 ) {
     val renderer = remember { CanvasStrokeRenderer.create() }
     val images = com.example.fucknotes.ui.editor.ink.rememberPageImages(attachments, 512)
@@ -141,7 +144,7 @@ private fun PageThumb(
             PaperPreview(
                 style = style,
                 modifier = Modifier.fillMaxSize(),
-                paperColor = if (darkReader) NightPalette.paper else paperColorArgb.paperColorOr(Color.White),
+                paperColor = if (darkReader) NightPalette.paper(pitchBlack) else paperColorArgb.paperColorOr(Color.White),
                 lineColor = if (darkReader) NightPalette.rule else lineColorArgb.paperColorOr(MaterialTheme.brand.tileBorder),
                 spacingDp = spacingDp,
                 zoom = 0.16f,
@@ -162,7 +165,7 @@ private fun PageThumb(
                     native.concat(transform)
                     attachments.forEach { image ->
                         images[image.id]?.let { bitmap ->
-                            com.example.fucknotes.ui.editor.ink.drawPageImage(native, image, bitmap, page, darkReader = darkReader)
+                            com.example.fucknotes.ui.editor.ink.drawPageImage(native, image, bitmap, page, darkReader = darkReader, pitchBlack = pitchBlack)
                         }
                     }
                     strokes.forEach { inkStroke ->

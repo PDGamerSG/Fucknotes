@@ -7,6 +7,7 @@ import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.fucknotes.ui.editor.tabs.EditorTabBar
 import com.example.fucknotes.ui.editor.tabs.OpenTabs
@@ -37,11 +38,11 @@ class EditorTabBarTest {
         }
         compose.onNodeWithContentDescription("Lecture tab").assertIsDisplayed().assertIsNotSelected()
         compose.onNodeWithContentDescription("Untitled tab").assertIsDisplayed().assertIsSelected()
-        compose.onNodeWithContentDescription("Scratch tab").assertIsDisplayed().assertIsNotSelected()
+        compose.onNodeWithContentDescription("Scratch tab").performScrollTo().assertIsDisplayed().assertIsNotSelected()
 
         compose.onNodeWithContentDescription("Scratch tab").performClick()
-        compose.onNodeWithContentDescription("Close Lecture").performClick()
-        compose.onNodeWithContentDescription("Open another note").performClick()
+        compose.onNodeWithContentDescription("Close Lecture").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Open another note").performScrollTo().performClick()
         compose.runOnIdle {
             assertEquals(listOf(3L), selected)
             assertEquals(listOf(1L), closed)

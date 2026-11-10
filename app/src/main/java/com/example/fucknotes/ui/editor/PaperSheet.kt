@@ -53,6 +53,8 @@ fun PaperSheet(
     onSpacing: (Int) -> Unit,
     onPage: (PageSpec) -> Unit,
     onDismiss: () -> Unit,
+    pitchBlack: Boolean = false,
+    onPitchBlack: () -> Unit = {},
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         ImmersiveDialogWindow()
@@ -60,12 +62,12 @@ fun PaperSheet(
             Text("Paper", style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(16.dp))
 
-            AppearanceRow(dark = dark, onChange = onDark)
+            AppearanceRow(dark = dark, onChange = onDark, pitchBlack = pitchBlack, onPitchBlack = onPitchBlack)
             Spacer(Modifier.height(18.dp))
 
             TemplatePicker(
                 selected = style,
-                paperColor = if (dark) NightPalette.paper else paperColorArgb.paperColorOr(Color.White),
+                paperColor = if (dark) NightPalette.paper(pitchBlack) else paperColorArgb.paperColorOr(Color.White),
                 lineColor = if (dark) NightPalette.rule else lineColorArgb.paperColorOr(MaterialTheme.brand.tileBorder),
                 spacingDp = spacingDp.takeIf { it > 0 }?.toFloat() ?: 24f,
                 onPick = onStyle,

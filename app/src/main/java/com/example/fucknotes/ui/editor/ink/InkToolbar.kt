@@ -2,6 +2,9 @@ package com.example.fucknotes.ui.editor.ink
 
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -14,6 +17,15 @@ import androidx.compose.material.icons.outlined.Gesture
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.PanTool
+import androidx.compose.material.icons.outlined.Category
+import androidx.compose.material.icons.outlined.Highlight
+import androidx.compose.material.icons.automirrored.outlined.Undo
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Text
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.graphics.Color
+import com.example.fucknotes.data.ink.InkShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -59,118 +71,159 @@ fun InkToolbar(
     modifier: Modifier = Modifier,
     /** Swatches show the colour each pen will actually leave on a night page. */
     darkReader: Boolean = false,
+    shape: InkShape = InkShape.RECTANGLE,
+    onSelectShape: (InkShape) -> Unit = {},
+    canUndo: Boolean = false,
+    onUndo: () -> Unit = {},
 ) {
     var editingPen by remember { mutableIntStateOf(-1) }
+    var shapesOpen by remember { mutableStateOf(false) }
 
-    // Four pens, two highlighters and four fixed controls; only the swatches scroll on phones.
-    // 4 dp of bar beyond the 48 dp targets, each of which keeps 4 dp of its own air around its
-    // disc — so the eraser's halo, the lock's halo and a selected pen's ring all sit the same
-    // 8 dp in from the bar's rounded ends.
-    FloatingPanel(modifier.widthIn(max = 544.dp)) {
+    val tools: @Composable () -> Unit = {
+        ToolButton(icon = EraserIcon, label = "Eraser", selected = tool == InkTool.ERASER,
+            onClick = { onSelectTool(InkTool.ERASER) }, size = 48.dp)
+        ToolButton(icon = Icons.Outlined.HighlightAlt, label = "Select: circle strokes to move them",
+            selected = tool == InkTool.LASSO, onClick = { onSelectTool(InkTool.LASSO) }, size = 48.dp)
+        ToolButton(
+            icon = fingerModeIcon(fingerInputMode),
+            label = "Finger input: ${fingerInputMode.label}. Tap for ${fingerInputMode.next().label}",
+            modifier = Modifier.semantics { stateDescription = fingerInputMode.description },
+            onClick = { onFingerInputMode(fingerInputMode.next()) }, size = 48.dp,
+        )
+        Box {
+            ToolButton(
+                icon = Icons.Outlined.Category, label = "Shapes", selected = tool == InkTool.SHAPE,
+                modifier = Modifier.semantics { stateDescription = shape.label },
+                onClick = { shapesOpen = true }, size = 48.dp,
+            )
+            DropdownMenu(expanded = shapesOpen, onDismissRequest = { shapesOpen = false }) {
+                InkShape.entries.forEach { choice ->
+                    DropdownMenuItem(text = { Text(choice.label) },
+                        onClick = { shapesOpen = false; onSelectShape(choice) })
+                }
+            }
+        }
+        ToolButton(
+            icon = Icons.Outlined.Highlight, label = "Temporary red highlighter (fades after 2.5 seconds)",
+            selected = tool == InkTool.LASER, tint = Color(0xFFE84158),
+            onClick = { onSelectTool(InkTool.LASER) }, size = 48.dp,
+        )
+    }
+    val lock: @Composable () -> Unit = {
+        ToolButton(
+            icon = if (chrome == EditorChrome.FULL) Icons.Outlined.LockOpen else Icons.Outlined.Lock,
+            label = chrome.lockLabel, selected = chrome != EditorChrome.FULL,
+            onClick = onCycleChrome, size = 48.dp,
+        )
+    }
+    val undo: @Composable () -> Unit = {
+        if (chrome == EditorChrome.COMPACT) ToolButton(
+            icon = Icons.AutoMirrored.Outlined.Undo, label = "Undo",
+            enabled = canUndo, onClick = onUndo, size = 48.dp,
+        )
+    }
+    val tray: @Composable (Modifier) -> Unit = { trayModifier ->
+        val penSlots = pens.withIndex().filter { it.value.tool == InkTool.PEN }.take(4)
+        val highlighterSlots = pens.withIndex().filter { it.value.tool == InkTool.HIGHLIGHTER }.take(2)
+        // Preserve a selected legacy slot without adding a fifth pen to the bar.
+        val selected = pens.getOrNull(selectedPen)
+        val visiblePens = if (selected?.tool == InkTool.PEN && penSlots.none { it.index == selectedPen }) {
+            penSlots.take(3) + IndexedValue(selectedPen, selected)
+        } else penSlots
         Row(
-            Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+            trayModifier.horizontalScroll(rememberScrollState()).height(48.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            ToolButton(
-                icon = EraserIcon,
-                label = "Eraser",
-                selected = tool == InkTool.ERASER,
-                onClick = { onSelectTool(InkTool.ERASER) },
-                size = 48.dp,
-            )
-            ToolButton(
-                icon = Icons.Outlined.HighlightAlt,
-                label = "Select: circle strokes to move them",
-                selected = tool == InkTool.LASSO,
-                onClick = { onSelectTool(InkTool.LASSO) },
-                size = 48.dp,
-            )
-            ToolButton(
-                icon = fingerModeIcon(fingerInputMode),
-                label = "Finger input: ${fingerInputMode.label}. Tap for ${fingerInputMode.next().label}",
-                modifier = Modifier.semantics { stateDescription = fingerInputMode.description },
-                onClick = { onFingerInputMode(fingerInputMode.next()) },
-                size = 48.dp,
-            )
-            ToolDivider()
-
-            val penSlots = pens.withIndex().filter { it.value.tool == InkTool.PEN }.take(4)
-            val highlighterSlots = pens.withIndex().filter { it.value.tool == InkTool.HIGHLIGHTER }.take(2)
-            // Preserve a selected legacy slot without adding a fifth pen to the bar.
-            val selected = pens.getOrNull(selectedPen)
-            val visiblePens = if (selected?.tool == InkTool.PEN && penSlots.none { it.index == selectedPen }) {
-                penSlots.take(3) + IndexedValue(selectedPen, selected)
-            } else penSlots
-            Row(
-                Modifier.weight(1f, fill = false).horizontalScroll(rememberScrollState()).height(48.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                visiblePens.forEach { slot ->
-                    val slotIndex = slot.index
-                    val slotPen = slot.value
-                    Box {
-                        PenGlyph(
-                            pen = slotPen,
-                            active = tool == InkTool.PEN && selectedPen == slotIndex,
-                            onClick = {
-                                if (tool == InkTool.PEN && selectedPen == slotIndex) editingPen = slotIndex
-                                else onSelectPen(slotIndex)
-                            },
+            visiblePens.forEach { slot ->
+                val slotIndex = slot.index
+                val slotPen = slot.value
+                Box {
+                    PenGlyph(
+                        pen = slotPen,
+                        active = tool == InkTool.PEN && selectedPen == slotIndex,
+                        onClick = {
+                            if (tool == InkTool.PEN && selectedPen == slotIndex) editingPen = slotIndex
+                            else onSelectPen(slotIndex)
+                        },
+                        darkReader = darkReader,
+                    )
+                    if (editingPen == slotIndex && slotIndex >= 0) {
+                        PenEditorPopup(
+                            pen = pens.getOrNull(slotIndex) ?: slotPen,
+                            onDismiss = { editingPen = -1 },
+                            onChange = { nextColor, width -> onEditPen(slotIndex, nextColor, width) },
                             darkReader = darkReader,
                         )
-                        if (editingPen == slotIndex && slotIndex >= 0) {
-                            PenEditorPopup(
-                                pen = pens.getOrNull(slotIndex) ?: slotPen,
-                                onDismiss = { editingPen = -1 },
-                                onChange = { nextColor, width -> onEditPen(slotIndex, nextColor, width) },
-                                darkReader = darkReader,
-                            )
-                        }
-                    }
-                }
-
-                // Two dedicated highlighter choices stay visible in compact mode as well. Each is
-                // a real tray slot, so its translucent width and colour persist independently.
-                if (highlighterSlots.isNotEmpty()) ToolDivider()
-                highlighterSlots.forEach { slot ->
-                    val slotIndex = slot.index
-                    val slotPen = slot.value
-                    Box {
-                        PenGlyph(
-                            pen = slotPen,
-                            active = tool == InkTool.HIGHLIGHTER && selectedPen == slotIndex,
-                            highlighter = true,
-                            onClick = {
-                                if (tool == InkTool.HIGHLIGHTER && selectedPen == slotIndex) editingPen = slotIndex
-                                else onSelectPen(slotIndex)
-                            },
-                            darkReader = darkReader,
-                        )
-                        if (editingPen == slotIndex) {
-                            PenEditorPopup(
-                                pen = pens.getOrNull(slotIndex) ?: slotPen,
-                                onDismiss = { editingPen = -1 },
-                                onChange = { nextColor, width -> onEditPen(slotIndex, nextColor, width) },
-                                darkReader = darkReader,
-                            )
-                        }
                     }
                 }
             }
 
-            ToolDivider()
+            // Two dedicated highlighter choices stay visible in compact mode as well. Each is
+            // a real tray slot, so its translucent width and colour persist independently.
+            if (highlighterSlots.isNotEmpty()) ToolDivider()
+            highlighterSlots.forEach { slot ->
+                val slotIndex = slot.index
+                val slotPen = slot.value
+                Box {
+                    PenGlyph(
+                        pen = slotPen,
+                        active = tool == InkTool.HIGHLIGHTER && selectedPen == slotIndex,
+                        highlighter = true,
+                        onClick = {
+                            if (tool == InkTool.HIGHLIGHTER && selectedPen == slotIndex) editingPen = slotIndex
+                            else onSelectPen(slotIndex)
+                        },
+                        darkReader = darkReader,
+                    )
+                    if (editingPen == slotIndex) {
+                        PenEditorPopup(
+                            pen = pens.getOrNull(slotIndex) ?: slotPen,
+                            onDismiss = { editingPen = -1 },
+                            onChange = { nextColor, width -> onEditPen(slotIndex, nextColor, width) },
+                            darkReader = darkReader,
+                        )
+                    }
+                }
+            }
+        }
 
-            // The lock stays at the end of the bar in every state so the page can always be
-            // cleared — or restored — from the same spot.
-            ToolButton(
-                icon = if (chrome == EditorChrome.FULL) Icons.Outlined.LockOpen else Icons.Outlined.Lock,
-                label = chrome.lockLabel,
-                selected = chrome != EditorChrome.FULL,
-                onClick = onCycleChrome,
-                size = 48.dp,
-            )
+    }
+    // Narrow windows keep tools on one row and pen swatches on the next. Select, the finger
+    // setting and the lock stay reachable even after the swatches have been scrolled.
+    BoxWithConstraints(modifier.widthIn(max = 736.dp)) {
+        val narrow = maxWidth < 620.dp
+        FloatingPanel {
+            Column(Modifier.padding(horizontal = 4.dp, vertical = 4.dp)) {
+                if (narrow) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        tools()
+                        Spacer(Modifier.weight(1f))
+                        lock()
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        undo()
+                        tray(Modifier.weight(1f))
+                    }
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        undo()
+                        tools()
+                        ToolDivider()
+                        tray(Modifier.weight(1f))
+                        ToolDivider()
+                        lock()
+                    }
+                }
+            }
         }
     }
+}
+
+private val InkShape.label: String get() = when (this) {
+    InkShape.LINE -> "Line"
+    InkShape.ARROW -> "Arrow"
+    InkShape.RECTANGLE -> "Rectangle"
+    InkShape.CIRCLE -> "Circle"
 }
 
 private fun fingerModeIcon(mode: FingerInputMode) = when (mode) {

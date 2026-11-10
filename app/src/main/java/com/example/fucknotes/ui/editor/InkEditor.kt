@@ -2,6 +2,7 @@ package com.example.fucknotes.ui.editor
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -29,7 +30,10 @@ import com.example.fucknotes.ui.editor.ink.Lasso
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Brush
+import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
@@ -38,12 +42,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.ink.strokes.Stroke
 import com.example.fucknotes.data.db.AttachmentEntity
 import com.example.fucknotes.data.ink.InkStroke
+import com.example.fucknotes.data.ink.InkShape
 import com.example.fucknotes.data.model.FingerInputMode
 import com.example.fucknotes.data.model.InkTool
 import com.example.fucknotes.data.model.NoteType
@@ -58,7 +64,9 @@ import com.example.fucknotes.ui.editor.ink.InkToolbar
 import com.example.fucknotes.ui.editor.ink.PageIndicator
 import com.example.fucknotes.ui.editor.ink.PaperWhite
 import com.example.fucknotes.ui.editor.ink.ZoomChip
+import com.example.fucknotes.ui.editor.ink.controlAlpha
 import com.example.fucknotes.ui.theme.brand
+import kotlinx.coroutines.delay
 
 /**
  * A writing page and the chrome that floats over it.
@@ -120,10 +128,33 @@ fun InkEditor(
     onRemoveAttachment: (AttachmentEntity) -> Unit,
     onMore: () -> Unit,
     modifier: Modifier = Modifier,
+    onLassoColor: (Set<Int>) -> Unit = {},
+    quickHighlighterVisible: Boolean = false,
+    onToggleQuickHighlighter: () -> Unit = {},
+    onSelectShape: (InkShape) -> Unit = {},
+    onShapeFinished: (Stroke, InkShape) -> Unit = { _, _ -> },
 ) {
     val brand = MaterialTheme.brand
     val notebook = state.type == NoteType.NOTEBOOK
     val lasso = remember { LassoState() }
+    var controlsAwake by remember { mutableStateOf(true) }
+    var controlsWakeToken by remember { mutableStateOf(0) }
+
+    fun wakeControls() {
+        controlsAwake = true
+        controlsWakeToken++
+    }
+
+    LaunchedEffect(controlsWakeToken) {
+        delay(2600)
+        controlsAwake = false
+    }
+    val controlsVisible = controlsAwake || lasso.active
+    val controlsAlpha by animateFloatAsState(
+        targetValue = controlAlpha(controlsVisible),
+        animationSpec = tween(220),
+        label = "page controls opacity",
+    )
 
     Box(modifier.fillMaxSize().background(brand.desk)) {
         InkSurface(
@@ -150,7 +181,11 @@ fun InkEditor(
             onToggleEraser = onToggleEraser,
             pageColor = state.colorArgb.paperColorOr(PaperWhite),
             darkReader = state.darkReader,
+            pitchBlack = state.pitchBlack,
+            shape = state.shape,
+            onShapeFinished = onShapeFinished,
             reading = chrome == EditorChrome.READING,
+            onUserInteraction = ::wakeControls,
             modifier = Modifier
                 .fillMaxSize()
                 .then(if (chrome != EditorChrome.FULL) Modifier.systemGestureExclusion() else Modifier),
@@ -159,7 +194,8 @@ fun InkEditor(
         val quickBar: @Composable () -> Unit = {
             EditorQuickBar(
                 canUndo = canUndo, canRedo = canRedo, notebook = notebook,
-                onBack = onBack, onPages = onPages, onUndo = onUndo, onRedo = onRedo,
+                onBack = onBack, onPages = onPages,
+                onUndo = { lasso.clear(); onUndo() }, onRedo = { lasso.clear(); onRedo() },
                 onAddPage = { onAppendPage() }, onMore = onMore,
             )
         }
@@ -170,6 +206,8 @@ fun InkEditor(
                 chrome = chrome, onSelectPen = onSelectPen, onEditPen = onEditPen,
                 onSelectTool = onSelectTool, onCycleChrome = onCycleChrome, modifier = barModifier,
                 darkReader = state.darkReader,
+                shape = state.shape, onSelectShape = onSelectShape,
+                canUndo = canUndo, onUndo = { lasso.clear(); onUndo() },
             )
         }
 
@@ -223,6 +261,23 @@ fun InkEditor(
             ReadingUnlock(onClick = onCycleChrome, modifier = Modifier.padding(12.dp))
         }
 
+        if (quickHighlighterVisible && chrome != EditorChrome.READING) {
+            FloatingPanel(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 72.dp),
+                elevation = 6.dp,
+            ) {
+                ToolButton(
+                    icon = Icons.Outlined.Brush,
+                    label = if (state.tool == InkTool.HIGHLIGHTER) "Turn off highlighter" else "Turn on highlighter",
+                    selected = state.tool == InkTool.HIGHLIGHTER,
+                    onClick = { wakeControls(); onToggleQuickHighlighter() },
+                    size = 48.dp,
+                )
+            }
+        }
+
         AnimatedVisibility(
             visible = chrome != EditorChrome.READING,
             enter = fadeIn(tween(160)),
@@ -232,8 +287,8 @@ fun InkEditor(
             ZoomReadout(
                 camera = camera,
                 locked = state.zoomLocked,
-                onToggleLock = onToggleZoomLock,
-                modifier = Modifier.padding(16.dp),
+                onToggleLock = { wakeControls(); onToggleZoomLock() },
+                modifier = Modifier.padding(16.dp).alpha(controlsAlpha),
             )
         }
 
@@ -245,6 +300,7 @@ fun InkEditor(
                 camera = camera,
                 onDelete = { onErase(lasso.selection); lasso.clear() },
                 onDuplicate = { lasso.selection = onDuplicateStrokes(lasso.selection, 24f, 24f) },
+                onColor = { onLassoColor(lasso.selection) },
                 onDismiss = lasso::clear,
             )
         }
@@ -255,7 +311,8 @@ fun InkEditor(
                 state = state,
                 pageCount = pageCount,
                 onAppendPage = onAppendPage,
-                modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp),
+                onInteraction = ::wakeControls,
+                modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp).alpha(controlsAlpha),
             )
         }
 
@@ -275,6 +332,7 @@ fun InkEditor(
                 onRemove = onRemoveAttachment,
                 modifier = Modifier.padding(start = 96.dp, end = 96.dp, bottom = 64.dp),
                 darkReader = state.darkReader,
+                pitchBlack = state.pitchBlack,
             )
         }
     }
@@ -324,6 +382,7 @@ private fun PageCounter(
     state: EditorUiState,
     pageCount: () -> Int,
     onAppendPage: () -> Int,
+    onInteraction: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val current = camera.pageAtCentre(state.page)
@@ -335,8 +394,9 @@ private fun PageCounter(
     PageIndicator(
         current = boundedCurrent + 1,
         total = total,
-        onPrevious = { camera.goToPage(boundedCurrent - 1, state.page) },
+        onPrevious = { onInteraction(); camera.goToPage(boundedCurrent - 1, state.page) },
         onNext = {
+            onInteraction()
             val next = boundedCurrent + 1
             if (next >= total) camera.goToPage(onAppendPage(), state.page)
             else camera.goToPage(next, state.page)
@@ -353,12 +413,13 @@ private fun PageCounter(
  * stroke recomposes this little bar, not the editor around it.
  */
 @Composable
-private fun LassoActions(
+internal fun LassoActions(
     lasso: LassoState,
     strokes: () -> List<InkStroke>,
     camera: InkCamera,
     onDelete: () -> Unit,
     onDuplicate: () -> Unit,
+    onColor: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     val bounds = Lasso.selectionBounds(strokes(), lasso.selection)?.translate(lasso.drag) ?: return
@@ -385,6 +446,7 @@ private fun LassoActions(
             Row(Modifier.padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 ToolButton(icon = Icons.Outlined.ContentCopy, label = "Duplicate the circled strokes", onClick = onDuplicate)
                 ToolButton(icon = Icons.Outlined.Delete, label = "Delete the circled strokes", onClick = onDelete)
+                ToolButton(icon = Icons.Outlined.Palette, label = "Change colour of the circled strokes", onClick = onColor)
                 ToolButton(icon = Icons.Outlined.Close, label = "Deselect", onClick = onDismiss)
             }
         }

@@ -1,7 +1,128 @@
 # Notes workflow changes
 
-Validated on the connected Xiaomi 2410CRP4CI (Android 16) on 2026-10-22 and 2026-10-23. The checks below
+## Pitch-black pages and drawing tools — 2026-11-10
+
+- Saved pitch-black appearance is available in notebook creation, Paper, and the editor menu.
+  Paper previews, typed notes, imported pages, page thumbnails, and dark exports use the choice.
+- Shapes are an explicit tool with line, arrow, rectangle, and circle choices. Drag previews and
+  saved vectors share geometry; ordinary freehand strokes are preserved. Shape metadata survives
+  storage, selection, moving, duplication, recolouring, undo/redo, and editable PDF export.
+- Temporary red highlights remain entirely in memory, hold for 1.5 seconds after pen lift and
+  fade over one second. Each completed trail has its own timer and never changes saved ink,
+  exports, dirty state, or undo history.
+- Compact mode includes Undo. Narrow windows use separate tool and pen rows so Select, the
+  finger control, Shapes, the red highlighter, and the lock stay reachable after swatch scrolling.
+- Device regressions cover real toolbar/pointer/ViewModel/storage flows, pixel checks for black
+  paper and disappearing red ink, shape selection and movement, compact Undo, a pinch followed by
+  a shape, two pen strokes with a continuously resting palm, and pitch-black editable PDF output.
+- The old shape-recognition notes below describe an earlier draft. The released behaviour uses
+  the explicit Shapes tool instead of rewriting handwriting automatically.
+- A release-build smoke check caught the stock marker smoothing sparse shape vertices. A pixel
+  regression failed at the rectangle's upper-right corner before generated shapes were switched
+  to Ink's raw input model. It now checks rectangle corners, both arrow wings, circle extrema,
+  and line endpoints in freshly drawn and reopened vectors.
+- The final optimized APK was installed over the existing app without clearing its data. An
+  interactive smoke check confirmed pitch-black paper, a square-cornered rectangle, visible
+  Select and red-highlighter controls, and working Undo in the compact toolbar.
+- Final workspace verification: **98 JVM tests, 0 failures; 60 Android 15 emulator tests,
+  0 failures**. Debug, instrumentation, and optimized release builds succeeded. Release lint
+  completed with 0 errors (85 existing/toolchain warnings). `git diff --check` passed.
+- `apksigner` verified APK Signature Scheme v2. The certificate SHA-256 matches published 1.1.0:
+  `a889393c409dcdbe1980a4e332772b1392ef3618b034a9a7fb66e994c6cec8c0`.
+  The APK declares `com.example.fucknotes`, version code 3, version name 1.2.0, minimum SDK 26.
+  The physical Xiaomi tablet and pen were not connected during this pass.
+
+Validated on the connected Xiaomi 2410CRP4CI (Android 16) on 2026-10-22 through 2026-10-24. The checks below
 distinguish automated coverage, interactive checks and remaining scenarios.
+
+## Editor controls, rough shapes and editable recolouring — 2026-10-25, macOS, emulator
+
+- Zoom percentage/lock and page arrows fade to 18% opacity after 2.6 seconds idle. Page gestures
+  and control taps restore them with a short fade; their full touch targets remain available.
+- Rough single strokes are recognised as lines, arrows, rectangles or circles and replaced with
+  compact vector paths. Rounded box corners are supported. Unsupported triangles, diamonds and
+  retraced scribbles keep their geometry. Arrow recognition does not depend on sample counts,
+  and cleanup retains both complete arrowhead wings.
+- Ink editors offer **Quick highlighter** in the overflow menu. It reveals a top-left toggle;
+  switching it off restores the previous pen slot, including its colour and width.
+- Lasso selections have a colour action using the ink palette. The page palette's transparent
+  default is excluded. Recolouring supports undo and retains vector inputs, brush properties,
+  tool tags and optional shape metadata; moving/duplicating shapes retains their metadata too.
+- Notes continue storing compressed vector inputs and editable brush/shape metadata. Default
+  JSON fields and absent shape tags are omitted. Existing notes remain readable; no schema
+  migration or flattened page images are introduced by these features. Storage still grows
+  with stroke count and attached images.
+- Regression proof: four geometry tests failed before the boundary/area fix, the dense-head arrow
+  test failed before removing its sample-count restriction, and an Android cleanup test showed
+  a wing ending at x=98 instead of x=82 before preserving the whole wing. All now pass.
+- Final verification: **92 JVM tests passed**, plus **11 Android tests passed** on an isolated
+  API 35 tablet emulator: `InkDecodeTest`, `EditorViewportRestorationTest`, `LassoDeviceTest`,
+  `EditorChromeTest` and `NightInkTest`. These cover vector metadata/recolour round trips, arrow
+  cleanup, page-6/zoom restoration, selection movement, editor chrome and dark-ink handling.
+  Debug, instrumentation and optimized release APKs built successfully; `git diff --check`
+  passed. Build/test logs are in `build/editor-validation-20261025/`.
+- The tablet remains disconnected and untouched. The installable release is
+  `app/build/outputs/apk/release/app-release.apk`. The new idle timing, shortcut interaction and
+  colour-picker flow have not been interactively checked with the owner's physical pen/tablet.
+
+## Keep the PDF page through rotation — 2026-10-24, macOS, emulator
+
+The editor's camera used ordinary `remember`, so activity recreation reset the PDF/notebook to
+page 1. It now saves the world-space viewport centre and zoom per editor entry. Restoration waits
+for valid layout bounds, and resizing keeps the same document position. This also preserves canvas
+pan/zoom and handles density changes without storing view state in the note's content.
+
+- The resize regression failed against the old camera before the fix. All 81 JVM tests now pass,
+  including recreation in both orientations, canvas pan/zoom, repeated recreation before layout,
+  page-count growth, and initial zero-size layout.
+- Seven editor instrumentation tests passed on a temporary emulator at tablet dimensions: saved
+  viewport restoration, editor chrome, finger/stylus input, and tab navigation. The existing tab
+  visibility test assumes tablet width; its initial phone-width run failed before rerunning wide.
+- Debug, test and optimized release APKs built successfully. In the release app, imported a
+  ten-page PDF, navigated to page 6, rotated landscape → portrait → landscape, and confirmed page
+  6 and 213% zoom throughout. Screenshots and UI hierarchies are in
+  `build/rotation-validation-20261024/`. The app stayed alive with an empty crash buffer.
+- The physical tablet was disconnected. Per the owner's instruction, verification continued on
+  the emulator; this build has **not** been installed on the tablet. The update APK is
+  `app/build/outputs/apk/release/app-release.apk`.
+
+## Startup crash from a large notebook — 2026-10-24, macOS, tablet
+
+The release repeatedly crashed with `SQLiteBlobTooBigException`. Note 29 carried 2,096,971
+characters of ink JSON (2,618 strokes); reading the full row exceeded Android's roughly 2 MB
+`CursorWindow`. Restoring the saved tab list (`29,23`) read that row immediately at startup;
+shelf, editor and export queries were also affected.
+
+Room now uses `BundledSQLiteDriver`, which reads SQLite statements directly without a cursor
+window. The schema remains v8 and existing ink JSON is unchanged. Repository transactions use
+writer connections, and every existing migration supports both native and legacy connections.
+
+- The isolated 3 MB notebook regression failed with the original driver and passes with the fix.
+- Four new device tests cover full ink reads/saves/duplication/reopen, migration from v1 to v8,
+  notebook import/replacement/reorder, and rollback when an attachment insert fails.
+- All 75 JVM tests and 18 existing tablet import/export/appearance/order tests passed.
+- The first Gradle-managed test run crashed during application initialization and its cleanup
+  removed the installed package. Recovered all 27 note rows and settings from the current
+  snapshot, and all 33 referenced images from existing local backups. The complete recovery
+  archive is `build/tablet-backup-20261024-crash-recovery/recovery.tar`.
+- The optimized release APK built and installed successfully over the restored debug build.
+  A cold launch showed all 14 active notes; opening the affected 16-page notebook rendered its
+  original handwriting. The release process remained alive and the crash buffer stayed empty.
+  Screenshots are `home-release.png` and `notebook-release.png` in the recovery directory.
+
+Run isolated database checks with a plain test application so the owner's tabs and shelf never
+start. Assemble and install directly on a tablet with user data; the Gradle connected-test task
+can uninstall the application during cleanup.
+
+```bash
+JAVA_HOME=/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home ./gradlew \
+  :app:assembleDebug :app:assembleDebugAndroidTest \
+  -PandroidTestRunner=com.example.fucknotes.DatabaseTestRunner
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+adb shell am instrument -w -r -e class com.example.fucknotes.LargeDrawingCursorTest \
+  com.example.fucknotes.test/com.example.fucknotes.DatabaseTestRunner
+```
 
 ## Latest pass (tablet verification of the 2026-10-22/23 work) — 2026-10-23, macOS, tablet
 

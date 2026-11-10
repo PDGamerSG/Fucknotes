@@ -6,7 +6,9 @@ import androidx.ink.strokes.Stroke
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.fucknotes.data.ink.InkCache
 import com.example.fucknotes.data.ink.InkCodec
+import com.example.fucknotes.data.ink.InkShape
 import com.example.fucknotes.data.ink.InkStroke
+import com.example.fucknotes.data.ink.ShapeRecognizer
 import com.example.fucknotes.data.model.InkTool
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -62,5 +64,45 @@ class InkDecodeTest {
         assertNull(InkCache.get(43L, json))
         InkCache.evict(42L)
         assertNull(InkCache.get(42L, json))
+    }
+
+    @Test fun recognizedShapeMetadataAndRecolorSurviveTheVectorRoundTrip() {
+        val brush = InkCodec.brushFor(InkTool.PEN, 0xFF112233.toInt(), 3f, 1f)
+        val inputs = MutableStrokeInputBatch().apply {
+            add(InputToolType.STYLUS, 10f, 10f, 0L)
+            add(InputToolType.STYLUS, 100f, 10f, 16L)
+        }
+        val original = InkStroke(Stroke(brush, inputs), InkTool.PEN, InkShape.LINE)
+        val recolored = InkCodec.recolor(original, 0xFF445566.toInt())
+
+        assertEquals(InkShape.LINE, InkCodec.decode(InkCodec.encode(listOf(recolored))).single().shape)
+        assertEquals(0xFF445566.toInt(), recolored.stroke.brush.colorIntArgb)
+        assertEquals(original.stroke.inputs.size, recolored.stroke.inputs.size)
+
+        val freehand = InkStroke(Stroke(brush, inputs), InkTool.PEN)
+        assertEquals(false, InkCodec.encode(listOf(freehand)).contains("\"shape\""))
+    }
+
+    @Test fun cleaningAnArrowKeepsBothCompleteHeadWings() {
+        val brush = InkCodec.brushFor(InkTool.PEN, 0xFF112233.toInt(), 3f, 1f)
+        val inputs = MutableStrokeInputBatch().apply {
+            add(InputToolType.STYLUS, 0f, 0f, 0L)
+            add(InputToolType.STYLUS, 50f, 0f, 16L)
+            add(InputToolType.STYLUS, 100f, 0f, 32L)
+            add(InputToolType.STYLUS, 98f, -2f, 48L)
+            add(InputToolType.STYLUS, 82f, -16f, 64L)
+            add(InputToolType.STYLUS, 98f, -2f, 80L)
+            add(InputToolType.STYLUS, 100f, 0f, 96L)
+            add(InputToolType.STYLUS, 82f, 16f, 112L)
+        }
+        val cleaned = ShapeRecognizer.clean(Stroke(brush, inputs), InkShape.ARROW)
+        val points = ShapeRecognizer.points(cleaned)
+
+        assertEquals(5, points.size)
+        assertEquals(82f, points[2].x, 0.001f)
+        assertEquals(-16f, points[2].y, 0.001f)
+        assertEquals(82f, points[4].x, 0.001f)
+        assertEquals(16f, points[4].y, 0.001f)
+        assertEquals(brush, cleaned.brush)
     }
 }

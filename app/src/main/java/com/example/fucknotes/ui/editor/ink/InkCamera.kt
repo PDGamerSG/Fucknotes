@@ -1,13 +1,25 @@
 package com.example.fucknotes.ui.editor.ink
 
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Matrix
+import androidx.compose.ui.platform.LocalDensity
 import com.example.fucknotes.data.ink.NotebookLayout
 import com.example.fucknotes.data.ink.PageSpec
+
+/** Each editor entry saves its own viewport across activity and process recreation. */
+@Composable
+fun rememberInkCamera(noteId: Long): InkCamera {
+    val density = LocalDensity.current.density
+    return rememberSaveable(noteId, saver = InkCamera.saver(density)) { InkCamera(density) }
+}
 
 /**
  * The "camera" over the infinite page.
@@ -26,7 +38,11 @@ import com.example.fucknotes.data.ink.PageSpec
 class InkCamera(density: Float) {
 
     var density: Float = density
-        internal set
+        internal set(value) {
+            if (field == value) return
+            pendingPosition = position()
+            field = value
+        }
 
     var zoom: Float by mutableFloatStateOf(1f)
         private set
@@ -59,15 +75,27 @@ class InkCamera(density: Float) {
     /** A notebook opens with its page fitted to the window; after that the user's zoom stands. */
     private var fittedColumn = false
 
+    private data class Position(val zoom: Float, val centreX: Float, val centreY: Float)
+    private var pendingPosition: Position? = null
+
+    private fun position(): Position? = pendingPosition ?: if (viewportWidthPx > 0f && viewportHeightPx > 0f) {
+        val centre = screenToWorld(Offset(viewportWidthPx / 2f, viewportHeightPx / 2f))
+        Position(zoom, centre.x, centre.y)
+    } else null
+
     /** Combined world-unit to screen-pixel factor. */
     val scale: Float get() = density * zoom
 
     /** Told by the surface on every layout; re-clamps in case the window or the mode changed. */
     fun configure(columnWidthDp: Float, viewportWidthPx: Float, viewportHeightPx: Float, columnHeightDp: Float = 0f) {
+        // A restored camera waits for real bounds; a transient zero-size layout must not consume
+        // its saved position or mark the initial page-width fit as complete.
+        if (viewportWidthPx <= 0f || viewportHeightPx <= 0f) return
+        val resized = this.viewportWidthPx != viewportWidthPx || this.viewportHeightPx != viewportHeightPx
         val changed = this.columnWidthDp != columnWidthDp ||
-            this.viewportWidthPx != viewportWidthPx ||
-            this.viewportHeightPx != viewportHeightPx || this.columnHeightDp != columnHeightDp
+            resized || this.columnHeightDp != columnHeightDp || pendingPosition != null
         if (!changed) return
+        val anchor = pendingPosition ?: if (resized) position() else null
         this.columnWidthDp = columnWidthDp
         this.viewportWidthPx = viewportWidthPx
         this.viewportHeightPx = viewportHeightPx
@@ -75,8 +103,14 @@ class InkCamera(density: Float) {
         if (columnWidthDp <= 0f) {
             fittedColumn = false
         } else if (!fittedColumn) {
-            fitColumnWidth()
+            if (anchor == null) fitColumnWidth()
             fittedColumn = true
+        }
+        if (anchor != null) {
+            zoom = anchor.zoom
+            panX = viewportWidthPx / 2f - anchor.centreX * scale
+            panY = viewportHeightPx / 2f - anchor.centreY * scale
+            pendingPosition = null
         }
         clampToColumn()
     }
@@ -107,6 +141,7 @@ class InkCamera(density: Float) {
 
     /** Typed content owns its scroll position; annotations use exactly the same pixel offset. */
     fun followContentScroll(offsetPx: Int) {
+        pendingPosition = null
         zoom = 1f
         panX = 0f
         panY = -offsetPx.toFloat()
@@ -121,7 +156,7 @@ class InkCamera(density: Float) {
     fun pageAtCentre(spec: PageSpec): Int {
         val stride = NotebookLayout.strideOf(spec)
         if (stride <= 0f || scale <= 0f) return 0
-        val centreWorld = (viewportHeightPx / 2f - panY) / scale
+        val centreWorld = pendingPosition?.centreY ?: ((viewportHeightPx / 2f - panY) / scale)
         return NotebookLayout.pageIndexAt(centreWorld, spec).coerceAtLeast(0)
     }
 
@@ -135,6 +170,7 @@ class InkCamera(density: Float) {
     }
 
     fun reset() {
+        pendingPosition = null
         zoom = 1f
         panX = 0f
         panY = 0f
@@ -190,6 +226,19 @@ class InkCamera(density: Float) {
     companion object {
         const val MIN_ZOOM = 0.25f
         const val MAX_ZOOM = 8f
+
+        /** Save world coordinates rather than pixels so a new window size or density keeps place. */
+        fun saver(density: Float): Saver<InkCamera, Any> = listSaver(
+            save = { camera ->
+                camera.position()?.let { listOf(it.zoom, it.centreX, it.centreY) } ?: emptyList()
+            },
+            restore = { values ->
+                InkCamera(density).apply {
+                    zoom = values[0]
+                    pendingPosition = Position(values[0], values[1], values[2])
+                }
+            },
+        )
     }
 }
 

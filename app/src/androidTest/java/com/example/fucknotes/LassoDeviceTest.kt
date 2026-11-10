@@ -69,7 +69,7 @@ class LassoDeviceTest {
     @Test fun circleSelectsAndDragMoves() {
         val camera = InkCamera(1f) // the surface overwrites the density; stylus() maps world to screen
         val lasso = LassoState()
-        val strokes = listOf(line(300f, 300f, 400f, 300f), line(900f, 900f, 1000f, 900f))
+        val strokes = listOf(line(100f, 200f, 160f, 200f), line(260f, 450f, 300f, 450f))
         var moved: Triple<Set<Int>, Float, Float>? = null
         compose.setContent {
             FucknotesTheme {
@@ -90,14 +90,14 @@ class LassoDeviceTest {
         // A loop around the first line only.
         val loop = (0..24).map { i ->
             val a = i / 24f * 2 * Math.PI
-            Offset(350f + 120f * Math.cos(a).toFloat(), 300f + 80f * Math.sin(a).toFloat())
+            Offset(130f + 60f * Math.cos(a).toFloat(), 200f + 50f * Math.sin(a).toFloat())
         }
         stylus(camera, loop)
         assertEquals(setOf(0), lasso.selection)
         assertTrue(lasso.loop.isEmpty())
 
         // Drag from inside the box 60 right, 40 down.
-        stylus(camera, listOf(Offset(350f, 300f), Offset(370f, 310f), Offset(390f, 330f), Offset(410f, 340f), Offset(410f, 340f)))
+        stylus(camera, listOf(Offset(130f, 200f), Offset(150f, 210f), Offset(170f, 230f), Offset(190f, 240f), Offset(190f, 240f)))
         val (indices, dx, dy) = requireNotNull(moved)
         assertEquals(setOf(0), indices)
         assertEquals(60f, dx, 1f)
@@ -105,7 +105,7 @@ class LassoDeviceTest {
         assertEquals(Offset.Zero, lasso.drag)
 
         // A tap away from the selection lets it go.
-        stylus(camera, listOf(Offset(600f, 600f), Offset(600f, 600f)))
+        stylus(camera, listOf(Offset(260f, 350f), Offset(260f, 350f)))
         assertTrue(lasso.selection.isEmpty())
     }
 

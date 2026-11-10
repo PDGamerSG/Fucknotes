@@ -14,6 +14,7 @@ import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DriveFileRenameOutline
 import androidx.compose.material.icons.outlined.FormatPaint
+import androidx.compose.material.icons.outlined.Brush
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.PictureAsPdf
@@ -58,6 +59,9 @@ fun EditorOverflowMenu(
     darkReader: Boolean = false,
     onToggleDarkReader: () -> Unit = {},
     onRename: () -> Unit = {},
+    onHighlighter: (() -> Unit)? = null,
+    pitchBlack: Boolean = false,
+    onTogglePitchBlack: () -> Unit = {},
 ) {
     DropdownMenu(expanded, onDismissRequest = onDismiss) {
         // Night colours for every page, image and stroke; the same switch as in Settings, here
@@ -67,6 +71,12 @@ fun EditorOverflowMenu(
             leadingIcon = { Icon(if (darkReader) Icons.Outlined.LightMode else Icons.Outlined.DarkMode, null) },
             trailingIcon = { Switch(checked = darkReader, onCheckedChange = { onToggleDarkReader() }) },
             onClick = onToggleDarkReader,
+        )
+        DropdownMenuItem(
+            text = { Text("Pitch black pages") },
+            leadingIcon = { Icon(Icons.Outlined.DarkMode, null) },
+            trailingIcon = { Switch(checked = pitchBlack, onCheckedChange = { onTogglePitchBlack() }) },
+            onClick = onTogglePitchBlack,
         )
         HorizontalDivider()
         DropdownMenuItem(
@@ -79,6 +89,13 @@ fun EditorOverflowMenu(
             leadingIcon = { Icon(Icons.Outlined.FormatPaint, null) },
             onClick = onPaper,
         )
+        onHighlighter?.let { action ->
+            DropdownMenuItem(
+                text = { Text("Quick highlighter") },
+                leadingIcon = { Icon(Icons.Outlined.Brush, null) },
+                onClick = action,
+            )
+        }
         DropdownMenuItem(
             text = { Text("Note colour") },
             leadingIcon = { Icon(Icons.Outlined.Palette, null) },

@@ -24,6 +24,11 @@ import androidx.compose.ui.unit.dp
 import com.example.fucknotes.ui.common.FloatingPanel
 import com.example.fucknotes.ui.common.ToolButton
 
+/** Low-opacity idle state: the panel still owns its full hit target when it is out of the way. */
+const val FADED_CONTROL_ALPHA = 0.18f
+
+fun controlAlpha(awake: Boolean): Float = if (awake) 1f else FADED_CONTROL_ALPHA
+
 /**
  * The zoom readout.
  *

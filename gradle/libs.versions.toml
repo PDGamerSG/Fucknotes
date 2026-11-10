@@ -13,6 +13,7 @@ composeBom = "2025.09.00"
 lifecycle = "2.9.4"
 navigationCompose = "2.9.5"
 room = "2.8.4"
+sqlite = "2.6.2"
 datastore = "1.1.7"
 coil = "2.7.0"
 biometric = "1.1.0"
@@ -45,6 +46,7 @@ androidx-room-runtime = { group = "androidx.room", name = "room-runtime", versio
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 androidx-room-testing = { group = "androidx.room", name = "room-testing", version.ref = "room" }
+androidx-sqlite-bundled = { group = "androidx.sqlite", name = "sqlite-bundled", version.ref = "sqlite" }
 
 androidx-datastore-preferences = { group = "androidx.datastore", name = "datastore-preferences", version.ref = "datastore" }
 androidx-biometric = { group = "androidx.biometric", name = "biometric", version.ref = "biometric" }

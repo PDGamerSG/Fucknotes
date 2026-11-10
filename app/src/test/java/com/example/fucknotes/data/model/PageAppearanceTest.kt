@@ -9,6 +9,14 @@ import org.junit.Test
 
 /** A note's own light-or-dark choice wins; only a note that never chose follows the app. */
 class PageAppearanceTest {
+    @Test fun pitchBlackIsDarkAndSurvivesStorage() {
+        val black = PageAppearance.valueOf("PITCH_BLACK")
+        assertTrue(black.isDark(false))
+        assertTrue(black.isDark(true))
+        assertEquals(black, Converters().stringToAppearance(Converters().appearanceToString(black)))
+        assertTrue(EditorUiState(appearance = black).darkReader)
+    }
+
     @Test fun ownChoiceWinsOverTheAppSetting() {
         assertTrue(PageAppearance.DARK.isDark(appDarkReader = false))
         assertFalse(PageAppearance.LIGHT.isDark(appDarkReader = true))

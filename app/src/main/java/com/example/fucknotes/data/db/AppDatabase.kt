@@ -6,7 +6,19 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
+import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.db.SupportSQLiteDatabase
+import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import androidx.sqlite.execSQL
+
+/** Runs the same upgrade statements with either Room's legacy or native SQLite connection. */
+private abstract class SqlMigration(from: Int, to: Int) : Migration(from, to) {
+    final override fun migrate(db: SupportSQLiteDatabase) = migrateStatements(db::execSQL)
+
+    final override fun migrate(connection: SQLiteConnection) = migrateStatements(connection::execSQL)
+
+    abstract fun migrateStatements(execute: (String) -> Unit)
+}
 
 @Database(
     entities = [
@@ -39,41 +51,41 @@ abstract class AppDatabase : RoomDatabase() {
          * look different. Existing rows take zeroes, which every reader treats as "use the
          * default", and A4 — which is what they were drawn on.
          */
-        private val MIGRATION_1_2 = object : Migration(1, 2) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE notes ADD COLUMN lineColorArgb INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE notes ADD COLUMN lineSpacingDp INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE notes ADD COLUMN pageFormat TEXT NOT NULL DEFAULT 'A4'")
+        private val MIGRATION_1_2 = object : SqlMigration(1, 2) {
+            override fun migrateStatements(execute: (String) -> Unit) {
+                execute("ALTER TABLE notes ADD COLUMN lineColorArgb INTEGER NOT NULL DEFAULT 0")
+                execute("ALTER TABLE notes ADD COLUMN lineSpacingDp INTEGER NOT NULL DEFAULT 0")
+                execute("ALTER TABLE notes ADD COLUMN pageFormat TEXT NOT NULL DEFAULT 'A4'")
             }
         }
 
-        private val MIGRATION_2_3 = object : Migration(2, 3) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE notes ADD COLUMN pageCount INTEGER NOT NULL DEFAULT 1")
+        private val MIGRATION_2_3 = object : SqlMigration(2, 3) {
+            override fun migrateStatements(execute: (String) -> Unit) {
+                execute("ALTER TABLE notes ADD COLUMN pageCount INTEGER NOT NULL DEFAULT 1")
             }
         }
 
-        private val MIGRATION_3_4 = object : Migration(3, 4) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE notes ADD COLUMN pagesExplicitlyCreated INTEGER NOT NULL DEFAULT 0")
+        private val MIGRATION_3_4 = object : SqlMigration(3, 4) {
+            override fun migrateStatements(execute: (String) -> Unit) {
+                execute("ALTER TABLE notes ADD COLUMN pagesExplicitlyCreated INTEGER NOT NULL DEFAULT 0")
                 // A recorded count can include real writing on later pages. Preserve it when
                 // adopting explicit page creation instead of making those pages inaccessible.
-                db.execSQL("UPDATE notes SET pageCount = MAX(1, MIN(pageCount, 500))")
-                db.execSQL("UPDATE notes SET pagesExplicitlyCreated = 1 WHERE pageCount > 1")
+                execute("UPDATE notes SET pageCount = MAX(1, MIN(pageCount, 500))")
+                execute("UPDATE notes SET pagesExplicitlyCreated = 1 WHERE pageCount > 1")
             }
         }
 
         @Volatile private var instance: AppDatabase? = null
 
-        private val MIGRATION_4_5 = object : Migration(4, 5) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE attachments ADD COLUMN pageIndex INTEGER")
-                db.execSQL("ALTER TABLE attachments ADD COLUMN pageX REAL NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE attachments ADD COLUMN pageY REAL NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE attachments ADD COLUMN pageWidth REAL NOT NULL DEFAULT 0")
-                db.execSQL("ALTER TABLE attachments ADD COLUMN pageHeight REAL NOT NULL DEFAULT 0")
+        private val MIGRATION_4_5 = object : SqlMigration(4, 5) {
+            override fun migrateStatements(execute: (String) -> Unit) {
+                execute("ALTER TABLE attachments ADD COLUMN pageIndex INTEGER")
+                execute("ALTER TABLE attachments ADD COLUMN pageX REAL NOT NULL DEFAULT 0")
+                execute("ALTER TABLE attachments ADD COLUMN pageY REAL NOT NULL DEFAULT 0")
+                execute("ALTER TABLE attachments ADD COLUMN pageWidth REAL NOT NULL DEFAULT 0")
+                execute("ALTER TABLE attachments ADD COLUMN pageHeight REAL NOT NULL DEFAULT 0")
                 // These features were removed; existing notes remain available and normally sorted.
-                db.execSQL("UPDATE notes SET locked = 0, pinned = 0, reminderAt = NULL")
+                execute("UPDATE notes SET locked = 0, pinned = 0, reminderAt = NULL")
             }
         }
 
@@ -81,10 +93,10 @@ abstract class AppDatabase : RoomDatabase() {
          * Manual shelf order. Every existing note takes its creation time as its position, so
          * the shelf opens in creation order and nothing moves until the user drags it.
          */
-        private val MIGRATION_5_6 = object : Migration(5, 6) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE notes ADD COLUMN position INTEGER NOT NULL DEFAULT 0")
-                db.execSQL("UPDATE notes SET position = createdAt")
+        private val MIGRATION_5_6 = object : SqlMigration(5, 6) {
+            override fun migrateStatements(execute: (String) -> Unit) {
+                execute("ALTER TABLE notes ADD COLUMN position INTEGER NOT NULL DEFAULT 0")
+                execute("UPDATE notes SET position = createdAt")
             }
         }
 
@@ -92,21 +104,21 @@ abstract class AppDatabase : RoomDatabase() {
          * Light or dark pages per note. Existing notes follow the app-wide setting, which is what
          * they did before, so nothing changes on screen until a note chooses for itself.
          */
-        private val MIGRATION_6_7 = object : Migration(6, 7) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE notes ADD COLUMN appearance TEXT NOT NULL DEFAULT 'FOLLOW'")
+        private val MIGRATION_6_7 = object : SqlMigration(6, 7) {
+            override fun migrateStatements(execute: (String) -> Unit) {
+                execute("ALTER TABLE notes ADD COLUMN appearance TEXT NOT NULL DEFAULT 'FOLLOW'")
             }
         }
 
         /** Google Drive sync bookkeeping: which Drive file and folder stand for which note and folder. */
-        private val MIGRATION_7_8 = object : Migration(7, 8) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL(
+        private val MIGRATION_7_8 = object : SqlMigration(7, 8) {
+            override fun migrateStatements(execute: (String) -> Unit) {
+                execute(
                     "CREATE TABLE IF NOT EXISTS `drive_files` (`noteId` INTEGER NOT NULL, `fileId` TEXT NOT NULL, " +
                         "`folderKey` TEXT NOT NULL, `name` TEXT NOT NULL, `syncedUpdatedAt` INTEGER NOT NULL, " +
                         "`syncedAt` INTEGER NOT NULL, PRIMARY KEY(`noteId`))"
                 )
-                db.execSQL(
+                execute(
                     "CREATE TABLE IF NOT EXISTS `drive_folders` (`folderKey` TEXT NOT NULL, `fileId` TEXT NOT NULL, " +
                         "`name` TEXT NOT NULL, `parentKey` TEXT, PRIMARY KEY(`folderKey`))"
                 )
@@ -119,11 +131,19 @@ abstract class AppDatabase : RoomDatabase() {
                 .first { it.startVersion == from && it.endVersion == to }
 
         fun get(context: Context): AppDatabase = instance ?: synchronized(this) {
-            instance ?: Room.databaseBuilder(
+            instance ?: builder(context).build().also { instance = it }
+        }
+
+        /** Shared database configuration for the app and isolated database instances. */
+        fun builder(context: Context, name: String = NAME): Builder<AppDatabase> =
+            Room.databaseBuilder(
                 context.applicationContext,
                 AppDatabase::class.java,
-                NAME,
+                name,
             )
+                // Native statements read large ink strings directly, without CursorWindow's
+                // ~2 MB row limit. The existing SQLite file and note encoding stay compatible.
+                .setDriver(BundledSQLiteDriver())
                 .addMigrations(MIGRATION_1_2)
                 .addMigrations(MIGRATION_2_3)
                 .addMigrations(MIGRATION_3_4)
@@ -133,8 +153,5 @@ abstract class AppDatabase : RoomDatabase() {
                 .addMigrations(MIGRATION_7_8)
                 // Foreign keys drive the note -> tag/attachment cascades.
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
-                .build()
-                .also { instance = it }
-        }
     }
 }

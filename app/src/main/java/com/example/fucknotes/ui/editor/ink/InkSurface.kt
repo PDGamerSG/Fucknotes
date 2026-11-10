@@ -45,6 +45,10 @@ import androidx.ink.geometry.MutableSegment
 import androidx.ink.geometry.MutableVec
 import androidx.ink.rendering.android.canvas.CanvasStrokeRenderer
 import androidx.ink.strokes.Stroke
+import androidx.ink.brush.InputToolType
+import androidx.ink.strokes.MutableStrokeInputBatch
+import com.example.fucknotes.data.ink.InkShape
+import com.example.fucknotes.data.ink.ShapeRecognizer
 import com.example.fucknotes.data.ink.InkCodec
 import com.example.fucknotes.data.ink.InkStroke
 import com.example.fucknotes.data.ink.NotebookLayout
@@ -141,6 +145,8 @@ fun InkSurface(
     lasso: LassoState? = null,
     /** Circled strokes were dragged: indices and the world-unit shift to apply. */
     onMoveStrokes: (Set<Int>, Float, Float) -> Unit = { _, _, _ -> },
+    /** Wakes page controls after a page gesture without observing every pointer move. */
+    onUserInteraction: () -> Unit = {},
     /**
      * Reading mode: fingers always move the page.
      *
@@ -150,6 +156,9 @@ fun InkSurface(
      * but not its movement, and a finger never draws, erases or swaps tools. The stylus writes.
      */
     reading: Boolean = false,
+    pitchBlack: Boolean = false,
+    shape: InkShape = InkShape.RECTANGLE,
+    onShapeFinished: (Stroke, InkShape) -> Unit = { _, _ -> },
 ) {
     camera.density = LocalDensity.current.density
 
@@ -176,6 +185,10 @@ fun InkSurface(
     val currentContentScroll by rememberUpdatedState(contentScroll)
     val currentLasso by rememberUpdatedState(lasso)
     val currentOnMoveStrokes by rememberUpdatedState(onMoveStrokes)
+    val currentOnUserInteraction by rememberUpdatedState(onUserInteraction)
+    val currentShape by rememberUpdatedState(shape)
+    val currentOnShapeFinished by rememberUpdatedState(onShapeFinished)
+    val drawingOverlay = remember { DrawingOverlayState() }
     // Leaving the Select tool drops the selection; a pen stroke on a circled word is just a stroke.
     LaunchedEffect(tool) { if (tool != InkTool.LASSO) lasso?.clear() }
     val contentScrollOffset = contentScroll?.value
@@ -238,11 +251,11 @@ fun InkSurface(
     // The paper tone the surface actually paints: night slate while dark mode is on. Notebook
     // sheets go through the same rule in drawNotebookPages; the canvas has no sheets, so its
     // background is the page and must follow the rule here or stay white at night.
-    val renderedPageColor = if (darkReader && pageColor != Color.Transparent) NightPalette.paper else pageColor
+    val renderedPageColor = if (darkReader && pageColor != Color.Transparent) NightPalette.paper(pitchBlack) else pageColor
     BoxWithConstraints(
         modifier = modifier
             // Notebook pages float on a desk; the endless canvas *is* the page.
-            .background(if (notebook) deskColor else renderedPageColor)
+            .background(if (notebook && !pitchBlack) deskColor else renderedPageColor)
             .then(if (enabled) Modifier.pointerInput(Unit) {
                 awaitPointerEventScope {
                     var lastErasePoint: Offset? = null
@@ -257,6 +270,12 @@ fun InkSurface(
                     // stroke under the pen (eraser now consumes the stream) or hand a half-erase
                     // to the ink layer as moves without a down. Either way the pen seems dead.
                     var gestureTool: InkTool? = null
+                    var drawingPointer: androidx.compose.ui.input.pointer.PointerId? = null
+                    var drawingStart = Offset.Zero
+                    var drawingEnd = Offset.Zero
+                    var drawingShape = InkShape.RECTANGLE
+                    var drawingBrush: Brush? = null
+                    var drawingCancelled = false
 
                     // Double-tap tool swap, measured over a whole gesture: from the first pointer
                     // down to the last one up.
@@ -293,10 +312,12 @@ fun InkSurface(
 
                         val down = event.changes.filter { it.pressed }
                         event.changes.filter { !it.pressed }.forEach { palmIds -= it.id }
-                        if (down.isEmpty()) { outsidePageGesture = false; gestureTool = null }
-                        else if (gestureTool == null) gestureTool = currentTool
+                        // A new stylus contact starts its own stroke even while the same palm rests.
+                        if (down.any { it.type == PointerType.Stylus && !it.previousPressed }) gestureTool = currentTool
+                        if (down.isNotEmpty() && gestureTool == null) gestureTool = currentTool
                         val activeTool = gestureTool ?: currentTool
-                        if (currentNotebook && activeTool.isBrush) {
+                        if (down.isEmpty()) { gestureTool = null; drawingCancelled = false }
+                        if (currentNotebook && (activeTool.isBrush || activeTool == InkTool.SHAPE || activeTool == InkTool.LASER)) {
                             val writer = down.firstOrNull { it.type == PointerType.Stylus }
                                 ?: down.singleOrNull()?.takeIf { currentFingerInputMode == FingerInputMode.DRAW }
                             if (writer != null && !writer.previousPressed) {
@@ -307,9 +328,51 @@ fun InkSurface(
                             }
                             if (outsidePageGesture) {
                                 event.changes.forEach { it.consume() }
+                                if (down.isEmpty()) outsidePageGesture = false
                                 continue
                             }
                         }
+                        // A pen release must land before palm/touch navigation can return early.
+                        // A resting palm is allowed to stay down across several separate strokes.
+                        val drawingRelease = drawingPointer?.let { pointer ->
+                            event.changes.firstOrNull { it.id == pointer && !it.pressed }
+                        }
+                        if (drawingRelease != null) {
+                            if (activeTool == InkTool.SHAPE) {
+                                var end = camera.screenToWorld(drawingRelease.position)
+                                if (currentNotebook) {
+                                    val spec = currentPageSpec
+                                    val top = floor(drawingStart.y / NotebookLayout.strideOf(spec)) * NotebookLayout.strideOf(spec)
+                                    end = Offset(end.x.coerceIn(0f, spec.widthDp), end.y.coerceIn(top, top + spec.heightDp))
+                                }
+                                val points = ShapeRecognizer.dragPoints(drawingShape, drawingStart, end)
+                                val brush = drawingBrush
+                                if (points.isNotEmpty() && brush != null) {
+                                    val batch = MutableStrokeInputBatch()
+                                    points.forEachIndexed { index, p -> batch.add(InputToolType.STYLUS, p.x, p.y, index * 16L) }
+                                    currentOnShapeFinished(Stroke(brush, batch), drawingShape)
+                                }
+                                drawingOverlay.shapePoints = emptyList()
+                            } else drawingOverlay.finishLaser(android.os.SystemClock.uptimeMillis())
+                            drawingPointer = null
+                            drawingBrush = null
+                        }
+                        // The lasso pointer lifted: close the loop, or land the move.
+                        val lassoState = currentLasso
+                        if (lassoPointer != null && event.changes.any { it.id == lassoPointer && !it.pressed } && lassoState != null) {
+                            if (lassoMoving) {
+                                val drag = lassoState.drag
+                                lassoState.drag = Offset.Zero
+                                if (drag != Offset.Zero) currentOnMoveStrokes(lassoState.selection, drag.x, drag.y)
+                            } else {
+                                lassoState.selection = Lasso.select(lassoState.loop, currentStrokes())
+                                lassoState.loop = emptyList()
+                                if (lassoState.active) haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            }
+                            lassoPointer = null
+                            lassoMoving = false
+                        }
+
                         val stylusInEvent = event.changes.any { it.type == PointerType.Stylus }
                         if (stylusInEvent) {
                             // A stylus-up event is included as an unpressed stylus change.  Touch
@@ -352,6 +415,7 @@ fun InkSurface(
 
                         if (down.isNotEmpty()) {
                             if (!gestureActive) {
+                                currentOnUserInteraction()
                                 gestureActive = true
                                 gestureStartMs = nowMs
                                 gesturePointers = 0
@@ -401,6 +465,10 @@ fun InkSurface(
                         // Two or more fingers mean "move the page", never "draw". The zoom lock
                         // pins the scale but still lets the pinch carry the page.
                         if (fingers.size >= 2 && !stylusDown) {
+                            drawingPointer = null
+                            drawingCancelled = activeTool == InkTool.SHAPE || activeTool == InkTool.LASER
+                            drawingOverlay.shapePoints = emptyList()
+                            drawingOverlay.laserPoints = emptyList()
                             if (currentContentScroll != null) panContent(event.calculatePan())
                             else camera.transformBy(
                                 factor = if (currentZoomLocked) 1f
@@ -436,20 +504,33 @@ fun InkSurface(
                         val active = down.firstOrNull { it.type == PointerType.Stylus }
                             ?: fingers.firstOrNull()?.takeUnless { stylusDown }
 
-                        // The lasso pointer lifted: close the loop, or land the move.
-                        val lassoState = currentLasso
-                        if (lassoPointer != null && down.none { it.id == lassoPointer } && lassoState != null) {
-                            if (lassoMoving) {
-                                val drag = lassoState.drag
-                                lassoState.drag = Offset.Zero
-                                if (drag != Offset.Zero) currentOnMoveStrokes(lassoState.selection, drag.x, drag.y)
-                            } else {
-                                lassoState.selection = Lasso.select(lassoState.loop, currentStrokes())
-                                lassoState.loop = emptyList()
-                                if (lassoState.active) haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        if (activeTool == InkTool.SHAPE || activeTool == InkTool.LASER) {
+                            if (!drawingCancelled && active != null) {
+                                var world = camera.screenToWorld(active.position)
+                                if (drawingPointer == null || (active.type == PointerType.Stylus && drawingPointer != active.id)) {
+                                    drawingPointer = active.id
+                                    drawingOverlay.laserPoints = emptyList()
+                                    drawingStart = world
+                                    drawingShape = currentShape
+                                    drawingBrush = InkCodec.brushForShape(currentColor, currentWidth, camera.scale)
+                                    drawingOverlay.shapeColor = Color(if (currentDarkReader) darkReaderArgb(currentColor, InkTool.MARKER) else currentColor)
+                                    drawingOverlay.shapeWidth = currentWidth
+                                }
+                                if (currentNotebook && activeTool == InkTool.SHAPE) {
+                                    val spec = currentPageSpec
+                                    val pageTop = floor(drawingStart.y / NotebookLayout.strideOf(spec)) * NotebookLayout.strideOf(spec)
+                                    world = Offset(world.x.coerceIn(0f, spec.widthDp), world.y.coerceIn(pageTop, pageTop + spec.heightDp))
+                                }
+                                drawingEnd = world
+                                if (activeTool == InkTool.SHAPE) {
+                                    drawingOverlay.shapePoints = ShapeRecognizer.dragPoints(drawingShape, drawingStart, drawingEnd)
+                                } else if (drawingOverlay.laserPoints.lastOrNull()?.let { (world - it).getDistance() >= 0.75f } != false) {
+                                    drawingOverlay.laserPoints = drawingOverlay.laserPoints + world
+                                }
                             }
-                            lassoPointer = null
-                            lassoMoving = false
+                            if (down.isEmpty()) drawingCancelled = false
+                            event.changes.forEach { it.consume() }
+                            continue
                         }
 
                         when {
@@ -540,7 +621,7 @@ fun InkSurface(
             }
         }
 
-        PageImages(attachments, camera, pageSpec, notebook, darkReader)
+        PageImages(attachments, camera, pageSpec, notebook, darkReader, pitchBlack)
 
         // Cool only the page and imported backgrounds. Wet ink uses a separate front buffer;
         // tinting the dry layer would change the ink's color as soon as the pen is lifted.
@@ -637,6 +718,8 @@ fun InkSurface(
         if (lasso != null && tool == InkTool.LASSO) {
             LassoOverlay(lasso = lasso, camera = camera, strokes = currentStrokes)
         }
+
+        DrawingToolOverlay(drawingOverlay, camera)
 
     }
 }

@@ -24,7 +24,12 @@ import java.util.WeakHashMap
  * is an opaque native handle — tagging at creation time is exact, cheap and survives a round trip
  * through storage.
  */
-data class InkStroke(val stroke: Stroke, val tool: InkTool)
+data class InkStroke(
+    val stroke: Stroke,
+    val tool: InkTool,
+    /** Optional clean-shape metadata; null keeps ordinary handwriting compact. */
+    val shape: InkShape? = null,
+)
 
 /**
  * Persists Ink API strokes into the single `drawingJson` column on a note.
@@ -38,7 +43,9 @@ object InkCodec {
 
     const val FORMAT_VERSION = 1
 
-    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+    // Omit optional shape tags on ordinary handwriting. The required brush/input fields are still
+    // present, while old JSON remains readable because every omitted value has a decoder default.
+    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = false }
 
     /**
      * Re-encoding every stroke on each autosave gets wasteful once a page runs long, so encoded
@@ -79,6 +86,8 @@ object InkCodec {
         val colorArgb: Int,
         val size: Float,
         val epsilon: Float,
+        /** Omitted for ordinary freehand strokes to keep legacy notes small. */
+        val shape: InkShape? = null,
     )
 
     fun encode(strokes: List<InkStroke>): String {
@@ -97,6 +106,7 @@ object InkCodec {
                 colorArgb = brush.colorIntArgb,
                 size = brush.size,
                 epsilon = brush.epsilon,
+                shape = inkStroke.shape,
             )
         }
         return json.encodeToString(Page(strokes = dtos))
@@ -116,13 +126,21 @@ object InkCodec {
         val inputs = ByteArrayInputStream(Base64.decode(dto.inputs, Base64.NO_WRAP))
             .use { StrokeInputBatch.decode(it) }
         val brush = Brush.createWithColorIntArgb(
-            family = familyForTool(tool),
+            family = if (dto.shape != null && tool == InkTool.MARKER) shapeFamily else familyForTool(tool),
             colorIntArgb = colorForTool(tool, dto.colorArgb),
             size = dto.size,
             epsilon = dto.epsilon,
         )
-        InkStroke(Stroke(brush = brush, inputs = inputs), tool)
+        InkStroke(Stroke(brush = brush, inputs = inputs), tool, dto.shape)
     }.getOrNull()
+
+    /** Rebuilds only the brush, preserving the exact vector input batch and shape metadata. */
+    fun recolor(inkStroke: InkStroke, colorArgb: Int): InkStroke = inkStroke.copy(
+        stroke = Stroke(
+            brush = inkStroke.stroke.brush.copyWithColorIntArgb(colorForTool(inkStroke.tool, colorArgb)),
+            inputs = inkStroke.stroke.inputs,
+        )
+    )
 
     /**
      * Builds the brush for a tool.
@@ -139,6 +157,12 @@ object InkCodec {
             epsilon = (0.1f / worldToScreenScale.coerceAtLeast(0.05f)).coerceIn(0.001f, 1f),
         ).also { brushTools[it] = tool }
 
+    /** Generated geometry must reach every corner, both immediately and after decoding. */
+    fun brushForShape(colorArgb: Int, widthDp: Float, worldToScreenScale: Float): Brush =
+        brushFor(InkTool.MARKER, colorArgb, widthDp, worldToScreenScale)
+            .copy(family = shapeFamily)
+            .also { brushTools[it] = InkTool.MARKER }
+
     /**
      * Clamp rather than multiply alpha: repeated saves must never fade a highlight.  A quarter
      * opacity keeps black text readable underneath the chisel tip on both paper and imported PDFs.
@@ -152,8 +176,17 @@ object InkCodec {
 
     // One instance per family, so lookups by family work by identity as well as by value.
     @OptIn(ExperimentalInkCustomBrushApi::class)
+    // Ink 1.0.0 exposes its spring input model with a library annotation; pinned and device-tested.
+    @Suppress("RestrictedApi")
     private val penFamily: BrushFamily by lazy { StockBrushes.pressurePen().copy(inputModel = BrushFamily.SPRING_MODEL) }
     private val markerFamily: BrushFamily by lazy { StockBrushes.marker() }
+    @OptIn(ExperimentalInkCustomBrushApi::class)
+    @Suppress("RestrictedApi")
+    // The stock marker's sliding-window model rounds a sparse rectangle into a loop and
+    // shortens arrowheads. Shape inputs already describe their exact path; do not smooth it.
+    private val shapeFamily: BrushFamily by lazy {
+        StockBrushes.marker().copy(inputModel = BrushFamily.EXPERIMENTAL_NAIVE_MODEL)
+    }
     private val highlighterFamily: BrushFamily by lazy { StockBrushes.highlighter() }
     private val dashedFamily: BrushFamily by lazy { StockBrushes.dashedLine() }
     private val plainPenFamily: BrushFamily by lazy { StockBrushes.pressurePen() }
@@ -169,6 +202,6 @@ object InkCodec {
         InkTool.HIGHLIGHTER -> highlighterFamily
         InkTool.DASHED -> dashedFamily
         // Not brush tools; fall back to the pen so callers never get a null family.
-        InkTool.ERASER, InkTool.PAN, InkTool.LASSO -> plainPenFamily
+        InkTool.ERASER, InkTool.PAN, InkTool.LASSO, InkTool.SHAPE, InkTool.LASER -> plainPenFamily
     }
 }
