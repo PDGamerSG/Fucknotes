@@ -39,9 +39,9 @@ class DarkReaderTest {
 
     @Test fun imageMatrixTurnsPaperDarkTextLightAndKeepsHue() {
         val paper = NightPalette.applyImageMatrix(0xFFFFFFFF.toInt())
-        assertTrue("white paper lands on the slate", lightness(paper) < 0.15f)
+        assertEquals("white paper lands on black, like the page around it", 0xFF000000.toInt(), paper)
         val text = NightPalette.applyImageMatrix(0xFF000000.toInt())
-        assertTrue("black text reads light but not pure white", lightness(text) in 0.85f..0.98f)
+        assertTrue("black text reads light but not pure white", lightness(text) in 0.80f..0.98f)
         val blue = NightPalette.applyImageMatrix(0xFF0000FF.toInt())
         assertTrue("blue stays blue", (blue and 0xFF) > ((blue ushr 16) and 0xFF) && (blue and 0xFF) > ((blue ushr 8) and 0xFF))
         assertEquals(0x80, NightPalette.applyImageMatrix(0x80123456.toInt()) ushr 24)

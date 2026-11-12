@@ -156,7 +156,6 @@ fun InkSurface(
      * but not its movement, and a finger never draws, erases or swaps tools. The stylus writes.
      */
     reading: Boolean = false,
-    pitchBlack: Boolean = false,
     shape: InkShape = InkShape.RECTANGLE,
     onShapeFinished: (Stroke, InkShape) -> Unit = { _, _ -> },
 ) {
@@ -248,14 +247,15 @@ fun InkSurface(
     // make it rebuild its low-latency surface. Keep one instance per actual camera position.
     val screenToWorld = remember(camera.scale, camera.panX, camera.panY) { camera.screenToWorld() }
 
-    // The paper tone the surface actually paints: night slate while dark mode is on. Notebook
+    // The paper tone the surface actually paints: black while dark mode is on. Notebook
     // sheets go through the same rule in drawNotebookPages; the canvas has no sheets, so its
     // background is the page and must follow the rule here or stay white at night.
-    val renderedPageColor = if (darkReader && pageColor != Color.Transparent) NightPalette.paper(pitchBlack) else pageColor
+    val renderedPageColor = if (darkReader && pageColor != Color.Transparent) NightPalette.paper else pageColor
     BoxWithConstraints(
         modifier = modifier
-            // Notebook pages float on a desk; the endless canvas *is* the page.
-            .background(if (notebook && !pitchBlack) deskColor else renderedPageColor)
+            // Notebook pages float on a desk; the endless canvas *is* the page. At night the desk
+            // is as black as the sheets, and only their outline tells them apart.
+            .background(if (!notebook) renderedPageColor else if (darkReader) NightPalette.paper else deskColor)
             .then(if (enabled) Modifier.pointerInput(Unit) {
                 awaitPointerEventScope {
                     var lastErasePoint: Offset? = null
@@ -615,13 +615,14 @@ fun InkSurface(
                     ruleColor = renderedRuleColor,
                     ruleSpacingDp = ruleSpacingDp,
                     pageCount = pageCount().coerceAtLeast(1),
+                    edgeColor = if (darkReader) NightPalette.edge else PageEdge,
                 )
             } else {
                 drawPaper(paperStyle, renderedRuleColor, ruleSpacingDp, camera)
             }
         }
 
-        PageImages(attachments, camera, pageSpec, notebook, darkReader, pitchBlack)
+        PageImages(attachments, camera, pageSpec, notebook, darkReader)
 
         // Cool only the page and imported backgrounds. Wet ink uses a separate front buffer;
         // tinting the dry layer would change the ink's color as soon as the pen is lifted.
@@ -813,6 +814,7 @@ private fun DrawScope.drawNotebookPages(
     ruleColor: Color,
     ruleSpacingDp: Float,
     pageCount: Int,
+    edgeColor: Color,
 ) {
     val scale = camera.scale
     val step = ruleSpacingDp * scale
@@ -840,7 +842,7 @@ private fun DrawScope.drawNotebookPages(
         }
         // A hairline edge, so a page reads as a sheet rather than as a lit rectangle.
         drawRect(
-            color = PageEdge,
+            color = edgeColor,
             topLeft = Offset(left, top),
             size = Size(widthPx, heightPx),
             style = DrawStroke(width = 1f),

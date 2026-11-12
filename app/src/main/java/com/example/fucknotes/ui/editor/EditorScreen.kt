@@ -118,7 +118,13 @@ private fun EditorContent(
     var showExport by remember { mutableStateOf(false) }
     var showTagDialog by remember { mutableStateOf(false) }
     var showRename by remember { mutableStateOf(false) }
-    var showPdfExport by remember { mutableStateOf(false) }
+    // Straight to the share sheet: the PDF takes the note's own mode, so there is nothing to ask.
+    val exportPdf = {
+        viewModel.export(ExportFormat.PDF) { file, mime ->
+            context.startActivity(Intent.createChooser(viewModel.shareIntentFor(file, mime), "Export PDF"))
+        }
+        Unit
+    }
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var quickHighlighterVisible by rememberSaveable(state.noteId) { mutableStateOf(false) }
     var showStrokeColor by remember { mutableStateOf(false) }
@@ -258,7 +264,7 @@ private fun EditorContent(
                                     onPaper = { showPaper = true },
                                     onTags = { showTagDialog = true },
                                     onRename = { showRename = true },
-                                    onPdf = { showPdfExport = true },
+                                    onPdf = exportPdf,
                                     onAddImage = { pickImage.launch(arrayOf("image/*")) },
                                     onPageImages = if (isInkNote) ({ showPageImages = true }) else null,
                                     onExport = { showExport = true },
@@ -378,7 +384,7 @@ private fun EditorContent(
                         onTags = { showTagDialog = true },
                         onRename = { showRename = true },
                         onHighlighter = { quickHighlighterVisible = true },
-                        onPdf = { showPdfExport = true },
+                        onPdf = exportPdf,
                         onAddImage = { pickImage.launch(arrayOf("image/*")) },
                         onPageImages = { showPageImages = true },
                         onExport = { showExport = true },
@@ -422,7 +428,6 @@ private fun EditorContent(
                         pageColor = androidx.compose.ui.graphics.Color.Transparent,
                         darkReader = state.darkReader,
                         contentScroll = contentScroll,
-                        pitchBlack = state.pitchBlack,
                         shape = state.shape, onShapeFinished = viewModel::commitShape,
                         lasso = typedLasso, onMoveStrokes = viewModel::moveStrokes,
                     )
@@ -470,9 +475,6 @@ private fun EditorContent(
             page = state.page,
             notebook = state.type == NoteType.NOTEBOOK,
             dark = state.darkReader,
-            onDark = viewModel::setDarkPages,
-            pitchBlack = state.pitchBlack,
-            onPitchBlack = { viewModel.setPageAppearance(com.example.fucknotes.data.model.PageAppearance.PITCH_BLACK) },
             onStyle = viewModel::setPaperStyle,
             onPaperColor = viewModel::setColor,
             onLineColor = viewModel::setLineColor,
@@ -495,7 +497,6 @@ private fun EditorContent(
     if (showPages) {
         PagesSheet(
             darkReader = state.darkReader,
-            pitchBlack = state.pitchBlack,
             pageCount = viewModel.pageCount,
             currentPage = camera.pageAtCentre(state.page)
                 .coerceIn(0, (viewModel.pageCount - 1).coerceAtLeast(0)),
@@ -514,26 +515,12 @@ private fun EditorContent(
         )
     }
 
-    if (showPdfExport) {
-        PdfExportDialog(
-            initialDark = state.darkReader,
-            onDismiss = { showPdfExport = false },
-            onExport = { dark ->
-                showPdfExport = false
-                viewModel.export(ExportFormat.PDF, darkStyle = dark) { file, mime ->
-                    context.startActivity(Intent.createChooser(viewModel.shareIntentFor(file, mime), "Export PDF"))
-                }
-            },
-        )
-    }
-
     if (showExport) {
         ExportDialog(
-            initialDark = state.darkReader,
             onDismiss = { showExport = false },
-            onExport = { format, dark ->
+            onExport = { format ->
                 showExport = false
-                viewModel.export(format, dark) { file, mime ->
+                viewModel.export(format) { file, mime ->
                     context.startActivity(
                         Intent.createChooser(viewModel.shareIntentFor(file, mime), "Export note")
                     )
@@ -633,10 +620,5 @@ private fun EditorMenu(
         onDelete = { onDismiss(); onDelete() },
         darkReader = state.darkReader,
         onToggleDarkReader = { onDismiss(); viewModel.toggleDarkReader() },
-        pitchBlack = state.pitchBlack,
-        onTogglePitchBlack = {
-            onDismiss()
-            viewModel.setPageAppearance(if (state.pitchBlack) com.example.fucknotes.data.model.PageAppearance.DARK else com.example.fucknotes.data.model.PageAppearance.PITCH_BLACK)
-        },
     )
 }

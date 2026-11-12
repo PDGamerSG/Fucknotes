@@ -179,7 +179,10 @@ class DriveSync(
                 when (action) {
                     is SyncPlanner.Action.Upload -> {
                         val entity = note ?: return@forEachIndexed
-                        val pdf = exporter.exportEditablePdf(entity)
+                        // The file in Drive shows the note as it is set: black pages in dark mode.
+                        val pdf = exporter.exportEditablePdf(
+                            entity, entity.appearance.isDark(settings.settings.first().darkReader),
+                        )
                         try {
                             val parent = folderIds.getValue(action.folderKey)
                             val properties = mapOf(

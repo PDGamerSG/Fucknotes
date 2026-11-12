@@ -12,6 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
@@ -192,26 +193,44 @@ class EditorDrawingToolsTest {
         }
     }
 
-    @Test fun pitchBlackRendersAsBlackAndPersists() {
+    @Test fun darkModeRendersAsBlackAndPersists() {
         withEditor { vm, _ ->
-            compose.runOnIdle { vm.setPageAppearance(PageAppearance.PITCH_BLACK) }
+            compose.runOnIdle { vm.setDarkPages(true) }
             val pixels = compose.onNodeWithTag("editor").captureToImage().toPixelMap()
             assertEquals(Color.Black, pixels[pixels.width / 2, pixels.height / 2])
             runBlocking { vm.saveNow() }
             val app = InstrumentationRegistry.getInstrumentation().targetContext
             val saved = runBlocking { ServiceLocator.notes(app).getNote(vm.state.value.noteId) }!!
-            assertEquals(PageAppearance.PITCH_BLACK, saved.appearance)
+            assertEquals(PageAppearance.DARK, saved.appearance)
         }
     }
 
-    @Test fun newNotebookOffersPitchBlack() {
-        var draft: NotebookDraft? = null
-        compose.setContent {
-            FucknotesTheme { NewNotebookDialog("Black page", {}, { draft = it }) }
+    @Test fun exportComesOutInTheNotesOwnMode() {
+        withEditor { vm, _ ->
+            /** The bottom-right corner of the exported PDF's first page: paper, never ink or title. */
+            fun exportedPaper(): Int {
+                val ready = java.util.concurrent.LinkedBlockingQueue<java.io.File>()
+                compose.runOnUiThread { vm.export(com.example.fucknotes.export.ExportFormat.PDF) { file, _ -> ready.put(file) } }
+                val file = ready.poll(20, java.util.concurrent.TimeUnit.SECONDS) ?: error("The export did not finish")
+                try {
+                    android.graphics.pdf.PdfRenderer(
+                        android.os.ParcelFileDescriptor.open(file, android.os.ParcelFileDescriptor.MODE_READ_ONLY)
+                    ).use { pdf ->
+                        pdf.openPage(0).use { page ->
+                            val bitmap = Bitmap.createBitmap(page.width, page.height, Bitmap.Config.ARGB_8888)
+                            try {
+                                page.render(bitmap, null, null, android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                                return bitmap.getPixel(page.width - 12, page.height - 12)
+                            } finally { bitmap.recycle() }
+                        }
+                    }
+                } finally { file.parentFile?.deleteRecursively() }
+            }
+            compose.runOnIdle { vm.setDarkPages(true) }
+            assertEquals("A dark note exports black pages", android.graphics.Color.BLACK, exportedPaper())
+            compose.runOnIdle { vm.setDarkPages(false) }
+            assertTrue("A light note exports light pages", Color(exportedPaper()).luminance() > 0.8f)
         }
-        compose.onNodeWithContentDescription("Pitch black mode").performClick()
-        compose.onNodeWithText("Create").performClick()
-        assertEquals(PageAppearance.PITCH_BLACK, draft?.appearance)
     }
 
     private fun withEditor(test: (EditorViewModel, InkCamera) -> Unit) {

@@ -21,7 +21,6 @@ import androidx.compose.material.icons.outlined.PictureAsPdf
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.UploadFile
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -60,8 +59,6 @@ fun EditorOverflowMenu(
     onToggleDarkReader: () -> Unit = {},
     onRename: () -> Unit = {},
     onHighlighter: (() -> Unit)? = null,
-    pitchBlack: Boolean = false,
-    onTogglePitchBlack: () -> Unit = {},
 ) {
     DropdownMenu(expanded, onDismissRequest = onDismiss) {
         // Night colours for every page, image and stroke; the same switch as in Settings, here
@@ -71,12 +68,6 @@ fun EditorOverflowMenu(
             leadingIcon = { Icon(if (darkReader) Icons.Outlined.LightMode else Icons.Outlined.DarkMode, null) },
             trailingIcon = { Switch(checked = darkReader, onCheckedChange = { onToggleDarkReader() }) },
             onClick = onToggleDarkReader,
-        )
-        DropdownMenuItem(
-            text = { Text("Pitch black pages") },
-            leadingIcon = { Icon(Icons.Outlined.DarkMode, null) },
-            trailingIcon = { Switch(checked = pitchBlack, onCheckedChange = { onTogglePitchBlack() }) },
-            onClick = onTogglePitchBlack,
         )
         HorizontalDivider()
         DropdownMenuItem(
@@ -151,46 +142,9 @@ fun EditorOverflowMenu(
     }
 }
 
-/** Light or dark page, then export. The choice starts from how the note is being read. */
+/** Pick a format. The pages come out the way the note is set: black in dark mode, light otherwise. */
 @Composable
-fun PdfExportDialog(initialDark: Boolean, onDismiss: () -> Unit, onExport: (dark: Boolean) -> Unit) {
-    var dark by remember { mutableStateOf(initialDark) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Export as PDF") },
-        text = {
-            ImmersiveDialogWindow()
-            Column {
-                listOf(false to "Light page", true to "Dark page").forEach { (isDark, label) ->
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .clickable { dark = isDark }
-                            .padding(vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        androidx.compose.material3.RadioButton(selected = dark == isDark, onClick = { dark = isDark })
-                        Column(Modifier.padding(start = 4.dp)) {
-                            Text(label)
-                            Text(
-                                if (isDark) "Night slate, night ink, as dark mode shows the page"
-                                else "The paper and ink colours the note was written in",
-                                style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
-                                color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = { onExport(dark) }) { Text("Export") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-    )
-}
-
-@Composable
-fun ExportDialog(onDismiss: () -> Unit, onExport: (ExportFormat, Boolean) -> Unit, initialDark: Boolean = false) {
-    var dark by remember { mutableStateOf(initialDark) }
+fun ExportDialog(onDismiss: () -> Unit, onExport: (ExportFormat) -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Export") },
@@ -201,23 +155,12 @@ fun ExportDialog(onDismiss: () -> Unit, onExport: (ExportFormat, Boolean) -> Uni
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .clickable { onExport(format, dark) }
+                            .clickable { onExport(format) }
                             .padding(vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(format.label, Modifier.weight(1f))
                     }
-                }
-                HorizontalDivider()
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable { dark = !dark }
-                        .padding(vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Checkbox(checked = dark, onCheckedChange = { dark = it })
-                    Text("Use a dark page")
                 }
             }
         },

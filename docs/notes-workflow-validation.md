@@ -1,5 +1,75 @@
 # Notes workflow changes
 
+## One black dark mode, exports that follow the note, ink colour repair — 2026-11-13, macOS, tablet
+
+First run of the 1.2.0 work on the owner's tablet (it had 1.1.0), plus the owner's requests of
+the day. Evidence — screenshots, the exported PDF, the instrumentation logs — is in
+`build/tablet-validation-20261113/`; the data backup taken before any test ran is
+`build/tablet-backup-20261113-pre-test/appdata.tar` (56 files, checksums matched the device).
+
+**What changed**
+
+- Dark mode is one switch, "Dark mode" in the editor's ⋯ menu, and its pages are true black
+  (`NightPalette.paper`). The separate "Pitch black pages" switch, the slate, the Light / Dark /
+  Pitch black row in the New notebook dialog and in the Paper sheet, and the dark paper swatch
+  are gone. A notebook, canvas or text note the user creates is light.
+- Exports ask nothing about light or dark: a note in dark mode exports black pages with night
+  ink, any other note exports light. "Export as PDF" goes straight to the share sheet. Home
+  exports and Drive uploads resolve each note on its own.
+- Ink that changed shade partway through a line: one notebook (id 29) held 66 strokes of 6,989
+  stored in their *night* colour, left by the pen-lift bug fixed in c4dc023 — 51 blue, 11 red,
+  4 black. They were inverted a second time on a dark page and nearly vanished in any export.
+  `InkCodec.parse` now reads such a stroke back in the pen it was written with. Nothing written
+  since the fix carries one: 3,829 strokes in the four later notebooks were checked.
+- Dot paper exported 2.6 pt dots; they are 1.2 pt now.
+
+**A stale working tree, and what it cost**
+
+This folder still held an older, uncommitted copy of the 1.2.0 work when the day started;
+`origin/main` already had the released commit (c1eca03, tag `v1.2.0`). The build first put on
+the tablet therefore lacked the release's raw-input-model fix for shapes, and a dragged box came
+out as a blob with one square corner (`shapes-before-fix.png`). An interim fix written here —
+replaying the outline slowly — was dropped when the day's work was moved onto `origin/main`:
+the released fix (`InkCodec.brushForShape`) does the same job and also repairs shapes on decode.
+`shapes-after-fix.png` shows the interim build, not the final one; the final build's shapes are
+covered on the tablet by `renderedShapesKeepTheirCornersAndArrowWingsAfterReopening`.
+
+**Checks**
+
+- Red before green: `NightSlipTest` (4 of 6 failed against a stub), its black-ink case (failed
+  after `NotebookRenderingTest` caught pure black being read as the night form of white), and
+  `PdfWorkflowTest.dottedPaperExportsFineDots` ("was 2.5").
+- **107 JVM tests passed.** **60 instrumentation tests passed on the tablet** on the final tree
+  (`instrumentation-merged.txt`). Earlier runs of the day, on the stale tree: 57 of 58 with the
+  black-ink failure (`instrumentation-first-run.txt`), then 60 of 60 (`instrumentation-final.txt`).
+- The repair was run over the real ink of notebooks 29, 31, 32, 33 and 34 on the JVM: 66 strokes
+  changed in 29 (`2A85D5→2386DC` ×51, `B71E33→E84158` ×11, `DBDEE6→171B23` ×4), none in the
+  others (`night-colour-repair-report.txt`).
+- On the tablet, with taps and stylus strokes injected over adb into a scratch notebook
+  (`ClaudeTest1113`), on the interim build: the New notebook dialog shows no mode row and four
+  light papers; the notebook opens light with the app in dark theme; the red highlighter shows
+  at once and is gone six seconds later with nothing stored (9,938 red pixels, then 0); the ⋯
+  menu has the single Dark mode switch; "Export as PDF" opened the system share sheet with no
+  dialog and the PDF is a black page with fine dots and night ink (`export-dark.pdf`).
+- After the first runs the database passed `integrity_check`, the 32 earlier notes held the same
+  8,945,865 characters of ink as in the backup, and the three images and eight empty lock files
+  the tests left behind were removed.
+
+**Not checked**
+
+- Nothing was done with the physical pen by the tester. The owner was writing in the scratch
+  notebook during the run — their strokes are in it, and it has been left in place — which also
+  swallowed some injected taps: the switch back to light followed by a second export was not
+  observed by hand. `EditorDrawingToolsTest.exportComesOutInTheNotesOwnMode` covers it.
+- The final tree was not driven by hand on the tablet, only by the instrumentation suite.
+- A light page still carries the editor's cool wash while the app theme is dark; that is how it
+  was and it was not part of this request.
+- Home export and Drive upload were not driven on the tablet; Drive has never been signed in.
+- `svc power stayon usb` was set for the test run and then turned off; whatever "Stay awake"
+  was before is not known.
+- The version is still 1.2.0 (versionCode 3), the same as the published release, although the
+  app now differs from it. Bump it before the next release.
+
 ## Pitch-black pages and drawing tools — 2026-11-10
 
 - Saved pitch-black appearance is available in notebook creation, Paper, and the editor menu.

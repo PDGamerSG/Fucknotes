@@ -24,8 +24,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * A notebook picks light or dark pages when it is made, keeps the choice with the note, and old
- * rows come through the schema change still following the app-wide setting.
+ * A notebook is made light, a note keeps the mode it is switched to, and old rows come through
+ * the schema change still following the app-wide setting.
  */
 @RunWith(AndroidJUnit4::class)
 class NotebookAppearanceTest {
@@ -36,29 +36,18 @@ class NotebookAppearanceTest {
         AppDatabase::class.java,
     )
 
-    @Test fun theSheetStartsFromTheAppSettingAndTheChoiceReachesTheDraft() {
+    @Test fun aNewNotebookIsLightAndTheSheetOffersNoDarkPage() {
         var created: NotebookDraft? = null
         compose.setContent {
-            FucknotesTheme {
-                NewNotebookDialog(initialTitle = "Night", initialDark = false, onDismiss = {}, onCreate = { created = it })
-            }
-        }
-        compose.onNodeWithContentDescription("Light mode").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Dark mode").performClick()
-        // The paper tone has no say on a night page, so its row steps aside.
-        compose.onNodeWithText("Paper colour").assertDoesNotExist()
-        compose.onNodeWithText("Create").performClick()
-        assertEquals(PageAppearance.DARK, created?.appearance)
-    }
-
-    @Test fun theSheetPreselectsDarkWhenTheAppIsDark() {
-        var created: NotebookDraft? = null
-        compose.setContent {
+            // Even with the app in dark mode: dark is a switch inside the note, not a kind of paper.
             FucknotesTheme(darkReader = true) {
-                NewNotebookDialog(initialTitle = "Day", initialDark = true, onDismiss = {}, onCreate = { created = it })
+                NewNotebookDialog(initialTitle = "Day", onDismiss = {}, onCreate = { created = it })
             }
         }
-        compose.onNodeWithContentDescription("Light mode").performClick()
+        compose.onNodeWithText("Mode").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Light mode").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Dark mode").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Pitch black mode").assertDoesNotExist()
         compose.onNodeWithText("Paper colour").assertIsDisplayed()
         compose.onNodeWithText("Create").performClick()
         assertEquals(PageAppearance.LIGHT, created?.appearance)

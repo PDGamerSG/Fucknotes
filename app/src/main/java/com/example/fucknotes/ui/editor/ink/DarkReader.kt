@@ -4,6 +4,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.ink.brush.Brush
 import androidx.ink.strokes.Stroke
 import com.example.fucknotes.data.ink.InkStroke
+import com.example.fucknotes.data.model.DefaultPenTray
+import com.example.fucknotes.data.model.InkColors
 import com.example.fucknotes.data.model.InkTool
 import java.util.Collections
 import java.util.WeakHashMap
@@ -18,25 +20,20 @@ import kotlin.math.min
  * and every reader — the page, its thumbnails, imported PDF and slide images, the attachment
  * strip — repaints through these rules when dark mode is on.
  *
- * The rules invert *lightness* and keep *hue*, so black ink reads as off-white, white paper as a
- * dark slate, and blue stays blue rather than turning orange the way a raw RGB inversion does.
+ * The rules invert *lightness* and keep *hue*, so black ink reads as off-white, white paper as
+ * black, and blue stays blue rather than turning orange the way a raw RGB inversion does.
  * Lightness is capped short of pure white and saturation eased a little, which is what keeps a
  * page of text from glaring in a dark room.
  */
 object NightPalette {
-    fun paper(pitchBlack: Boolean): Color = if (pitchBlack) Color.Black else paper
-
-    fun imageMatrix(pitchBlack: Boolean): FloatArray = if (!pitchBlack) imageMatrix else blackImageMatrix
-
-    private val blackImageMatrix: FloatArray by lazy {
-        imageMatrix.copyOf().apply { this[4] -= 24f; this[9] -= 28f; this[14] -= 36f }
-    }
-
-    /** The sheet, a dark slate rather than black: enough depth for the chrome to float on. */
-    val paper: Color = Color(0xFF181C24)
+    /** The sheet: true black, the one dark mode there is. */
+    val paper: Color = Color.Black
 
     /** Rules, grid and dots on the dark sheet. */
     val rule: Color = Color(0xFF4A5566)
+
+    /** The outline of a sheet, so a black page still reads as a page on the black desk. */
+    val edge: Color = Color(0xFF2C323D)
 
     /** Brightest an inverted colour may become; pure white glares. */
     const val MAX_LIGHTNESS = 0.88f
@@ -49,20 +46,19 @@ object NightPalette {
 
     /**
      * A 4x5 colour matrix (Android layout, offsets in 0–255) for bitmaps: invert, then rotate hue
-     * by a half turn so hues survive, then ease towards the slate so white paper lands on
-     * [paper] and black text on a soft off-white instead of the extremes.
+     * by a half turn so hues survive, then scale down so white paper lands on [paper] — black —
+     * and black text on a soft off-white instead of pure white.
      */
     val imageMatrix: FloatArray = run {
         // Hue-preserving inversion: invert followed by a 180° hue rotation.
         val a = 0.333f
         val b = -0.667f
-        // Ease: v' = SCALE * v + offset, with the offset tinted like the paper.
+        // Ease: v' = SCALE * v, so the brightest an inverted pixel gets is short of white.
         val scale = 0.86f
-        val offset = floatArrayOf(24f, 28f, 36f)
         floatArrayOf(
-            a * scale, b * scale, b * scale, 0f, 255f * scale + offset[0],
-            b * scale, a * scale, b * scale, 0f, 255f * scale + offset[1],
-            b * scale, b * scale, a * scale, 0f, 255f * scale + offset[2],
+            a * scale, b * scale, b * scale, 0f, 255f * scale,
+            b * scale, a * scale, b * scale, 0f, 255f * scale,
+            b * scale, b * scale, a * scale, 0f, 255f * scale,
             0f, 0f, 0f, 1f, 0f,
         )
     }
@@ -140,6 +136,51 @@ internal fun InkStroke.forDarkReader(): Stroke = nightStrokes.getOrPut(stroke) {
         brush = stroke.brush.copyWithColorIntArgb(darkReaderArgb(stroke.brush.colorIntArgb, tool)),
         inputs = stroke.inputs,
     )
+}
+
+// ---- night colours that were stored by mistake ------------------------------
+
+/** The pen colours of the first palette, still on the pages written with it. */
+private val LegacyInks: List<Int> = listOf(
+    0xFF1B1B1F.toInt(), 0xFF5A5A66.toInt(), 0xFF2F6FED.toInt(), 0xFF1B9AAA.toInt(),
+    0xFF2E9E5B.toInt(), 0xFFE8A317.toInt(), 0xFFE23B3B.toInt(), 0xFF8E44AD.toInt(),
+    0xFFFFE14D.toInt(), 0xFF7BE0A6.toInt(), 0xFFFFAFCC.toInt(), 0xFFFFFFFF.toInt(),
+)
+
+/** Every colour a pen has been able to hold: today's palette and tray, and the palette before it. */
+internal val KnownInks: Set<Int> =
+    (LegacyInks + InkColors + DefaultPenTray.map { it.colorArgb }).toSet()
+
+/** Night colour to the pen it came from, by RGB; today's palette wins a tie with the old one. */
+private fun nightToDay(tool: InkTool): Map<Int, Int> {
+    val known = KnownInks.map { it and 0xFFFFFF }.toSet()
+    return (LegacyInks + DefaultPenTray.map { it.colorArgb } + InkColors)
+        .associateBy({ darkReaderArgb(it, tool) and 0xFFFFFF }, { it and 0xFFFFFF })
+        // A colour a pen can really hold is never a slip, whatever it happens to be the night of.
+        // Neither is black: it is the night form of the white pen, but it is also plain black
+        // ink from outside the tray, and turning that white would erase it from a light page.
+        .filter { (night, day) -> night != day && night !in known && night != BLACK_RGB }
+}
+
+private const val BLACK_RGB = 0x000000
+
+private val penNightToDay: Map<Int, Int> by lazy { nightToDay(InkTool.PEN) }
+private val highlighterNightToDay: Map<Int, Int> by lazy { nightToDay(InkTool.HIGHLIGHTER) }
+
+/**
+ * The pen colour a stored night colour stands for, or null when [argb] is an honest colour.
+ *
+ * While the night-to-day lookup above was a weak map, a stroke written on a dark page now and
+ * then reached the note in the colour it was *drawn* in. Such a stroke is inverted a second time
+ * on a dark page and is a pale ghost on a light one, so a line of writing changes shade partway
+ * through. Pens only ever hold palette colours, and no palette colour is the night form of
+ * another, so a stored colour that is exactly the night form of a palette pen can only be one of
+ * those strokes — black excepted, which is left alone. Alpha is the stroke's own and is kept.
+ */
+internal fun daylightOfNightSlip(argb: Int, tool: InkTool): Int? {
+    val table = if (tool == InkTool.HIGHLIGHTER) highlighterNightToDay else penNightToDay
+    val day = table[argb and 0xFFFFFF] ?: return null
+    return (argb and 0xFF000000.toInt()) or day
 }
 
 // ---- colour maths, dependency-free so it runs in JVM tests ----------------

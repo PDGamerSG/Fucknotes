@@ -19,7 +19,7 @@ data class NotebookDraft(
     val lineColorArgb: Int = LineColors.first(),
     val spacingDp: Int = DEFAULT_RULE_SPACING_DP.toInt(),
     val page: PageSpec = PageSpec.Default,
-    /** Light or night pages. The sheet preselects whatever the app is set to. */
+    /** A notebook starts light; dark mode is switched on inside the note. */
     val appearance: PageAppearance = PageAppearance.LIGHT,
 )
 
@@ -27,13 +27,12 @@ data class NotebookDraft(
 const val MAX_NOTEBOOK_PAGES = 500
 const val MAX_INITIAL_NOTEBOOK_PAGES = MAX_NOTEBOOK_PAGES
 
-/** Paper tones offered at creation: white, cream and a dark sheet for night writing. */
+/** Paper tones offered at creation, all light: dark pages come from the note's dark mode. */
 val PaperColors: List<Int> = listOf(
     0xFFF1F5FA.toInt(),
     0xFFFFFFFF.toInt(),
     0xFFFBF3DE.toInt(),
     0xFFEDF3EC.toInt(),
-    0xFF1F1F24.toInt(),
 )
 
 /** Rule tones: the default grey, a soft blue, and a red for margins. */

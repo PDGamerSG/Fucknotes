@@ -20,8 +20,7 @@ class Converters {
 
     @TypeConverter fun appearanceToString(v: PageAppearance): String = v.name
 
-    @TypeConverter fun stringToAppearance(v: String): PageAppearance =
-        runCatching { PageAppearance.valueOf(v) }.getOrDefault(PageAppearance.FOLLOW)
+    @TypeConverter fun stringToAppearance(v: String): PageAppearance = PageAppearance.fromStored(v)
 
     @TypeConverter fun attachmentTypeToString(v: AttachmentType): String = v.name
 

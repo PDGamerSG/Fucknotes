@@ -87,7 +87,7 @@ class NoteRestorer(
         pageFormat = payload.pageFormat,
         pageCount = payload.pageCount.coerceIn(1, MAX_NOTEBOOK_PAGES),
         pagesExplicitlyCreated = payload.pagesExplicitlyCreated,
-        appearance = runCatching { PageAppearance.valueOf(payload.appearance) }.getOrDefault(PageAppearance.FOLLOW),
+        appearance = PageAppearance.fromStored(payload.appearance),
         createdAt = if (createdAt == 0L) payload.createdAt else createdAt,
         updatedAt = payload.updatedAt,
     )

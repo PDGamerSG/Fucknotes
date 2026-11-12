@@ -9,12 +9,22 @@ import org.junit.Test
 
 /** A note's own light-or-dark choice wins; only a note that never chose follows the app. */
 class PageAppearanceTest {
-    @Test fun pitchBlackIsDarkAndSurvivesStorage() {
-        val black = PageAppearance.valueOf("PITCH_BLACK")
-        assertTrue(black.isDark(false))
-        assertTrue(black.isDark(true))
-        assertEquals(black, Converters().stringToAppearance(Converters().appearanceToString(black)))
-        assertTrue(EditorUiState(appearance = black).darkReader)
+    @Test fun aNoteStoredAsPitchBlackIsSimplyDark() {
+        // Dark mode is black now; the separate name only survives in old rows and exported files.
+        assertEquals(PageAppearance.DARK, Converters().stringToAppearance("PITCH_BLACK"))
+        assertEquals(PageAppearance.DARK, PageAppearance.fromStored("PITCH_BLACK"))
+        assertEquals(listOf("FOLLOW", "LIGHT", "DARK"), PageAppearance.entries.map { it.name })
+    }
+
+    @Test fun darkPaperIsBlack() {
+        assertEquals(0xFF000000.toInt(), com.example.fucknotes.ui.editor.ink.NightPalette.paper.value.shr(32).toInt())
+    }
+
+    @Test fun onlyLightPaperIsOfferedWhenANotebookIsMade() {
+        PaperColors.forEach { argb ->
+            val lightness = com.example.fucknotes.ui.editor.ink.rgbToHsl(argb).third
+            assertTrue("paper ${Integer.toHexString(argb)} must be light", lightness > 0.8f)
+        }
     }
 
     @Test fun ownChoiceWinsOverTheAppSetting() {
@@ -33,9 +43,9 @@ class PageAppearanceTest {
         assertFalse(EditorUiState().darkReader)
     }
 
-    @Test fun aDraftIsLightUnlessTheSheetSaysOtherwise() {
+    @Test fun aNewNotebookIsLight() {
         assertEquals(PageAppearance.LIGHT, NotebookDraft().appearance)
-        assertEquals(PageAppearance.DARK, NotebookDraft(appearance = PageAppearance.of(true)).appearance)
+        assertFalse(NotebookDraft().appearance.isDark(appDarkReader = true))
     }
 
     @Test fun storedNamesRoundTripAndUnknownOnesFollowTheApp() {

@@ -10,6 +10,7 @@ import androidx.ink.storage.encode
 import androidx.ink.strokes.Stroke
 import androidx.ink.strokes.StrokeInputBatch
 import com.example.fucknotes.data.model.InkTool
+import com.example.fucknotes.ui.editor.ink.daylightOfNightSlip
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.ByteArrayInputStream
@@ -114,10 +115,19 @@ object InkCodec {
 
     fun decode(raw: String): List<InkStroke> = parse(raw).mapNotNull { decodeStroke(it) }
 
-    /** The stored strokes, parsed but not yet built; building is the expensive half. */
+    /**
+     * The stored strokes, parsed but not yet built; building is the expensive half.
+     *
+     * A stroke that was stored in its night colour by the old pen-lift bug comes back in the pen
+     * it was written with, so the page, its thumbnails and every export agree; the note itself
+     * is rewritten the next time it is edited. See [daylightOfNightSlip].
+     */
     fun parse(raw: String): List<StrokeDto> {
         if (raw.isBlank()) return emptyList()
-        return runCatching { json.decodeFromString<Page>(raw) }.getOrNull()?.strokes.orEmpty()
+        return runCatching { json.decodeFromString<Page>(raw) }.getOrNull()?.strokes.orEmpty().map { dto ->
+            val tool = runCatching { InkTool.valueOf(dto.tool) }.getOrDefault(InkTool.PEN)
+            daylightOfNightSlip(dto.colorArgb, tool)?.let { dto.copy(colorArgb = it) } ?: dto
+        }
     }
 
     /** One stroke from its stored form: the input batch decoded and the mesh built. */

@@ -35,10 +35,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.example.fucknotes.data.model.LineColors
 import com.example.fucknotes.data.model.NotebookDraft
-import com.example.fucknotes.data.model.PageAppearance
 import com.example.fucknotes.data.model.PaperColors
 import com.example.fucknotes.data.model.PaperStyle
-import com.example.fucknotes.ui.common.AppearanceRow
 import com.example.fucknotes.ui.common.ColorSwatchRow
 import com.example.fucknotes.ui.common.ImmersiveDialogWindow
 import com.example.fucknotes.ui.common.PageSizeRow
@@ -47,7 +45,6 @@ import com.example.fucknotes.ui.common.PaperSectionLabel
 import com.example.fucknotes.ui.common.SpacingRow
 import com.example.fucknotes.ui.common.TemplatePicker
 import com.example.fucknotes.ui.common.paperColorOr
-import com.example.fucknotes.ui.editor.ink.NightPalette
 import com.example.fucknotes.ui.theme.Radii
 import com.example.fucknotes.ui.theme.brand
 
@@ -64,13 +61,9 @@ fun NewNotebookDialog(
     initialTitle: String,
     onDismiss: () -> Unit,
     onCreate: (NotebookDraft) -> Unit,
-    /** What the app is set to; the sheet starts from it so a night-time notebook is dark by default. */
-    initialDark: Boolean = false,
 ) {
-    var draft by remember {
-        mutableStateOf(NotebookDraft(title = initialTitle, appearance = PageAppearance.of(initialDark)))
-    }
-    val dark = draft.appearance.isDark(initialDark)
+    // A notebook starts light. Dark mode is a switch inside the note, not a kind of paper.
+    var draft by remember { mutableStateOf(NotebookDraft(title = initialTitle)) }
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         ImmersiveDialogWindow()
@@ -89,7 +82,6 @@ fun NewNotebookDialog(
 
                 NotebookSummary(
                     draft = draft,
-                    dark = dark,
                     onTitle = { draft = draft.copy(title = it) },
                     onCreate = { onCreate(draft) },
                 )
@@ -100,14 +92,6 @@ fun NewNotebookDialog(
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = 22.dp, vertical = 16.dp),
                 ) {
-                    AppearanceRow(
-                        dark = dark,
-                        onChange = { draft = draft.copy(appearance = PageAppearance.of(it)) },
-                        pitchBlack = draft.appearance == PageAppearance.PITCH_BLACK,
-                        onPitchBlack = { draft = draft.copy(appearance = PageAppearance.PITCH_BLACK) },
-                    )
-
-                    Spacer(Modifier.height(14.dp))
                     PageSizeRow(page = draft.page, onPage = { draft = draft.copy(page = it) })
 
                     Spacer(Modifier.height(18.dp))
@@ -115,26 +99,22 @@ fun NewNotebookDialog(
                     Spacer(Modifier.height(10.dp))
                     TemplatePicker(
                         selected = draft.paperStyle,
-                        paperColor = if (dark) NightPalette.paper(draft.appearance == PageAppearance.PITCH_BLACK) else draft.paperColorArgb.paperColorOr(Color.White),
-                        lineColor = if (dark) NightPalette.rule else draft.lineColorArgb.paperColorOr(MaterialTheme.brand.tileBorder),
+                        paperColor = draft.paperColorArgb.paperColorOr(Color.White),
+                        lineColor = draft.lineColorArgb.paperColorOr(MaterialTheme.brand.tileBorder),
                         spacingDp = draft.spacingDp.toFloat(),
                         onPick = { draft = draft.copy(paperStyle = it) },
                     )
 
                     Spacer(Modifier.height(20.dp))
                     Row {
-                        // A night page is always the slate, so the paper tone only matters in
-                        // light mode; the row stays so the choice is kept for a later switch back.
-                        if (!dark) {
-                            Column(Modifier.weight(1f)) {
-                                PaperSectionLabel("Paper colour")
-                                Spacer(Modifier.height(8.dp))
-                                ColorSwatchRow(
-                                    colors = PaperColors,
-                                    selectedArgb = draft.paperColorArgb,
-                                    onPick = { draft = draft.copy(paperColorArgb = it) },
-                                )
-                            }
+                        Column(Modifier.weight(1f)) {
+                            PaperSectionLabel("Paper colour")
+                            Spacer(Modifier.height(8.dp))
+                            ColorSwatchRow(
+                                colors = PaperColors,
+                                selectedArgb = draft.paperColorArgb,
+                                onPick = { draft = draft.copy(paperColorArgb = it) },
+                            )
                         }
                         Column(Modifier.weight(1f)) {
                             PaperSectionLabel("Line colour")
@@ -187,7 +167,6 @@ private fun DialogHeader(onDismiss: () -> Unit) {
 @Composable
 private fun NotebookSummary(
     draft: NotebookDraft,
-    dark: Boolean,
     onTitle: (String) -> Unit,
     onCreate: () -> Unit,
 ) {
@@ -203,8 +182,8 @@ private fun NotebookSummary(
             modifier = Modifier
                 .width(104.dp)
                 .aspectRatio(draft.page.widthDp / draft.page.heightDp),
-            paperColor = if (dark) NightPalette.paper(draft.appearance == PageAppearance.PITCH_BLACK) else draft.paperColorArgb.paperColorOr(Color.White),
-            lineColor = if (dark) NightPalette.rule else draft.lineColorArgb.paperColorOr(MaterialTheme.brand.tileBorder),
+            paperColor = draft.paperColorArgb.paperColorOr(Color.White),
+            lineColor = draft.lineColorArgb.paperColorOr(MaterialTheme.brand.tileBorder),
             spacingDp = draft.spacingDp.toFloat(),
             zoom = 0.26f,
             corner = 10.dp,

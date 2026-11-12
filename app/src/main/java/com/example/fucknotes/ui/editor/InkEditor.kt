@@ -181,7 +181,6 @@ fun InkEditor(
             onToggleEraser = onToggleEraser,
             pageColor = state.colorArgb.paperColorOr(PaperWhite),
             darkReader = state.darkReader,
-            pitchBlack = state.pitchBlack,
             shape = state.shape,
             onShapeFinished = onShapeFinished,
             reading = chrome == EditorChrome.READING,
@@ -332,7 +331,6 @@ fun InkEditor(
                 onRemove = onRemoveAttachment,
                 modifier = Modifier.padding(start = 96.dp, end = 96.dp, bottom = 64.dp),
                 darkReader = state.darkReader,
-                pitchBlack = state.pitchBlack,
             )
         }
     }

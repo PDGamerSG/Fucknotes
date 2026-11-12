@@ -83,7 +83,7 @@ fun TypedEditor(
         modifier
             .fillMaxSize()
             .background(
-                if (state.darkReader) NightPalette.paper(state.pitchBlack)
+                if (state.darkReader) NightPalette.paper
                 else state.colorArgb.paperColorOr(MaterialTheme.colorScheme.background),
             )
     ) {
@@ -124,7 +124,6 @@ fun TypedEditor(
                             onPlay = onPlay,
                             onRemove = viewModel::removeAttachment,
                             darkReader = state.darkReader,
-                            pitchBlack = state.pitchBlack,
                         )
                         Spacer(Modifier.height(80.dp))
                     }
@@ -145,7 +144,6 @@ fun TypedEditor(
                 onPlay = onPlay,
                 onRemove = viewModel::removeAttachment,
                 darkReader = state.darkReader,
-                pitchBlack = state.pitchBlack,
             )
         }
         TagStrip(state = state, onAdd = onAddTag, onRemove = viewModel::removeTag)
@@ -220,7 +218,6 @@ internal fun AttachmentStrip(
     modifier: Modifier = Modifier,
     /** Night colours for the pictures, like every other page image. */
     darkReader: Boolean = false,
-    pitchBlack: Boolean = false,
 ) {
     if (attachments.isEmpty()) return
     LazyRow(
@@ -237,7 +234,7 @@ internal fun AttachmentStrip(
                         painter = rememberAsyncImagePainter(attachment.path),
                         contentDescription = "Attached image",
                         contentScale = ContentScale.Crop,
-                        colorFilter = if (darkReader) ColorFilter.colorMatrix(ColorMatrix(NightPalette.imageMatrix(pitchBlack))) else null,
+                        colorFilter = if (darkReader) ColorFilter.colorMatrix(ColorMatrix(NightPalette.imageMatrix)) else null,
                         modifier = Modifier
                             .size(110.dp)
                             .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp)),

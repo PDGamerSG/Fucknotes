@@ -26,14 +26,14 @@ import java.io.File
 /** Deferred device regression: imported pages must survive persistence and PDF export. */
 @RunWith(AndroidJUnit4::class)
 class PdfWorkflowTest {
-    @Test fun pitchBlackNotebookExportsBlackAndKeepsItsEditableAppearance() = runBlocking {
+    @Test fun darkNotebookExportsBlackAndKeepsItsEditableAppearance() = runBlocking {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
         val repo = NotesRepository(db)
         var exported: File? = null
         try {
             val id = repo.createNote(com.example.fucknotes.data.model.NoteType.NOTEBOOK, null,
-                "Black notebook", appearance = com.example.fucknotes.data.model.PageAppearance.PITCH_BLACK)
+                "Black notebook", appearance = com.example.fucknotes.data.model.PageAppearance.DARK)
             val note = requireNotNull(repo.getNote(id))
             val file = NoteExporter(context, repo).export(note, ExportFormat.PDF, darkStyle = true, editable = true)
             exported = file
@@ -48,7 +48,42 @@ class PdfWorkflowTest {
             }
             val parts = com.example.fucknotes.export.EditablePdf.read(file)
             val payload = requireNotNull(com.example.fucknotes.media.NoteRestorer.payloadOf(parts))
-            assertEquals("PITCH_BLACK", payload.appearance)
+            assertEquals("DARK", payload.appearance)
+        } finally { exported?.parentFile?.deleteRecursively(); db.close() }
+    }
+
+    /**
+     * Dot paper in a PDF: the dots are marks to write along, not beads. They came out 2.6 points
+     * across — wider than the pen — and the owner found them "very big" (2026-11-13).
+     */
+    @Test fun dottedPaperExportsFineDots() = runBlocking {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java).build()
+        val repo = NotesRepository(db)
+        var exported: File? = null
+        try {
+            val id = repo.createNote(com.example.fucknotes.data.model.NoteType.NOTEBOOK, null, "Dots",
+                paperStyle = com.example.fucknotes.data.model.PaperStyle.DOTTED,
+                paperColorArgb = Color.WHITE, lineSpacingDp = 24,
+                appearance = com.example.fucknotes.data.model.PageAppearance.LIGHT)
+            val file = NoteExporter(context, repo).export(requireNotNull(repo.getNote(id)), ExportFormat.PDF)
+            exported = file
+            val zoom = 8 // pixels per point: enough to measure a dot
+            PdfRenderer(ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)).use { pdf ->
+                pdf.openPage(0).use { page ->
+                    val bitmap = Bitmap.createBitmap(60 * zoom, 60 * zoom, Bitmap.Config.ARGB_8888)
+                    try {
+                        bitmap.eraseColor(Color.WHITE)
+                        page.render(bitmap, null, android.graphics.Matrix().apply { setScale(zoom.toFloat(), zoom.toFloat()) },
+                            PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                        // The first dot sits one spacing in from the corner; walk the row through it.
+                        val row = 24 * zoom
+                        val across = (12 * zoom until 36 * zoom).count { x -> Color.red(bitmap.getPixel(x, row)) < 235 }
+                        assertTrue("There must be a dot at 24,24 (found $across px)", across >= zoom / 2)
+                        assertTrue("A dot is at most 1.6 points across, was ${across.toFloat() / zoom}", across <= 1.6f * zoom)
+                    } finally { bitmap.recycle() }
+                }
+            }
         } finally { exported?.parentFile?.deleteRecursively(); db.close() }
     }
 

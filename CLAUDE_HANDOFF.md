@@ -101,23 +101,61 @@ and export, first-page previews, dark reader, folder hierarchy, home export.
   live brush can be collected mid-stroke); `Stroke.daylight()` swaps it back. `InkSurface` builds brushes in the real
   colour, turns them to night for `InProgressStrokes`, and wraps `onStrokesFinished` so committed
   strokes are daylight. Never store a stroke straight from the wet layer while dark mode is on.
-- Dark mode for pages: `ui/editor/ink/DarkReader.kt` holds `NightPalette` (paper, rule,
-  `imageMatrix` for bitmaps, `applyImageMatrix` for JVM tests), `darkReaderArgb(argb, tool)`
+- Dark mode for pages: `ui/editor/ink/DarkReader.kt` holds `NightPalette` (`paper` is true black,
+  `rule`, `edge` for the outline of a black sheet on the black desk, `imageMatrix` for bitmaps —
+  white paper lands on black — and `applyImageMatrix` for JVM tests), `darkReaderArgb(argb, tool)`
   (HSL lightness inversion, hue kept, highlighter exception) and `InkStroke.forDarkReader()`
   (cached night `Stroke` per stroke). Consumers: `InkSurface`, `PageImages`, `PagesSheet`,
-  `AttachmentStrip`, `NoteTile`/`NoteRow`, `TypedEditor`, and the theme (dark while on).
+  `AttachmentStrip`, `NoteTile`/`NoteRow`, `TypedEditor`, the exporter, and the theme (dark while
+  on). There is one dark mode and it is black; the slate and the separate "pitch black" option
+  are gone (owner's request, 2026-11-13).
 - Light or dark per note: `NoteEntity.appearance` (`PageAppearance.FOLLOW / LIGHT / DARK`, db v7,
-  `MIGRATION_6_7`, stored as the enum name). `PageAppearance.isDark(appDarkReader)` resolves it;
+  `MIGRATION_6_7`, stored as the enum name; `PageAppearance.fromStored` reads a legacy
+  `PITCH_BLACK` as `DARK`). `PageAppearance.isDark(appDarkReader)` resolves it;
   `EditorUiState.darkReader` is a computed property over `appearance` + `appDarkReader`, so every
-  editor consumer still reads `state.darkReader`. The New notebook dialog and the Paper sheet
-  carry an `AppearanceRow` (Light / Dark, `ui/common/PaperControls.kt`); the dialog preselects
-  from the app-wide setting (`initialDark`) and the draft carries `appearance` into
-  `NotesRepository.createNote`. The editor ⋯ switch now flips the *note*
-  (`EditorViewModel.setDarkPages`), not the preference; Settings' "Dark mode for pages" is the
-  default for `FOLLOW` notes (old notes, imported documents). Shelf, search and trash tiles call
+  editor consumer still reads `state.darkReader`. **The only switch is "Dark mode" in the editor's
+  ⋯ menu** (`EditorViewModel.toggleDarkReader` → `setDarkPages`). The New notebook dialog and the
+  Paper sheet no longer offer light/dark, `PaperColors` holds light tones only, and every note the
+  user creates (`HomeViewModel.createNote/createNotebook`) is `LIGHT` whatever the app-wide
+  setting says. Settings' "Dark mode for pages" is still the default for `FOLLOW` notes (old
+  notes, imported documents). Shelf, search and trash tiles call
   `note.appearance.isDark(settings.darkReader)`. `PageTheme(dark)` (Theme.kt) wraps the editor so
   its chrome matches the open note; it always nests the same tree, because switching between a
   bare `content()` and a wrapped one recreated the editor and closed its sheets.
+- Export follows the note: there is no light/dark question anywhere. `EditorViewModel.export`
+  passes `state.darkReader`; "Export as PDF" goes straight to the share sheet; the home export
+  (`FolderExporter.save(dark = { note -> … })`, `NoteExporter.exportAll(notes, format, dark)`)
+  and Drive uploads (`exportEditablePdf(note, dark)`) resolve each note's own mode, so one
+  combined PDF can hold black and light pages. Dark export paper is `Color.BLACK` everywhere.
+  Dot paper exports with 1.2 pt dots (`NoteExporter.DOT_RADIUS_PT = 0.6f`); they were 2.6 pt and
+  the owner found them too big.
+- Night colours stored by mistake: before c4dc023 a stroke written on a dark page could reach the
+  note in its *night* colour (the weak-map bug described under "Night ink"). The owner's
+  "Untitled Notebook" (id 29) held 66 such strokes out of 6,989; nothing written after the fix
+  has any. `daylightOfNightSlip(argb, tool)` (DarkReader.kt) maps a stored colour that is exactly
+  the night form of a palette pen back to that pen, and `InkCodec.parse` applies it to every
+  stroke it reads, so the page, thumbnails and exports agree; the row is rewritten the next time
+  the note is edited. Pens only hold `KnownInks` (today's palette and tray plus the first
+  palette), and no palette colour is the night form of another — `NightSlipTest` guards both.
+  If the pen colour picker ever allows free colours, revisit this rule.
+- Drawing tools (released in 1.2.0): `InkTool.SHAPE` (toolbar "Shapes" menu, drag out a line /
+  arrow / rectangle / circle with the pen in hand; `ShapeRecognizer.dragPoints` is the outline
+  for both the live preview and the stored stroke, `EditorViewModel.commitShape` keeps it as a
+  `MARKER` stroke with `InkStroke.shape`). A shape is drawn and decoded with
+  `InkCodec.brushForShape` / `shapeFamily` — the marker with Ink's naive input model — because
+  the stock marker smooths by pen speed and turned four sparse corners into a blob with one
+  square corner and a curled arrowhead. Any build that draws shapes with plain
+  `brushFor(MARKER)` shows that blob; it was seen on the tablet on 2026-11-13 from a stale
+  working tree. `InkTool.LASER` is the red "Temporary red highlighter":
+  `TemporaryHighlighter.kt`, drawn only in `DrawingOverlayState`, each trail holds 1.5 s after
+  the pen lifts and fades over 1 s, never stored, never on the undo stack. Both tools consume
+  their touches in `InkSurface`'s gesture loop before the wet layer. The lasso bar has a colour
+  action (`EditorViewModel.recolorStrokes`); the zoom chip and page arrows fade to
+  `FADED_CONTROL_ALPHA` after 2.6 s idle (`InkEditor.wakeControls`).
+- `origin/main` got the 1.2.0 commit (c1eca03, tag `v1.2.0`) from another checkout while this
+  folder still held an older uncommitted copy of the same work, which is how the tablet came to
+  be tested with a stale build on 2026-11-13. Run `git fetch` and compare with `origin/main`
+  before building on a dirty tree here.
 - Opening documents from other apps: `AndroidManifest.xml` offers `MainActivity` for VIEW/SEND
   of PDF, PPTX, every legacy PowerPoint type (`application/vnd.ms-powerpoint`, `mspowerpoint`,
   `x-mspowerpoint`, `powerpoint` — file managers label .pptx with these), and `*/*` with
@@ -200,7 +238,10 @@ adb -s b86e61d8 shell am instrument -w -r com.example.fucknotes.test/androidx.te
 ```
 
 `platforms;android-36` had to be installed with `sdkmanager`. Install with `-r` so the owner's
-notes are kept; never clear app data or uninstall.
+notes are kept; never clear app data or uninstall, and never run Gradle's `connected*Test` tasks
+against the tablet (their cleanup uninstalls the app). With the debug build installed, take a
+backup before any device test run:
+`adb exec-out "run-as com.example.fucknotes tar cf - databases files" > build/tablet-backup-<date>/appdata.tar`.
 
 ## Validation of the latest pass
 
@@ -211,3 +252,8 @@ See `docs/notes-workflow-validation.md` for the executed commands and counts.
 The physical display is landscape 3200x2136 at about 2.75 density; the serial is `b86e61d8`.
 The owner's notebooks (`Db and caching`, `Tablet_Validation_20261022`, and others) must be
 preserved. Do not claim a physical pen-button verification unless the pen was actually pressed.
+The owner may be using the tablet while it is plugged in: on 2026-11-13 their pen strokes landed
+in the scratch notebook mid-run and injected taps were lost or hit an open menu. Check the screen
+(`uiautomator dump`) before every injected tap, and prefer instrumentation tests to driving the
+UI. A scratch notebook `ClaudeTest1113` (id 43) was left on the shelf because the owner wrote in
+it; they can trash it.

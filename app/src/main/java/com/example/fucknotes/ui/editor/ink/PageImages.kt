@@ -62,7 +62,6 @@ internal fun PageImages(
     page: PageSpec,
     notebook: Boolean,
     darkReader: Boolean = false,
-    pitchBlack: Boolean = false,
 ) {
     // Which page images are near the viewport is derived state: the camera moves every frame
     // while the page scrolls, but this only changes — and only recomposes — when an image enters
@@ -94,7 +93,7 @@ internal fun PageImages(
             near.forEach { image ->
                 val top = NotebookLayout.topOf(image.pageIndex ?: 0, page) + image.pageY
                 if (!bounds.overlaps(image.pageX, top, image.pageX + image.pageWidth, top + image.pageHeight)) return@forEach
-                bitmaps[image.id]?.let { bitmap -> drawPageImage(native, image, bitmap, page, notebook, darkReader, pitchBlack) }
+                bitmaps[image.id]?.let { bitmap -> drawPageImage(native, image, bitmap, page, notebook, darkReader) }
             }
             native.restore()
         }
@@ -108,13 +107,12 @@ internal fun drawPageImage(
     page: PageSpec,
     notebook: Boolean = true,
     darkReader: Boolean = false,
-    pitchBlack: Boolean = false,
 ) {
     val top = if (notebook) NotebookLayout.topOf(image.pageIndex ?: 0, page) else 0f
     canvas.save()
     if (notebook) canvas.clipRect(0f, top, page.widthDp, top + page.heightDp)
     val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-    if (darkReader) paint.colorFilter = ColorMatrixColorFilter(ColorMatrix(NightPalette.imageMatrix(pitchBlack)))
+    if (darkReader) paint.colorFilter = ColorMatrixColorFilter(ColorMatrix(NightPalette.imageMatrix))
     canvas.drawBitmap(
         bitmap,
         null,

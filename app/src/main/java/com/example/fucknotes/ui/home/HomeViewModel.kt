@@ -194,7 +194,8 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     // ---- actions -----------------------------------------------------------
 
     fun createNote(type: NoteType, onCreated: (Long) -> Unit) = viewModelScope.launch {
-        onCreated(repo.createNote(type, currentFolderId()))
+        // A new note is light, whatever the app is set to; dark mode is switched on inside it.
+        onCreated(repo.createNote(type, currentFolderId(), appearance = com.example.fucknotes.data.model.PageAppearance.LIGHT))
     }
 
     /** Creates the notebook the New Notebook sheet describes, in the folder currently open. */
@@ -230,7 +231,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             _message.value = "That image could not be imported"
             return@launch
         }
-        val id = repo.createNote(NoteType.TEXT, currentFolderId())
+        val id = repo.createNote(NoteType.TEXT, currentFolderId(), appearance = com.example.fucknotes.data.model.PageAppearance.LIGHT)
         repo.addAttachment(
             AttachmentEntity(noteId = id, path = file.absolutePath, type = AttachmentType.IMAGE)
         )
@@ -269,7 +270,8 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             _message.value = "There are no notes to export"
             return@launch
         }
-        runCatching { exporter.exportAll(notes, ExportFormat.PDF) }
+        val appDark = state.value.settings.darkReader
+        runCatching { exporter.exportAll(notes, ExportFormat.PDF) { it.appearance.isDark(appDark) } }
             .onSuccess { onReady(it, ExportFormat.PDF.mime) }
             .onFailure { _message.value = "Export failed: ${it.message}" }
     }
@@ -374,7 +376,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                 ?: target.noteIds.mapNotNull { repo.getNote(it) }
             com.example.fucknotes.export.FolderExporter(getApplication(), exporter, state.value.settings.editablePdfExports).save(
                 notes, state.value.folders, target.folderId, target.title, request.mode, destination,
-                dark = request.dark,
+                dark = { it.appearance.isDark(state.value.settings.darkReader) },
             ) { done, total -> progress.value = "Exporting note $done of $total…" }
             _message.value = "Saved ${notes.size} ${if (notes.size == 1) "note" else "notes"}"
         } catch (error: Exception) {

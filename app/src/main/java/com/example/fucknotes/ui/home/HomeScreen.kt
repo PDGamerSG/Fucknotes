@@ -275,7 +275,6 @@ fun HomeScreen(
     if (showNewNotebook) {
         NewNotebookDialog(
             initialTitle = remember { viewModel.suggestedNotebookTitle() },
-            initialDark = state.settings.darkReader,
             onDismiss = { showNewNotebook = false },
             onCreate = { draft ->
                 showNewNotebook = false
@@ -285,9 +284,9 @@ fun HomeScreen(
     }
 
     exportTarget?.let { target ->
-        HomeExportDialog(target.title, state.busy, onDismiss = { exportTarget = null }, initialDark = state.settings.darkReader) { mode, dark ->
+        HomeExportDialog(target.title, state.busy, onDismiss = { exportTarget = null }) { mode ->
             exportTarget = null
-            val request = HomeExportRequest(target, mode, dark)
+            val request = HomeExportRequest(target, mode)
             viewModel.pendingExport = request
             val name = com.example.fucknotes.export.ExportNames.safeBase(target.title)
             when (mode) {

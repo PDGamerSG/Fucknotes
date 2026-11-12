@@ -107,7 +107,6 @@ data class EditorUiState(
 
     /** Night colours for this note's pages. */
     val darkReader: Boolean get() = appearance.isDark(appDarkReader)
-    val pitchBlack: Boolean get() = appearance == PageAppearance.PITCH_BLACK
 
     /** The pen the brush tools draw with. Falls back to the first slot if an index goes stale. */
     val activePen: PenPreset get() = pens.getOrElse(selectedPen) { DefaultPenTray.first() }
@@ -470,13 +469,9 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
     /** Flips this note between light and night pages; the choice is the note's, not the app's. */
     fun toggleDarkReader() = setDarkPages(!_state.value.darkReader)
 
-    /** Light or night pages for this note, kept with it like its paper. */
+    /** Light or black pages for this note, kept with it like its paper. */
     fun setDarkPages(dark: Boolean) {
-        setPageAppearance(PageAppearance.of(dark))
-    }
-
-    fun setPageAppearance(appearance: PageAppearance) {
-        _state.value = _state.value.copy(appearance = appearance)
+        _state.value = _state.value.copy(appearance = PageAppearance.of(dark))
         scheduleSave()
     }
 
@@ -766,12 +761,13 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
 
     // ---- export ------------------------------------------------------------
 
-    fun export(format: ExportFormat, darkStyle: Boolean, onReady: (File, String) -> Unit) =
+    /** Exports the note as it is set: black pages in dark mode, light pages otherwise. */
+    fun export(format: ExportFormat, onReady: (File, String) -> Unit) =
         viewModelScope.launch {
             saveNow()
             val note = repo.getNote(noteId) ?: return@launch
             val editable = format == ExportFormat.PDF && settings.settings.first().editablePdfExports
-            runCatching { exporter.export(note, format, darkStyle, editable) }
+            runCatching { exporter.export(note, format, _state.value.darkReader, editable) }
                 .onSuccess { onReady(it, format.mime) }
                 .onFailure { emit("Export failed: ${it.message}") }
         }
