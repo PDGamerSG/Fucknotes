@@ -122,7 +122,14 @@ fun HomeScreen(
     }
 
     val exportVisiblePdf: () -> Unit = { exportTarget = viewModel.exportTarget() }
-    val exportSelectedPdf: () -> Unit = { exportTarget = viewModel.exportTarget(selected = true) }
+    val exportSelectedPdf: () -> Unit = {
+        val target = viewModel.exportTarget(selected = true)
+        if (target.folderId == null && target.noteIds.size == 1) {
+            // One note is one PDF: nothing to choose between, so straight to where to save it.
+            viewModel.pendingExport = HomeExportRequest(target, HomeExportMode.COMBINED)
+            savePdf.launch("${com.example.fucknotes.export.ExportNames.safeBase(target.title)}.pdf")
+        } else exportTarget = target
+    }
 
     LaunchedEffect(message) {
         message?.let {

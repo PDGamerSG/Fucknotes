@@ -35,6 +35,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import com.example.fucknotes.data.db.FolderEntity
@@ -159,7 +162,11 @@ fun ColorPickerDialog(
                                         else MaterialTheme.colorScheme.outlineVariant,
                                         shape = CircleShape,
                                     )
-                                    .clickable { onPick(argb) },
+                                    .semantics {
+                                        contentDescription = if (argb == 0) "Default colour"
+                                        else "Colour #" + (argb and 0xFFFFFF).toString(16).padStart(6, '0').uppercase()
+                                    }
+                                    .clickable(role = Role.RadioButton) { onPick(argb) },
                                 contentAlignment = Alignment.Center,
                             ) {
                                 if (argb == selected) {

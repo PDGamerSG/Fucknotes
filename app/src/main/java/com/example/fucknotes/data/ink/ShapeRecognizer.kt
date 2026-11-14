@@ -27,7 +27,8 @@ enum class InkShape {
  */
 object ShapeRecognizer {
     /** The same geometry drives the live drag preview and the saved vector stroke. */
-    fun dragPoints(shape: InkShape, start: Offset, end: Offset): List<Offset> {
+    fun dragPoints(shape: InkShape, start: Offset, end: Offset, sketchy: Boolean = false): List<Offset> {
+        if (sketchy) return SketchyShapes.points(shape, start, end)
         val delta = end - start
         val length = delta.getDistance()
         if (length < 2f || !length.isFinite()) return emptyList()

@@ -69,16 +69,14 @@ fun PaperSheet(
 
             Spacer(Modifier.height(20.dp))
             Row(Modifier.fillMaxWidth()) {
-                if (!dark) {
-                    Column(Modifier.weight(1f)) {
-                        PaperSectionLabel("Paper colour")
-                        Spacer(Modifier.height(8.dp))
-                        ColorSwatchRow(
-                            colors = PaperColors,
-                            selectedArgb = paperColorArgb,
-                            onPick = onPaperColor,
-                        )
-                    }
+                Column(Modifier.weight(1f)) {
+                    PaperSectionLabel("Paper colour")
+                    Spacer(Modifier.height(8.dp))
+                    ColorSwatchRow(
+                        colors = PaperColors,
+                        selectedArgb = paperColorArgb,
+                        onPick = onPaperColor,
+                    )
                 }
                 Column(Modifier.weight(1f)) {
                     PaperSectionLabel("Line colour")

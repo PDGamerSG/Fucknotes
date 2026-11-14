@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.example.fucknotes.data.model.AccentPreset
 import com.example.fucknotes.data.model.DefaultPenTray
@@ -71,6 +72,8 @@ class SettingsRepository(private val context: Context) {
         val driveLastSyncAt = longPreferencesKey("drive_last_sync_at")
         val driveLastError = stringPreferencesKey("drive_last_error")
         val editablePdfExports = booleanPreferencesKey("editable_pdf_exports")
+        val toolbarHidden = stringSetPreferencesKey("toolbar_hidden")
+        val sketchyShapes = booleanPreferencesKey("sketchy_shapes")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -123,6 +126,13 @@ class SettingsRepository(private val context: Context) {
         val driveLastError: String = "",
         /** PDF exports carry the note's own data, so they can be opened back into an editable note. */
         val editablePdfExports: Boolean = true,
+        /**
+         * Pen-bar items the user has put away: `ToolbarTool.key`s and `ToolbarLayout.penKey`s.
+         * App-wide, like the pen case itself — the bar is the same bar in every note.
+         */
+        val hiddenToolbarItems: Set<String> = emptySet(),
+        /** Shapes are drawn hand-drawn style; off gives exact geometry. */
+        val sketchyShapes: Boolean = true,
     ) {
         val driveSignedIn: Boolean get() = driveEmail.isNotBlank()
     }
@@ -175,6 +185,8 @@ class SettingsRepository(private val context: Context) {
         driveLastSyncAt = this[Keys.driveLastSyncAt] ?: 0L,
         driveLastError = this[Keys.driveLastError].orEmpty(),
         editablePdfExports = this[Keys.editablePdfExports] ?: true,
+        hiddenToolbarItems = this[Keys.toolbarHidden].orEmpty(),
+        sketchyShapes = this[Keys.sketchyShapes] ?: true,
     )
 
     private inline fun <reified T : Enum<T>> enumOr(raw: String?, fallback: T): T =
@@ -206,6 +218,11 @@ class SettingsRepository(private val context: Context) {
     suspend fun setDriveLastSync(at: Long, error: String = "") = edit { it[Keys.driveLastSyncAt] = at; it[Keys.driveLastError] = error }
     suspend fun setDriveLastError(error: String) = edit { it[Keys.driveLastError] = error }
     suspend fun setEditablePdfExports(v: Boolean) = edit { it[Keys.editablePdfExports] = v }
+    suspend fun setHiddenToolbarItems(keys: Set<String>) = edit { it[Keys.toolbarHidden] = keys }
+    /** Changes the set from what is stored at that moment, so two quick switches cannot lose one another. */
+    suspend fun updateHiddenToolbarItems(change: (Set<String>) -> Set<String>) =
+        edit { it[Keys.toolbarHidden] = change(it[Keys.toolbarHidden].orEmpty()) }
+    suspend fun setSketchyShapes(v: Boolean) = edit { it[Keys.sketchyShapes] = v }
     suspend fun clearDriveAccount() = edit {
         it.remove(Keys.driveEmail); it.remove(Keys.driveName); it.remove(Keys.driveRootId)
         it.remove(Keys.driveLastSyncAt); it.remove(Keys.driveLastError)

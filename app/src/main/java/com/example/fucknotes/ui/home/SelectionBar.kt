@@ -1,6 +1,8 @@
 package com.example.fucknotes.ui.home
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -19,12 +21,15 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 
 /**
  * What replaces the action row while notes are selected.
@@ -57,7 +62,13 @@ fun SelectionBar(
         },
         actions = {
             IconButton(onClick = onColor) { Icon(Icons.Outlined.Palette, contentDescription = "Colour") }
-            IconButton(onClick = onExport) { Icon(Icons.Outlined.FileDownload, contentDescription = "Export selected notes") }
+            // Named, not just an icon: holding a note is how one note is exported from the shelf,
+            // and a bare arrow did not say so.
+            TextButton(onClick = onExport) {
+                Icon(Icons.Outlined.FileDownload, contentDescription = null)
+                Spacer(Modifier.width(6.dp))
+                Text(if (count == 1) "Export PDF" else "Export")
+            }
             IconButton(onClick = onDelete) { Icon(Icons.Outlined.Delete, contentDescription = "Move to trash") }
             Box {
                 IconButton(onClick = { more = true }) {

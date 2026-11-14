@@ -28,7 +28,11 @@ class FolderExporter(private val context: Context, private val exporter: NoteExp
         val paths = exportPathsFor(notes, folders, rootId)
         when (mode) {
             HomeExportMode.COMBINED -> {
-                val file = exporter.exportAll(notes, ExportFormat.PDF, dark)
+                // A single note is exported as the editor exports it, so its PDF opens back
+                // into an editable note; several notes share one plain document.
+                val file = if (notes.size == 1) {
+                    exporter.export(notes.first(), ExportFormat.PDF, darkStyle = dark(notes.first()), editable = editable)
+                } else exporter.exportAll(notes, ExportFormat.PDF, dark)
                 try { copyToDocument(file, destination) } finally { file.delete() }
             }
             HomeExportMode.ZIP -> {

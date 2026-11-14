@@ -14,10 +14,17 @@ class TemporaryHighlighterTest {
         assertEquals(0f, trail.alphaAt(Long.MAX_VALUE), 0f)
     }
 
-    @Test fun finishingAnotherTrailDoesNotRestartTheFirstTimer() {
-        val first = TemporaryTrail(listOf(Offset.Zero), 0L)
-        val second = TemporaryTrail(listOf(Offset(1f, 2f)), 2000L)
-        assertEquals(0f, first.alphaAt(3000L), 0f)
-        assertEquals(1f, second.alphaAt(3000L), 0f)
+    @Test fun finishingAnotherStrokeGivesAllTheWritingTimeToBeRead() {
+        val state = DrawingOverlayState()
+        state.laserPoints = listOf(Offset.Zero, Offset(20f, 0f))
+        state.finishLaser(1000L)
+        state.laserPoints = listOf(Offset(1f, 2f), Offset(20f, 2f))
+        state.finishLaser(3000L)
+        assertEquals(2, state.trails.size)
+        state.trails.forEach { trail ->
+            assertEquals("Earlier letters must wait for the last pen lift", 1f, trail.alphaAt(4400L), 0f)
+            assertEquals(0f, trail.alphaAt(5500L), 0f)
+        }
+        assertTrue(state.laserPoints.isEmpty())
     }
 }

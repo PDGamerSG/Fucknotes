@@ -19,6 +19,8 @@ import com.example.fucknotes.data.ink.InkCache
 import com.example.fucknotes.data.ink.InkStroke
 import com.example.fucknotes.data.ink.PageSpec
 import com.example.fucknotes.data.ink.InkShape
+import com.example.fucknotes.ui.editor.ink.ToolbarLayout
+import com.example.fucknotes.ui.editor.ink.ToolbarTool
 import com.example.fucknotes.data.model.AttachmentType
 import com.example.fucknotes.data.model.ChecklistItem
 import com.example.fucknotes.data.model.DefaultPenTray
@@ -79,6 +81,10 @@ data class EditorUiState(
     val inkMode: Boolean = false,
     val tool: InkTool = InkTool.PEN,
     val shape: InkShape = InkShape.RECTANGLE,
+    /** Shapes are drawn hand-drawn style rather than with exact geometry; app-wide. */
+    val sketchyShapes: Boolean = true,
+    /** Pen-bar items put away from the ⋯ menu; app-wide. See [ToolbarLayout]. */
+    val hiddenToolbarItems: Set<String> = emptySet(),
     val pens: List<PenPreset> = DefaultPenTray,
     val selectedPen: Int = 0,
     /** Mirrors the app-wide finger mode without changing the selected stylus tool. */
@@ -236,6 +242,8 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
                     fingerInputMode = s.fingerInputMode,
                     zoomLocked = s.zoomLocked,
                     appDarkReader = s.darkReader,
+                    sketchyShapes = s.sketchyShapes,
+                    hiddenToolbarItems = s.hiddenToolbarItems,
                     pens = s.penTray,
                     selectedPen = index,
                     penPrimaryAction = s.penPrimaryAction,
@@ -479,6 +487,63 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
         _state.value = _state.value.copy(tool = InkTool.SHAPE, shape = shape)
     }
 
+    /** Hand-drawn or exact shapes, for every note. Shapes already on a page stay as drawn. */
+    fun setSketchyShapes(sketchy: Boolean) {
+        _state.value = _state.value.copy(sketchyShapes = sketchy)
+        viewModelScope.launch { settings.setSketchyShapes(sketchy) }
+    }
+
+    /**
+     * Puts a pen-bar item away or brings it back. A tool or pen that is in hand when it is put
+     * away is exchanged for a pen that is still on the bar, so the page is never written on with
+     * something that cannot be seen. The last pen stays whatever is asked.
+     */
+    fun setToolbarItemHidden(key: String, hide: Boolean) {
+        val current = _state.value
+        if (hide && !ToolbarLayout.canHide(key, current.pens, current.hiddenToolbarItems)) return
+        val hidden = if (hide) current.hiddenToolbarItems + key else current.hiddenToolbarItems - key
+        // The bar follows the stored set rather than a guess made here: a guess can be overtaken
+        // by the store's report of an earlier switch and flick an item back for a moment.
+        viewModelScope.launch {
+            settings.updateHiddenToolbarItems { stored ->
+                when {
+                    !hide -> stored - key
+                    ToolbarLayout.canHide(key, current.pens, stored) -> stored + key
+                    else -> stored
+                }
+            }
+        }
+        if (!hide) return
+        val replacement = ToolbarLayout.penSlots(current.pens)
+            .firstOrNull { ToolbarLayout.penKey(it) !in hidden } ?: return
+        val toolInHand = when (current.tool) {
+            InkTool.ERASER -> ToolbarTool.ERASER.key
+            InkTool.LASSO -> ToolbarTool.SELECT.key
+            InkTool.SHAPE -> ToolbarTool.SHAPES.key
+            InkTool.LASER -> ToolbarTool.RED_HIGHLIGHTER.key
+            else -> null
+        }
+        when {
+            // The tool in hand went away: back to a pen.
+            toolInHand == key -> selectPen(replacement)
+            key != ToolbarLayout.penKey(current.selectedPen) -> Unit
+            // The pen in hand went away: write with one that is still there.
+            current.tool.isBrush -> selectPen(replacement)
+            // The pen the eraser or a shape will hand back to went away. The bar always shows
+            // the tray's selected slot, so move the selection or the pen would stay in view;
+            // the tool in hand is left alone.
+            else -> {
+                _state.value = _state.value.copy(selectedPen = replacement)
+                viewModelScope.launch { settings.setSelectedPen(replacement) }
+            }
+        }
+    }
+
+    /** Every pen-bar item back on the bar. */
+    fun showAllToolbarItems() {
+        viewModelScope.launch { settings.setHiddenToolbarItems(emptySet()) }
+    }
+
     fun commitShape(stroke: Stroke, shape: InkShape) {
         pushUndo()
         applyStrokes(strokes + InkStroke(stroke, InkCodec.toolForStroke(stroke, InkTool.MARKER), shape))
@@ -658,7 +723,9 @@ class EditorViewModel(app: Application, private val noteId: Long) : AndroidViewM
     }
 
     fun setColor(color: Int) {
-        _state.value = _state.value.copy(colorArgb = color)
+        // Picking paper is an explicit request to see that color, including the default paper.
+        // Dark mode otherwise masks it with black and makes the picker appear unresponsive.
+        _state.value = _state.value.copy(colorArgb = color, appearance = PageAppearance.LIGHT)
         scheduleSave()
     }
 

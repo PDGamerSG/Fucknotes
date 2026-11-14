@@ -38,10 +38,12 @@ fun PenGlyph(
     highlighter: Boolean = false,
     /** Show the pen as it will write on a night page, so a black pen reads as the off-white it draws. */
     darkReader: Boolean = false,
+    /** The touch target; the swatch inside keeps its size. */
+    size: androidx.compose.ui.unit.Dp = 48.dp,
 ) {
     val color = Color(if (darkReader) darkReaderArgb(pen.colorArgb, pen.tool) else pen.colorArgb)
     val scheme = MaterialTheme.colorScheme
-    Box(modifier.size(48.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onClick).semantics {
+    Box(modifier.size(size).clip(CircleShape).clickable(role = Role.Button, onClick = onClick).semantics {
         contentDescription = penLabel(pen)
         selected = active
     }, contentAlignment = Alignment.Center) {

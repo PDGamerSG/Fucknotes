@@ -30,7 +30,6 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 // Aliased: androidx.ink.strokes.Stroke is the ink stroke, this one is a paint style.
 import androidx.compose.ui.graphics.drawscope.Stroke as DrawStroke
 import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerType
@@ -158,11 +157,12 @@ fun InkSurface(
     reading: Boolean = false,
     shape: InkShape = InkShape.RECTANGLE,
     onShapeFinished: (Stroke, InkShape) -> Unit = { _, _ -> },
+    /** Shapes come out hand-drawn ([SketchyShapes]) rather than with exact geometry. */
+    sketchyShapes: Boolean = false,
 ) {
     camera.density = LocalDensity.current.density
 
     val renderer = remember { CanvasStrokeRenderer.create() }
-    val nightPaper = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val createdPageCount = pageCount().coerceAtLeast(1)
 
     // The gesture loop reads these on every event; holding them in updated state keeps the pointer
@@ -186,6 +186,7 @@ fun InkSurface(
     val currentOnMoveStrokes by rememberUpdatedState(onMoveStrokes)
     val currentOnUserInteraction by rememberUpdatedState(onUserInteraction)
     val currentShape by rememberUpdatedState(shape)
+    val currentSketchyShapes by rememberUpdatedState(sketchyShapes)
     val currentOnShapeFinished by rememberUpdatedState(onShapeFinished)
     val drawingOverlay = remember { DrawingOverlayState() }
     // Leaving the Select tool drops the selection; a pen stroke on a circled word is just a stroke.
@@ -274,6 +275,9 @@ fun InkSurface(
                     var drawingStart = Offset.Zero
                     var drawingEnd = Offset.Zero
                     var drawingShape = InkShape.RECTANGLE
+                    // Latched with the shape when the drag begins, so the preview and the stroke
+                    // that is stored are the same drawing.
+                    var drawingSketchy = false
                     var drawingBrush: Brush? = null
                     var drawingCancelled = false
 
@@ -310,10 +314,36 @@ fun InkSurface(
                             continue
                         }
 
+                        // Compose represents ACTION_CANCEL as consumed releases. It is loss of
+                        // the gesture, not a pen lift: discard previews and selection drags.
+                        if (event.changes.none { it.pressed } &&
+                            event.changes.any { it.previousPressed && it.isConsumed }
+                        ) {
+                            drawingPointer = null
+                            drawingBrush = null
+                            drawingCancelled = false
+                            drawingOverlay.shapePoints = emptyList()
+                            drawingOverlay.finishLaser(android.os.SystemClock.uptimeMillis(), cancelled = true)
+                            currentLasso?.let { it.loop = emptyList(); it.drag = Offset.Zero }
+                            lassoPointer = null
+                            lassoMoving = false
+                            lastErasePoint = null
+                            outsidePageGesture = false
+                            gestureTool = null
+                            gestureActive = false
+                            stylusContactActive = false
+                            palmIds.clear()
+                            lastTapMs = 0L
+                            continue
+                        }
+
                         val down = event.changes.filter { it.pressed }
                         event.changes.filter { !it.pressed }.forEach { palmIds -= it.id }
                         // A new stylus contact starts its own stroke even while the same palm rests.
-                        if (down.any { it.type == PointerType.Stylus && !it.previousPressed }) gestureTool = currentTool
+                        if (down.any { it.type == PointerType.Stylus && !it.previousPressed }) {
+                            gestureTool = currentTool
+                            drawingCancelled = false
+                        }
                         if (down.isNotEmpty() && gestureTool == null) gestureTool = currentTool
                         val activeTool = gestureTool ?: currentTool
                         if (down.isEmpty()) { gestureTool = null; drawingCancelled = false }
@@ -345,7 +375,7 @@ fun InkSurface(
                                     val top = floor(drawingStart.y / NotebookLayout.strideOf(spec)) * NotebookLayout.strideOf(spec)
                                     end = Offset(end.x.coerceIn(0f, spec.widthDp), end.y.coerceIn(top, top + spec.heightDp))
                                 }
-                                val points = ShapeRecognizer.dragPoints(drawingShape, drawingStart, end)
+                                val points = ShapeRecognizer.dragPoints(drawingShape, drawingStart, end, drawingSketchy)
                                 val brush = drawingBrush
                                 if (points.isNotEmpty() && brush != null) {
                                     val batch = MutableStrokeInputBatch()
@@ -468,7 +498,7 @@ fun InkSurface(
                             drawingPointer = null
                             drawingCancelled = activeTool == InkTool.SHAPE || activeTool == InkTool.LASER
                             drawingOverlay.shapePoints = emptyList()
-                            drawingOverlay.laserPoints = emptyList()
+                            drawingOverlay.finishLaser(android.os.SystemClock.uptimeMillis(), cancelled = true)
                             if (currentContentScroll != null) panContent(event.calculatePan())
                             else camera.transformBy(
                                 factor = if (currentZoomLocked) 1f
@@ -512,6 +542,7 @@ fun InkSurface(
                                     drawingOverlay.laserPoints = emptyList()
                                     drawingStart = world
                                     drawingShape = currentShape
+                                    drawingSketchy = currentSketchyShapes
                                     drawingBrush = InkCodec.brushForShape(currentColor, currentWidth, camera.scale)
                                     drawingOverlay.shapeColor = Color(if (currentDarkReader) darkReaderArgb(currentColor, InkTool.MARKER) else currentColor)
                                     drawingOverlay.shapeWidth = currentWidth
@@ -523,7 +554,7 @@ fun InkSurface(
                                 }
                                 drawingEnd = world
                                 if (activeTool == InkTool.SHAPE) {
-                                    drawingOverlay.shapePoints = ShapeRecognizer.dragPoints(drawingShape, drawingStart, drawingEnd)
+                                    drawingOverlay.shapePoints = ShapeRecognizer.dragPoints(drawingShape, drawingStart, drawingEnd, drawingSketchy)
                                 } else if (drawingOverlay.laserPoints.lastOrNull()?.let { (world - it).getDistance() >= 0.75f } != false) {
                                     drawingOverlay.laserPoints = drawingOverlay.laserPoints + world
                                 }
@@ -623,12 +654,6 @@ fun InkSurface(
         }
 
         PageImages(attachments, camera, pageSpec, notebook, darkReader)
-
-        // Cool only the page and imported backgrounds. Wet ink uses a separate front buffer;
-        // tinting the dry layer would change the ink's color as soon as the pen is lifted.
-        if (nightPaper && !darkReader && pageColor != Color.Transparent) {
-            Canvas(Modifier.fillMaxSize()) { drawRect(Color(0x38213249)) }
-        }
 
         // Dry ink.
         Canvas(Modifier.fillMaxSize()) {

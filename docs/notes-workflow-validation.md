@@ -1,5 +1,167 @@
 # Notes workflow changes
 
+## Doubled shape outlines fixed — 2026-11-13, Xiaomi tablet
+
+The owner reported shapes looking like two lines. The default hand-drawn generator deliberately
+retraced lines/shafts with an offset and went round boxes/circles twice. The tablet's open page
+visibly showed doubled circle contours. Earlier tests enforced those double passes, so passing
+them did not establish the visual requirement.
+
+Changed only the hand-drawn shape geometry and its regression checks: one line/shaft, one
+rounded rectangle perimeter, and one closed periodic ellipse. Shared endpoints remove gaps at
+corners; an arrow returns along the identical wing samples before drawing the other wing,
+keeping the shape one editable stroke without a second offset contour. Clean shapes and
+existing saved ink keep their stored geometry.
+
+Evidence in `build/tablet-validation-20261113-single-outline/`:
+
+- Before the fix, four updated geometry tests failed (`red-unit.txt`). Two tablet regressions
+  failed (`red-device.txt`): a 120 × 100 rectangle had 832 units of outline, and the native
+  renderer showed two arrow-shaft crossings at width 0.5.
+- After the fix, all **127 JVM tests** pass, and **17 of 17 drawing-tool tablet tests** pass
+  (`green-build.txt`, `device-final.txt`). Native rendering checks all four hand-drawn shapes
+  before/after storage at widths 0.5 and 2.5; the existing tests cover clean corners/arrowheads,
+  selecting/moving/undoing shapes, palm/pinch ownership, canceled shapes, highlighter and paper.
+- The optimized release builds successfully (`release-build.txt`).
+- An updated app-data backup and original installed APK were saved before tests. Test notes are
+  disposable and the owner's preferences are restored afterwards.
+- Final SQLite integrity is `ok`. All 34 original notes retain the same titles, body/ink hashes
+  and edit timestamps, with no extra/missing notes (`preservation-check.json`). The corrected
+  optimized release was installed in place, its installed SHA-256 matches (`installed-build.json`),
+  and it launches successfully through the Device panel.
+
+## Attached-tablet drawing and paper follow-up — 2026-11-13, Xiaomi 2410CRP4CI
+
+Continued on the physical Xiaomi `b86e61d8` (Android 16, portrait 2136 × 3200). Existing
+uncommitted toolbar and hand-drawn shape work was retained. Evidence lives in
+`build/tablet-validation-20261113-followup/`.
+
+Reproduced before changing production code:
+
+- A canceled shape was committed instead of discarded.
+- A pinch left shape drawing canceled while the hand remained down; a new stylus contact
+  could not draw until all fingers lifted.
+- Earlier temporary red strokes vanished during the next stroke. The existing 400 ms hold
+  plus 500 ms fade also left too little reading time.
+- Choosing paper in a dark note left the page black. Light pages also carried a blue wash
+  that changed the selected color.
+
+`red-device-tests.txt` records four failing tablet regressions. `red-build.txt` records both
+highlighter timing tests failing. The fixes reset gesture ownership on a new stylus contact,
+discard Compose cancellation events (including selection drags), pause fading while writing,
+restart all remaining trails from the latest pen lift, and show picked paper colors immediately
+by choosing light appearance. The Paper sheet offers color swatches in dark mode as well.
+The temporary highlighter now holds for 1.5 s after writing stops, then fades over 1 s.
+
+The actual editor's ⋯ → Note colour and ⋯ → Paper flows are exercised by
+`bothOverflowColorPickersRepaintTheNotebookImmediately`, including rendered pixels and stored
+appearance. The tests use disposable scratch notes and restore the owner's preferences.
+Synthetic stylus/palm streams exercise the tablet's input path; they do not verify physical
+pen buttons or the feel of a human writing session.
+
+Before tests, the installed APK was saved and the app was updated in place without uninstalling
+or clearing data. `appdata-before-tests.tar` contains 65 entries and 35,595,661 uncompressed
+bytes. Its SQLite database passed `integrity_check`; `notes-before.json` records all 34 existing
+notes, including trash, with ink/body hashes for the final preservation check.
+
+Final checks:
+
+- **127 JVM tests passed** (`green-build.txt`).
+- **68 of 68 instrumentation tests passed on the physical tablet** (`instrumentation-final.txt`).
+  The first full run was 67 of 68 because the new long-stroke test froze the Compose clock
+  before tool selection rendered. Waiting for the selection fixed the test; its isolated
+  recheck and the complete final run both passed. No production workaround was added for it.
+- The optimized release APK and `:app:lintDebug` built successfully (`release-and-lint.txt`);
+  lint reports zero errors. Existing toolchain deprecation/R8 metadata warnings remain.
+- After testing, SQLite integrity is `ok`; all 34 original notes have exactly the same title,
+  body/ink hashes, ink lengths and `updatedAt` as before, with no extra or missing notes
+  (`preservation-check.json`).
+- Installed `app/build/outputs/apk/release/app-release.apk` in place and relaunched through
+  the Device panel's agent command. Its SHA-256 matches the installed APK (`installed-build.json`),
+  and the shelf opens with the original 21 live notes. The tablet is left on the shelf.
+
+Commands used Gradle's assemble tasks and explicit `adb install -r` / `am instrument`; no
+`connected*Test`, uninstall, or data clearing. Version remains 1.2.0 (code 3); no release was
+published.
+
+## The app would not start on the second tablet — 2026-11-13, macOS, Lenovo TB373FU
+
+The owner reported the app "not working" on a tablet. The tablet plugged in was not the Xiaomi
+but a Lenovo TB373FU (serial `HA29MSA9`, Android 16, 1840 x 2944 at 340 dpi) carrying the
+published **1.1.0**, installed from its APK on 2026-11-10.
+
+- Its crash buffer held the same failure three times that morning, each at start:
+  `android.database.sqlite.SQLiteBlobTooBigException: Row too big to fit into CursorWindow
+  requiredPos=0, totalRows=1`. A notebook's ink had passed the roughly 2 MB a cursor window
+  holds, and 1.1.0 reads the row through one. This is the crash described under "Startup crash
+  from a large notebook" below; the fix (`BundledSQLiteDriver`) shipped in 1.2.0 and this
+  tablet had never been given it.
+- The current release build (1.2.0 with the day's uncommitted work, same signing certificate
+  `a889393c…`) was installed over it with `adb install -r`. First install time is unchanged, so
+  the data stayed; the database went from schema 6 to 8 through the two additive migrations.
+- It then started in 201 ms into the notebook it had been crashing on — 13 pages, handwriting
+  on screen — and the shelf listed both notes and both collections. No crash entry after the
+  install. The owner took the tablet back at that point, so nothing more was driven.
+
+Not checked: no copy of this tablet's data could be taken first (a release build cannot be read
+with `run-as`), the shelf tiles were plain black two seconds after a cold start and were not
+looked at again, and the second notebook was not opened by the tester.
+
+## Two bars on one row, toolbar items, hand-drawn shapes, lit highlighter, hold-to-export — 2026-11-13, macOS, emulator
+
+The owner's requests after the tablet run, built once the tablet had been unplugged. **None of
+this has been on the tablet.** Evidence is in `build/emulator-validation-20261113/`.
+
+**What changed**
+
+- The note bar and the pen bar are two pills on one row in both orientations, after the
+  owner's reference screenshots. Upright on the tablet the pen bar is: eraser, a "More tools"
+  button holding Select / Finger input / Shapes / Red highlighter, four pens, two highlighters,
+  lock. Lying down, every tool is on the bar. (`portrait-two-bars-one-row.png`,
+  `landscape-two-bars-one-row.png`.)
+- ⋯ → "Toolbar items": a switch for every tool and every pen and highlighter on the bar, kept
+  for all notes. The last pen cannot be switched off (`toolbar-items-dialog.png`).
+- Shapes come out hand-drawn — each edge twice over, soft box corners, a circle that goes round
+  twice — unless "Clean lines" is switched on in the Shapes menu (`hand-drawn-shapes.png`,
+  `shapes-menu-clean-lines.png`). No diamond, at the owner's word.
+- The red highlighter is a lit tube with a pale core and is gone 0.9 s after the pen lifts; it
+  was 2.5 s (`red-highlighter-lit-tube.png`).
+- Holding a note on the shelf shows "Export PDF" by name in the selection bar, and one note
+  goes straight to the save dialog (`hold-note-export-button.png`).
+
+**Checks**
+
+- Red before green: `ToolbarLayoutTest`, `SketchyShapesTest` and the new highlighter timings
+  failed against stubs (16 of 22), then passed. **127 JVM tests pass.**
+- A temporary API 35 tablet emulator, since deleted. At its own size (1280 x 800 dp, lying
+  down): **63 of 63 instrumentation tests** (`instrumentation-default-size.txt`). With the
+  display set to the tablet's upright size (777 x 1164 dp): **62 of 63**
+  (`instrumentation-tablet-portrait-size.txt`).
+- The one failure, `pinchBeforeChoosingShapeDoesNotSwallowItsFirstStroke`, is not from this
+  work: it fails the same way on the commit before it (bb2a73a) at that display size. The
+  injected pinch zooms the canvas 6.25 times instead of 1.2 (logged scale 1.375 → 8.596), so
+  the stroke that follows lands off screen. It passes at the emulator's own density (2.0) and
+  passed on the tablet (2.75). Whether a real pinch misbehaves on a low-density screen was not
+  looked into.
+- By hand on the emulator, with taps and stylus strokes over adb: the two bars share a row
+  upright and lying down; "More tools" opens Shapes; a box, circle, arrow and line drawn
+  hand-drawn; the highlighter showed 1,485 red pixels mid-stroke and none 1.6 s later; two
+  items switched off in "Toolbar items" left the bar; holding a note and tapping "Export PDF"
+  opened the system save dialog and wrote a 52,565-byte PDF ("Saved 1 note").
+- Found on the emulator and fixed: a pen put away while the red highlighter was in hand moved
+  to the end of the bar instead of leaving it (the bar always shows the tray's selected slot).
+  `aToolPutAwayLeavesTheBarAndComesBack` covers it.
+- The optimized release APK builds: `app/build/outputs/apk/release/app-release.apk`.
+
+**Not checked**
+
+- Anything on the tablet, or with the physical pen. The tablet still runs the build of
+  bb2a73a. Install with `adb -s b86e61d8 install -r app/build/outputs/apk/release/app-release.apk`.
+- How the hand-drawn shapes and the 44 dp buttons feel under a real pen at 2.75 density.
+- The last tablet test run left one unreferenced 24 KB image in `files/media` and four empty
+  `large-drawing-*.db.lck` files; they can only be removed while a debug build is installed.
+- Version is still 1.2.0 (versionCode 3), the same as the published release.
+
 ## One black dark mode, exports that follow the note, ink colour repair — 2026-11-13, macOS, tablet
 
 First run of the 1.2.0 work on the owner's tablet (it had 1.1.0), plus the owner's requests of

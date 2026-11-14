@@ -128,6 +128,7 @@ private fun EditorContent(
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var quickHighlighterVisible by rememberSaveable(state.noteId) { mutableStateOf(false) }
     var showStrokeColor by remember { mutableStateOf(false) }
+    var showToolbarItems by remember { mutableStateOf(false) }
     var recolorSelection by remember { mutableStateOf<Set<Int>>(emptySet()) }
     var pendingCameraPath by rememberSaveable(state.noteId) { mutableStateOf<String?>(null) }
 
@@ -292,6 +293,8 @@ private fun EditorContent(
                         shape = state.shape, onSelectShape = viewModel::selectShape,
                         canUndo = viewModel.canUndoInk,
                         onUndo = { typedLasso.clear(); viewModel.undo() },
+                        hidden = state.hiddenToolbarItems,
+                        sketchyShapes = state.sketchyShapes, onSketchyShapes = viewModel::setSketchyShapes,
                     )
                 }
             } else if (!isInkNote) {
@@ -338,6 +341,7 @@ private fun EditorContent(
                     onStrokesFinished = viewModel::commitStrokes,
                     onShapeFinished = viewModel::commitShape,
                     onSelectShape = viewModel::selectShape,
+                    onSketchyShapes = viewModel::setSketchyShapes,
                     onErase = viewModel::eraseStrokes,
                     onToggleEraser = viewModel::toggleEraser,
                     onMoveStrokes = viewModel::moveStrokes,
@@ -384,6 +388,7 @@ private fun EditorContent(
                         onTags = { showTagDialog = true },
                         onRename = { showRename = true },
                         onHighlighter = { quickHighlighterVisible = true },
+                        onToolbarItems = { showToolbarItems = true },
                         onPdf = exportPdf,
                         onAddImage = { pickImage.launch(arrayOf("image/*")) },
                         onPageImages = { showPageImages = true },
@@ -429,6 +434,7 @@ private fun EditorContent(
                         darkReader = state.darkReader,
                         contentScroll = contentScroll,
                         shape = state.shape, onShapeFinished = viewModel::commitShape,
+                        sketchyShapes = state.sketchyShapes,
                         lasso = typedLasso, onMoveStrokes = viewModel::moveStrokes,
                     )
                     if (typedLasso.active) LassoActions(
@@ -463,6 +469,17 @@ private fun EditorContent(
                 recolorSelection = emptySet()
                 showStrokeColor = false
             },
+        )
+    }
+
+    if (showToolbarItems) {
+        ToolbarItemsDialog(
+            pens = state.pens,
+            hidden = state.hiddenToolbarItems,
+            darkReader = state.darkReader,
+            onToggle = viewModel::setToolbarItemHidden,
+            onShowAll = viewModel::showAllToolbarItems,
+            onDismiss = { showToolbarItems = false },
         )
     }
 
@@ -589,11 +606,13 @@ private fun EditorMenu(
     onRename: () -> Unit = {},
     onPdf: () -> Unit = {},
     onHighlighter: (() -> Unit)? = null,
+    onToolbarItems: (() -> Unit)? = null,
 ) {
     EditorOverflowMenu(
         expanded = expanded,
         onRename = { onDismiss(); onRename() },
         onHighlighter = onHighlighter?.let { action -> { onDismiss(); action() } },
+        onToolbarItems = onToolbarItems?.let { action -> { onDismiss(); action() } },
         onDismiss = onDismiss,
         onColor = { onDismiss(); onColor() },
         onPaper = { onDismiss(); onPaper() },

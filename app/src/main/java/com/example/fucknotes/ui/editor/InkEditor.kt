@@ -68,6 +68,9 @@ import com.example.fucknotes.ui.editor.ink.controlAlpha
 import com.example.fucknotes.ui.theme.brand
 import kotlinx.coroutines.delay
 
+/** Narrower than this and the two bars cannot share a row even with the pen bar folded. */
+private val STACKED_BARS_BELOW = 560.dp
+
 /**
  * A writing page and the chrome that floats over it.
  *
@@ -133,6 +136,7 @@ fun InkEditor(
     onToggleQuickHighlighter: () -> Unit = {},
     onSelectShape: (InkShape) -> Unit = {},
     onShapeFinished: (Stroke, InkShape) -> Unit = { _, _ -> },
+    onSketchyShapes: (Boolean) -> Unit = {},
 ) {
     val brand = MaterialTheme.brand
     val notebook = state.type == NoteType.NOTEBOOK
@@ -183,6 +187,7 @@ fun InkEditor(
             darkReader = state.darkReader,
             shape = state.shape,
             onShapeFinished = onShapeFinished,
+            sketchyShapes = state.sketchyShapes,
             reading = chrome == EditorChrome.READING,
             onUserInteraction = ::wakeControls,
             modifier = Modifier
@@ -207,6 +212,8 @@ fun InkEditor(
                 darkReader = state.darkReader,
                 shape = state.shape, onSelectShape = onSelectShape,
                 canUndo = canUndo, onUndo = { lasso.clear(); onUndo() },
+                hidden = state.hiddenToolbarItems,
+                sketchyShapes = state.sketchyShapes, onSketchyShapes = onSketchyShapes,
             )
         }
 
@@ -219,8 +226,8 @@ fun InkEditor(
             modifier = Modifier.align(Alignment.TopCenter),
         ) {
             BoxWithConstraints(Modifier.fillMaxWidth().padding(8.dp)) {
-                if (maxWidth < 900.dp) {
-                    // Too narrow for both bars side by side: stack them, note bar first.
+                if (maxWidth < STACKED_BARS_BELOW) {
+                    // A phone: not even a folded pen bar fits beside the note bar, so they stack.
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -229,14 +236,18 @@ fun InkEditor(
                         penBar(Modifier.align(Alignment.End))
                     }
                 } else {
+                    // Two bars on one row, upright or lying down: the note bar at its own width
+                    // on the left, the pen bar in whatever is left, against the right edge. The
+                    // pen bar folds its tools to fit that room rather than taking a second row.
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         quickBar()
-                        Spacer(Modifier.weight(1f))
-                        penBar(Modifier)
+                        Box(
+                            Modifier.weight(1f).padding(start = 8.dp),
+                            contentAlignment = Alignment.CenterEnd,
+                        ) { penBar(Modifier) }
                     }
                 }
             }

@@ -1,5 +1,49 @@
 # Claude handoff: Fucknotes editor and tablet work
 
+## Single shape outlines — 2026-11-13
+
+The owner's next tablet check caught doubled outlines in the default hand-drawn style. The
+previous tests asserted two laps and missed that this looked broken at thin widths.
+`SketchyShapes` now draws one line/shaft, one rounded-box perimeter, and one closed ellipse.
+Arrow wings meet at the exact tip; the first wing's identical samples are retraced to keep a
+single branched Ink stroke without creating an offset second line. Endpoints stay fixed and
+ellipse perturbations are periodic so joins close without tails. The Clean lines option remains.
+
+Both new native-rendering/perimeter regressions failed on the old installed build, then pass
+after the fix. Evidence/backup: `build/tablet-validation-20261113-single-outline/`.
+All 127 JVM tests and 17 drawing-tool tablet tests pass, including both widths (0.5 and 2.5),
+save/reopen, clean shapes, palm gestures, selection/undo and highlighter/paper regressions.
+The corrected release is installed on the Xiaomi, hash-verified and launched. All 34 original
+notes match their pre-test contents and timestamps; no scratch notes remain.
+
+## Tablet follow-up — 2026-11-13
+
+The Xiaomi `b86e61d8` is attached again. The follow-up fixes are in `InkSurface`,
+`TemporaryHighlighter`, `EditorViewModel.setColor`, and `PaperSheet`:
+
+- A fresh stylus down clears a canceled shape/laser gesture even when fingers from a pinch
+  remain down. Compose's consumed synthetic releases mean cancellation: discard shape previews
+  and lasso drags rather than committing them as if the pen lifted.
+- Temporary red writing stays fully visible while another laser stroke is down. Every finished
+  stroke restarts the session's idle timer: hold 1.5 seconds after the latest lift, fade for
+  1 second, then remove. Cancellation discards only the active stroke and starts the idle timer
+  for the previous writing. It still never enters persisted ink or undo history.
+- Choosing a paper/note color, including Default, sets the note to `PageAppearance.LIGHT` so
+  dark mode cannot mask the choice. Paper swatches remain available in dark mode. The old blue
+  wash over light paper is removed; selected colors now match the page. Swatches have accessible
+  color labels, which are also used to exercise both actual overflow color pickers.
+
+Evidence, the previous installed APK, a verified pre-test app-data backup, and a note-content
+manifest are under `build/tablet-validation-20261113-followup/`. Do not delete this backup.
+The new regressions first failed on the tablet before the fixes. When testing timed overlays,
+wait for the selected tool to render before setting `mainClock.autoAdvance = false`; otherwise
+the test can start with the previous brush. Restore finger/toolbar preferences after tests.
+Final checks: 127 JVM tests, all 68 tablet instrumentation tests, release assembly and debug
+lint pass (zero lint errors). After tests, all 34 original notes match the pre-test manifest,
+including title, ink, body and edit timestamp; no scratch notes remain. SQLite integrity is `ok`.
+The optimized release is installed on the Xiaomi and its installed APK hash matches the local
+release artifact. It launches to the original shelf; the tablet is left there.
+
 ## 1.2.0 editor release — 2026-11-10
 
 The project is now available in `/Users/admin/Data/Company Project/Projects/Fucknotes`; the empty
@@ -147,11 +191,49 @@ and export, first-page previews, dark reader, folder hierarchy, home export.
   square corner and a curled arrowhead. Any build that draws shapes with plain
   `brushFor(MARKER)` shows that blob; it was seen on the tablet on 2026-11-13 from a stale
   working tree. `InkTool.LASER` is the red "Temporary red highlighter":
-  `TemporaryHighlighter.kt`, drawn only in `DrawingOverlayState`, each trail holds 1.5 s after
-  the pen lifts and fades over 1 s, never stored, never on the undo stack. Both tools consume
+  `TemporaryHighlighter.kt`, drawn only in `DrawingOverlayState`; all writing stays visible
+  during a laser stroke, holds 1.5 s after the latest lift, and fades over 1 s. Never stored or
+  on the undo stack. Both tools consume
   their touches in `InkSurface`'s gesture loop before the wet layer. The lasso bar has a colour
   action (`EditorViewModel.recolorStrokes`); the zoom chip and page arrows fade to
   `FADED_CONTROL_ALPHA` after 2.6 s idle (`InkEditor.wakeControls`).
+- The two top bars (owner's reference screenshots, 2026-11-13): the note bar and the pen bar are
+  two separate pills **on one row in both orientations** — never stacked on a tablet.
+  `InkEditor` puts the note bar at its own width and gives the pen bar the rest of the row
+  (stacking survives only below `STACKED_BARS_BELOW`, 560 dp, i.e. phones). `InkToolbar` is always
+  one row and asks `ToolbarLayout.fit(availableDp, …)` how to fit it: full 48 dp buttons with
+  every tool if there is room; otherwise 44 dp buttons, as many tools as fit in bar order
+  (eraser first), and the rest behind one **"More tools"** button whose menu lists them. The pens
+  never fold; they scroll if they must. Upright on the tablet (777 dp) that is: eraser, More
+  tools, four pens, two highlighters, lock. `ToolbarLayoutTest` pins both orientations' numbers;
+  if a button is added to either bar, redo that arithmetic.
+- Toolbar items: ⋯ → "Toolbar items" (`ToolbarItemsDialog`, EditorMenus.kt) has a switch for every
+  tool (`ToolbarTool`) and every pen and highlighter slot on the bar. The choice is app-wide:
+  `Settings.hiddenToolbarItems`, a string set under `toolbar_hidden` holding `ToolbarTool.key`s
+  and `ToolbarLayout.penKey(slot)`s — the keys are stored, do not rename them.
+  `ToolbarLayout.visible` applies it; a hidden slot closes up (the fifth pen does not slide in),
+  the pen in hand is always shown even if hidden, and `canHide` refuses the last pen.
+  `EditorViewModel.setToolbarItemHidden` swaps a hidden tool or pen that was in hand for a pen
+  still on the bar. Device tests that tap tools go through `tapTool` / `pickShape` in
+  `EditorDrawingToolsTest`, which look behind "More tools" when the bar is tight, and
+  `withEditor` shows every item and restores the owner's set afterwards.
+- Hand-drawn shapes: `SketchyShapes.points` draws one gently bowed outline, a box with soft
+  corners, and one closed circle. The earlier doubled passes were removed after tablet feedback.
+  `ShapeRecognizer.dragPoints(…, sketchy)` picks it; `Settings.sketchyShapes` (default on)
+  is flipped by the "Clean lines" switch at the bottom of the Shapes menu. The wobble is seeded
+  by the drag's *start* and every pass takes a fixed count of random values, so the preview
+  stretches instead of flickering while the far corner moves, and the stored stroke is the
+  preview. `InkSurface` latches `drawingSketchy` with the shape at pointer down. No diamond: the
+  owner did not want one.
+- The red highlighter is drawn as a lit tube (glow, red body, near-white core). All of its
+  writing stays visible while the pen is down, holds `TemporaryTrail.HOLD_MS` (1.5 s) after the
+  latest lift, then fades over `FADE_MS` (1 s). A brief 0.9 s total was tried on 2026-11-13 and
+  left too little reading time. Its button label is `RED_HIGHLIGHTER_LABEL`.
+- Exporting one note from the shelf: hold the note (that selects it), then "Export PDF" in the
+  selection bar — a labelled button now, not a bare arrow. One selected note goes straight to
+  the save dialog and is exported as the editor exports it (`FolderExporter` COMBINED with a
+  single note uses `NoteExporter.export`, so the PDF is editable); several notes still get the
+  combined / ZIP / folder question.
 - `origin/main` got the 1.2.0 commit (c1eca03, tag `v1.2.0`) from another checkout while this
   folder still held an older uncommitted copy of the same work, which is how the tablet came to
   be tested with a stale build on 2026-11-13. Run `git fetch` and compare with `origin/main`
@@ -257,3 +339,17 @@ in the scratch notebook mid-run and injected taps were lost or hit an open menu.
 (`uiautomator dump`) before every injected tap, and prefer instrumentation tests to driving the
 UI. A scratch notebook `ClaudeTest1113` (id 43) was left on the shelf because the owner wrote in
 it; they can trash it.
+
+There is a second tablet: a Lenovo TB373FU, serial `HA29MSA9` (Android 16, 1840 x 2944 at
+340 dpi), also with the owner's own notes. It ran the published 1.1.0 until 2026-11-13, when a
+notebook passed 2 MB and the app crashed at every start (`SQLiteBlobTooBigException`); it now
+has the 1.2.0 build. Check `adb devices` before assuming which tablet is attached — a command
+aimed at `b86e61d8` simply hangs when the Lenovo is the one plugged in.
+
+Without the tablet: `avdmanager create avd -n <name> -k "system-images;android-35;google_apis_playstore;arm64-v8a" -d pixel_tablet`,
+boot it with `emulator -avd <name> -no-window -no-audio -no-snapshot -gpu swiftshader_indirect`,
+and `adb shell wm size 1068x1600; wm density 220` gives the tablet's upright size in dp
+(777 x 1164). The full suite takes about ten minutes there. Delete the AVD afterwards; `naukri`
+is the owner's and belongs to another project. At that override size
+`pinchBeforeChoosingShapeDoesNotSwallowItsFirstStroke` fails on any build (see the validation
+notes of 2026-11-13); run the suite at the emulator's own size as well.
